@@ -109,16 +109,9 @@ def make_agent_cfg(env, agent_cfg):
 
 def make_trainer(env, agent, agent_cfg, auxiliary_task=None, writer=None):
 
-    train_timesteps = int(agent_cfg["trainer"]["max_global_timesteps_M"] * 1e6 / env.num_envs)
-    agent_cfg["trainer"]["timesteps"] = train_timesteps
-
-    # configure and instantiate a custom RL trainer for logging episode events
-    trainer_cfg = agent_cfg["trainer"]
-    trainer_cfg["close_environment_at_exit"] = False
-    trainer_cfg["disable_progressbar"] = True
-    trainer_cfg["observation_spaces"] = env.observation_space
-    num_eval_envs = trainer_cfg["num_eval_envs"]
-    trainer = SequentialTrainer(cfg=trainer_cfg, env=env, agents=agent, num_eval_envs=num_eval_envs, auxiliary_task=auxiliary_task, writer=writer)
+    num_timesteps_M = agent_cfg["trainer"]["max_global_timesteps_M"]
+    num_eval_envs = agent_cfg["trainer"]["num_eval_envs"]
+    trainer = SequentialTrainer(env=env, agents=agent, num_timesteps_M=num_timesteps_M, num_eval_envs=num_eval_envs, auxiliary_task=auxiliary_task, writer=writer)
     return trainer
 
 def update_env_cfg(args_cli, env_cfg, agent_cfg, skrl_config_dict):
