@@ -5,37 +5,17 @@
 
 from __future__ import annotations
 
-import gymnasium as gym
-import math
-import numpy as np
-import os
-import torch
-from collections.abc import Sequence
 
-from PIL import Image
+import torch
 
 from tasks.franka.franka import FrankaEnv, FrankaEnvCfg, randomize_rotation
-from isaaclab_rl.wrappers.frame_stack import LazyFrames
+
 import isaaclab.sim as sim_utils
-from isaaclab.assets import Articulation, ArticulationCfg, RigidObject, RigidObjectCfg
-from isaaclab.envs import DirectRLEnv, DirectRLEnvCfg
-from isaaclab.scene import InteractiveSceneCfg
-from isaaclab.sim import SimulationCfg
-from isaaclab.terrains import TerrainImporterCfg
+from isaaclab.assets import RigidObjectCfg
 from isaaclab.utils import configclass
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
-from isaaclab.sensors import (
-    FrameTransformer,
-    FrameTransformerCfg,
-    OffsetCfg,
-    TiledCamera,
-    TiledCameraCfg,
-)
-from isaaclab.sim import PhysxCfg, SimulationCfg
-from isaaclab.sim.schemas.schemas_cfg import CollisionPropertiesCfg, MassPropertiesCfg, RigidBodyPropertiesCfg
-from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
+from isaaclab.sim.schemas.schemas_cfg import RigidBodyPropertiesCfg
 from isaaclab.sim.spawners.from_files.from_files_cfg import UsdFileCfg
-from isaaclab.sim.spawners.materials.physics_materials_cfg import RigidBodyMaterialCfg
 from isaaclab.utils.math import (
     quat_conjugate,
     quat_from_angle_axis,
@@ -44,25 +24,9 @@ from isaaclab.utils.math import (
     saturate,
 )
 from isaaclab.sim.schemas.schemas_cfg import CollisionPropertiesCfg, MassPropertiesCfg, RigidBodyPropertiesCfg
-from isaaclab.assets import Articulation, ArticulationCfg, RigidObjectCfg
-from isaaclab.sim.spawners.from_files.from_files_cfg import UsdFileCfg
-from isaaclab.utils import configclass
-from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
-
 from isaaclab.markers import VisualizationMarkersCfg, VisualizationMarkers
 
 from tasks.franka.franka import rotation_distance
-
-
-"""
-
-GENERIC FRANKA ENVIRONMENT WITH AN OBJECT
-
-Please note
-- ee_pos, goal_pos, and object_pos are all to be expressed in their robot frame, not world frame
-
-
-"""
 
 
 @configclass
@@ -108,8 +72,6 @@ class LiftEnvCfg(FrankaEnvCfg):
     )
 
     num_gt_observations = 18
-
-
 
 
 class LiftEnv(FrankaEnv):
@@ -173,43 +135,30 @@ class LiftEnv(FrankaEnv):
 
     def _get_rewards(self) -> torch.Tensor:
 
-        # We will call this method once per environment step, regardless if training or eval'ing
         (
             rewards,
             reaching_object,
             is_lifted,
             object_goal_tracking,
-            object_goal_tracking_finegrained,
-            action_rate_penalty,
             joint_vel_penalty,
-            reach_success,
-            contact_reward
         ) = compute_rewards(
             self.reaching_object_scale,
             self.lift_object_scale,
             self.episode_length_buf,
             self.object_goal_tracking_scale,
-            self.object_goal_tracking_finegrained_scale,
-            self.action_penalty_scale,
             self.joint_vel_penalty_scale,
             self.object_pos,
             self.joint_vel,
-            self.actions,
-            self.last_action,
             self.object_ee_euclidean_distance,
             self.object_goal_euclidean_distance,
             self.cfg.minimal_height,
-            self.cfg.min_reach_dist,
-            self.normalised_forces
         )
 
         self.extras["log"] = {
             "reach_reward": (reaching_object),
             "lift_reward": (is_lifted),
             "object_goal_tracking": (object_goal_tracking),
-            "object_goal_tracking_finegrained": (object_goal_tracking_finegrained),
             "joint_vel_penalty": (joint_vel_penalty),
-            "contact_reward": (contact_reward)
         }
 
         if "tactile" in self.cfg.obs_list:
@@ -223,16 +172,6 @@ class LiftEnv(FrankaEnv):
 
         return rewards
 
-    # def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:
-    #     self._compute_intermediate_values()
-
-    #     # no termination at the moment
-    #     out_of_reach = self.object_goal_euclidean_distance >= self.cfg.fall_dist
-    #     termination = out_of_reach
-
-    #     time_out = self.episode_length_buf >= self.max_episode_length - 1
-
-    #     return termination, time_out
 
     def _reset_target_pose(self, env_ids):
         # reset goal rotation
@@ -263,83 +202,38 @@ class LiftEnv(FrankaEnv):
         self.object_goal_angular_distance[env_ids] = rotation_distance(self.object_rot[env_ids], self.goal_rot[env_ids])
 
 
+from tasks.franka.franka import distance_reward, lift_reward, object_goal_reward, joint_vel_penalty
+
 @torch.jit.script
 def compute_rewards(
     reaching_object_scale: float,
     lift_object_scale: float,
     episode_timestep_counter: torch.Tensor,
     object_goal_tracking_scale: float,
-    object_goal_tracking_finegrained_scale: float,
-    action_penalty_scale: float,
     joint_vel_penalty_scale: float,
     object_pos: torch.Tensor,
     robot_joint_vel: torch.Tensor,
-    action: torch.Tensor,
-    last_action: torch.Tensor,
     object_ee_distance: torch.Tensor,
     object_goal_distance: torch.Tensor,
     minimal_height: float,
-    min_reach_dist: float,
-    normalised_forces: torch.Tensor,
 ):
-
     # reaching objects
-    std = 0.1
-    reaching_object = (1 - torch.tanh(object_ee_distance / std)) * reaching_object_scale
-
-    reach_success = (object_ee_distance <= min_reach_dist).reshape(-1, 1)
-
-    # reward for lifting object
-    object_height = object_pos[:, 2]
-    is_lifted = torch.where(object_height > minimal_height, 1.0, 0.0) * lift_object_scale
-    is_lifted *= (episode_timestep_counter > 15).float()
-
-    # only activate object goal reward once object lifted
-    # tracking
-    std = 0.3
-    object_goal_tracking = (
-        (object_height > minimal_height) * (1 - torch.tanh(object_goal_distance / std)) * object_goal_tracking_scale
-    )
-    object_goal_tracking *= (episode_timestep_counter > 15).float()
-
-    # fine tracking
-    std = 0.05
-    object_goal_tracking_finegrained = (
-        (object_height > minimal_height)
-        * (1 - torch.tanh(object_goal_distance / std))
-        * object_goal_tracking_finegrained_scale
-    )
-    object_goal_tracking_finegrained *= (episode_timestep_counter > 15).float()
-
-    # penalise rate of change of actions using L2 squared kernel
-    action_rate_penalty = torch.sum(torch.square(action - last_action), dim=1) * action_penalty_scale
-
-    # joint vel penalty l2
-    joint_vel_penalty = torch.sum(torch.square(robot_joint_vel), dim=1) * joint_vel_penalty_scale
-
-    # ADD CONTACT REWARD FOR TOUCHING
-    # remember forces are normalised
-    min_force = 0.01
-    contact_reward = torch.where(normalised_forces[:, 0] > min_force, 10.0, 0.0) 
-    contact_reward += torch.where(normalised_forces[:, 1] > min_force, 10.0, 0.0)
+    r_ee_object = distance_reward(object_ee_distance, std=0.1) * reaching_object_scale
+    r_lift = lift_reward(object_pos, minimal_height, episode_timestep_counter) * lift_object_scale
+    r_object_goal = object_goal_reward(object_goal_distance, r_lift, std=0.3) * object_goal_tracking_scale
+    r_joint_vel = joint_vel_penalty(robot_joint_vel) * joint_vel_penalty_scale
+    
     rewards = (
-        reaching_object
-        + is_lifted
-        + object_goal_tracking
-        + object_goal_tracking_finegrained
-        + action_rate_penalty
-        + joint_vel_penalty
-        + contact_reward
+        r_ee_object
+        + r_lift
+        + r_object_goal
+        + r_joint_vel
     )
 
     return (
         rewards,
-        reaching_object,
-        is_lifted,
-        object_goal_tracking,
-        object_goal_tracking_finegrained,
-        action_rate_penalty,
-        joint_vel_penalty,
-        reach_success,
-        contact_reward
+        r_ee_object,
+        r_lift,
+        r_object_goal,
+        r_joint_vel
     )

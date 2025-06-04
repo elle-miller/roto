@@ -12,6 +12,9 @@ a more user-friendly way.
 
 """Launch Isaac Sim Simulator first."""
 
+
+
+
 import argparse
 import sys
 
@@ -42,7 +45,7 @@ import isaaclab_tasks  # noqa: F401
 from isaaclab_rl.models.running_standard_scaler import RunningStandardScaler
 from isaaclab_tasks.utils.hydra import hydra_task_config
 
-    
+
 @hydra_task_config(args_cli.task, "skrl_cfg_entry_point")
 def main(env_cfg, agent_cfg: dict):
     """Train with skrl agent."""
@@ -57,8 +60,7 @@ def main(env_cfg, agent_cfg: dict):
     env_cfg = update_env_cfg(args_cli, env_cfg, agent_cfg, skrl_config_dict)
 
     # LOGGING SETUP
-    wandb_session = setup_wandb(agent_cfg, skrl_config_dict)
-    tb_writer, agent_cfg = setup_logging(agent_cfg)
+    writer = Writer(agent_cfg)
 
     # Expose environment creation so I can configure obs_stack as tunable hparam
     obs_stack=skrl_config_dict["obs_stack"]
@@ -91,14 +93,13 @@ def main(env_cfg, agent_cfg: dict):
         observation_space=env.observation_space,
         action_space=env.action_space,
         device=env.device,
-        wandb_session=wandb_session,
+        writer=writer,
         auxiliary_task=auxiliary_task,
-        tb_writer=tb_writer
     )
-    
+
     # Let's go!
-    trainer = make_trainer(env, agent, agent_cfg, auxiliary_task)
-    trainer.train(wandb_session=wandb_session, tb_writer=tb_writer)
+    trainer = make_trainer(env, agent, agent_cfg, auxiliary_task, writer)
+    trainer.train()
 
     # close the simulator
     env.close()

@@ -3,6 +3,12 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
+"""
+Author: Elle Miller 2025
+
+Shared Franka parent environment
+"""
+
 from __future__ import annotations
 
 import gymnasium as gym
@@ -12,16 +18,11 @@ import os
 import torch
 from collections.abc import Sequence
 
-from PIL import Image
-
-from multimodal_gym.utils.image_utils import save_image_grid, save_single_image
-
 import isaaclab.sim as sim_utils
 from isaaclab.assets import Articulation, ArticulationCfg, RigidObject, RigidObjectCfg
 from isaaclab.envs import DirectRLEnv, DirectRLEnvCfg, ViewerCfg
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sim import SimulationCfg
-from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.utils import configclass
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
 from isaaclab.sensors import (
@@ -47,28 +48,21 @@ from isaaclab.utils.math import (
 )
 
 from isaaclab.markers.config import FRAME_MARKER_CFG  # isort: skip
-# from isaaclab_assets.robots.franka import FRANKA_PANDA_CFG  # isort: skip
 
+# from isaaclab_assets.robots.franka import FRANKA_PANDA_CFG  # isort: skip
 from assets.franka import FRANKA_PANDA_CFG  # isort: skip
 
 
-"""
-
-GENERIC FRANKA ENVIRONMENT WITH AN OBJECT
-
-Please note
-- ee_pos, goal_pos, and object_pos are all to be expressed in their robot frame, not world frame
-
-
-"""
 
 
 @configclass
 class FrankaEnvCfg(DirectRLEnvCfg):
     # physics sim
     physics_dt = 1/120 #0.002 #1 / 500 # 120 # 500 Hz
+
     # number of physics step per control step
     decimation = 2 #10 # # 50 Hz
+
     # the number of physics simulation steps per rendering steps (default=1)
     render_interval = 2
     episode_length_s = 5.0  # 5 * 120 / 2 = 300 timesteps
@@ -81,10 +75,11 @@ class FrankaEnvCfg(DirectRLEnvCfg):
     action_space = num_actions
     observation_space = num_observations
     state_space = num_states
+    num_prop_observations = 9 + 9 + 1 + 7 + 9
+    num_tactile_observations = 2
 
     # configure this to get the right dimensions for fusion network
     obs_stack = 1
-    
 
     # reset config
     reset_object_position_noise = 0.05
@@ -96,11 +91,7 @@ class FrankaEnvCfg(DirectRLEnvCfg):
     contact_reward_scale = 10
     lift_object_scale = 15.0
     object_goal_tracking_scale = 16.0
-    action_penalty_scale = 0  # -0.01
     joint_vel_penalty_scale = 0 #-0.01
-    curriculum = False
-    # TODO: replace curriculum timesteps with success metric
-    curriculum_timesteps = 10000
     object_out_of_bounds = 1.5
 
     # reach stuff
@@ -203,41 +194,6 @@ class FrankaEnvCfg(DirectRLEnvCfg):
         ),
     )
 
-    # )
-    # table_cfg: RigidObjectCfg = RigidObjectCfg(
-    #     prim_path="/World/envs/env_.*/Table",
-    #     init_state=RigidObjectCfg.InitialStateCfg(pos=[0.5, 0, 0.5], rot=[0.707, 0, 0, 0.707]),
-    #     spawn=UsdFileCfg(
-    #         usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Mounts/SeattleLabTable/table.usd",
-    #         # usd_path=f"/home/elle/code/external/IsaacLab/multimodal_gym/multimodal_gym/assets/franka/table_instanceable.usd",
-
-    # table_cfg = AssetBaseCfg(
-    #     prim_path="{ENV_REGEX_NS}/Table",
-    #     spawn=sim_utils.UsdFileCfg(
-    #         usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Mounts/SeattleLabTable/table_instanceable.usd",
-    #     ),
-    #     init_state=AssetBaseCfg.InitialStateCfg(pos=(0.55, 0.0, 0.0), rot=(0.70711, 0.0, 0.0, 0.70711)),
-    # )
-
-    # table_cfg: RigidObjectCfg = RigidObjectCfg(
-    #     prim_path="/World/envs/env_.*/Table",
-    #     init_state=RigidObjectCfg.InitialStateCfg(pos=[0.5, 0, 0], rot=[0.707, 0, 0, 0.707]),
-    #     spawn=UsdFileCfg(
-    #         # usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Mounts/SeattleLabTable/table_instanceable.usd",
-    #         usd_path=f"/home/emil/code/external/IsaacLab/multimodal_gym/multimodal_gym/assets/franka/table_instanceable.usd",
-
-    #         rigid_props=RigidBodyPropertiesCfg(
-    #             solver_position_iteration_count=16,
-    #             solver_velocity_iteration_count=1,
-    #             max_angular_velocity=1000.0,
-    #             max_linear_velocity=1000.0,
-    #             max_depenetration_velocity=5.0,
-    #             disable_gravity=False,
-    #         ),
-    #         # mass_props=sim_utils.MassPropertiesCfg(density=567.0)
-    #     ),
-    # )
-
     # Listens to the required transforms
     marker_cfg = FRAME_MARKER_CFG.copy()
     marker_cfg.markers["frame"].scale = (0.01, 0.01, 0.01)
@@ -302,30 +258,12 @@ class FrankaEnvCfg(DirectRLEnvCfg):
         debug_vis=True,
     )
 
-    # hold off on using multiple cameras until dev team sort their stuff
-    # https://github.com/isaac-sim/IsaacLab/issues/1074
-    eyes_front = [0.9, -0.9, 0.6]
-    targets_front = [0.3, 0.0, 0.2]
-    tiled_camera_front: TiledCameraCfg = TiledCameraCfg(
-        prim_path="/World/envs/env_.*/Camera_front",
-        offset=TiledCameraCfg.OffsetCfg(pos=(0.0, -0.0, 0.0), rot=(1, 0, 0, 0), convention="world"),
-        data_types=["rgb"],
-        spawn=sim_utils.PinholeCameraCfg(
-            focal_length=24.0, focus_distance=400.0, horizontal_aperture=20.955, clipping_range=(0.01, 3.2)
-        ),
-        width=img_dim,
-        height=img_dim,
-        debug_vis=True,
-    )
-
     # defaults to be overwritten
     write_image_to_file = False
     obs_list = ["prop", "gt"]
     aux_list = []
     normalise_prop = True
     normalise_pixels = True
-    frame_stack = 1
-    random_crop = False
     num_cameras = 1
     object_type = "rigid"
 
@@ -345,25 +283,15 @@ class FrankaEnv(DirectRLEnv):
     def __init__(self, cfg: FrankaEnvCfg, render_mode: str | None = None, **kwargs):
 
         self.obs_stack = cfg.obs_stack
-        # joint pos, joint vel, aperture, ee pos quat, actions
-        img_dim = 84
-
         super().__init__(cfg, render_mode, **kwargs)
 
         self.dtype = torch.float32
         self.binary_tactile = cfg.binary_tactile
-        print("binary tactile:", self.binary_tactile)
 
         # create auxiliary variables for computing applied action, observations and rewards
         self.robot_dof_lower_limits = self.robot.data.soft_joint_pos_limits[0, :, 0].to(device=self.device)
         self.robot_dof_upper_limits = self.robot.data.soft_joint_pos_limits[0, :, 1].to(device=self.device)
         self.robot_dof_targets = torch.zeros((self.num_envs, self.robot.num_joints), device=self.device)
-
-        # self.robot_vel_lower_limits = torch.zeros(self.robot.num_joints, device=self.device)
-        # self.robot_vel_upper_limits = torch.zeros(self.robot.num_joints, device=self.device)
-        # self.robot_vel_upper_limits[:4] = FRANKA_PANDA_CFG.actuators["panda_shoulder"].velocity_limit
-        # self.robot_vel_upper_limits[4:7] = FRANKA_PANDA_CFG.actuators["panda_forearm"].velocity_limit
-        # self.robot_vel_upper_limits[7:9] = FRANKA_PANDA_CFG.actuators["panda_hand"].velocity_limit
 
         # list of actuated joints
         self.actuated_dof_indices = list()
@@ -398,7 +326,6 @@ class FrankaEnv(DirectRLEnv):
         self.reaching_object_scale = cfg.reaching_object_scale
         self.contact_reward_scale = cfg.contact_reward_scale
         self.lift_object_scale = cfg.lift_object_scale
-        self.action_penalty_scale = cfg.action_penalty_scale
         self.joint_vel_penalty_scale = cfg.joint_vel_penalty_scale
         self.object_goal_tracking_scale = cfg.object_goal_tracking_scale
 
@@ -410,8 +337,6 @@ class FrankaEnv(DirectRLEnv):
 
         # camera stuff
         self.count = 0
-
-        self.auxiliary_task = None
 
         self.extras["log"] = {
             "reach_reward": None,
@@ -444,21 +369,16 @@ class FrankaEnv(DirectRLEnv):
             print("SETTING UP RIGID OBJECT", self.cfg.object_cfg)
             self.object = RigidObject(self.cfg.object_cfg)
             self.scene.rigid_objects["object"] = self.object
-            # self.object = Articulation(self.cfg.object_cfg)
-            # self.scene.articulations["object"] = self.object
 
     def _setup_scene(self):
         self.robot = Articulation(self.cfg.robot_cfg)
 
         self._add_object_to_scene()
 
-        # Issues with this particular rigid object
-        
         # FrameTransformer provides interface for reporting the transform of
         # one or more frames (target frames) wrt to another frame (source frame)
         self.ee_frame = FrameTransformer(self.cfg.ee_config)
         self.ee_frame.set_debug_vis(False)
-
         self.left_sensor_frame = FrameTransformer(self.cfg.left_sensor_cfg)
         self.right_sensor_frame = FrameTransformer(self.cfg.right_sensor_cfg)
 
@@ -468,13 +388,11 @@ class FrankaEnv(DirectRLEnv):
         # clone and replicate (no need to filter for this environment)
         self.scene.clone_environments(copy_from_source=False)
 
-        # add articultion to scene - we must register to scene to randomize with EventManager
+        # register to scene
         self.scene.articulations["robot"] = self.robot
-        
         self.scene.sensors["ee_frame"] = self.ee_frame
         self.scene.sensors["left_sensor_frame"] = self.left_sensor_frame
         self.scene.sensors["right_sensor_frame"] = self.right_sensor_frame
-
 
         yellow = (1.0, 0.96, 0.0)
         orange = (1.0, 0.5, 0.0)
@@ -486,19 +404,13 @@ class FrankaEnv(DirectRLEnv):
         light_cfg_2.func("/World/disk", light_cfg_2, translation=(-1, 0, 1))
 
         if "pixels" in self.cfg.obs_list or "pixels" in self.cfg.aux_list:
-            print("SETTING UP CAMERA")
+            print("This won't work at the moment - talk to Elle")
             from omni.isaac.core.utils.extensions import enable_extension
-
             enable_extension("omni.replicator.core")
             import omni.replicator.core as rep
-
             rep.settings.set_render_rtx_realtime(antialiasing="DLAA")
             self._tiled_camera = TiledCamera(self.cfg.tiled_camera)
             self.scene.sensors["tiled_camera"] = self._tiled_camera
-
-            # if self.cfg.num_cameras > 1:
-            #     self._tiled_camera_front = TiledCamera(self.cfg.tiled_camera_front)
-            #     self.scene.sensors["tiled_camera_front"] = self._tiled_camera_front
 
         if "tactile" in self.cfg.obs_list:
             self.left_contact_sensor = ContactSensor(self.cfg.left_contact_cfg)
@@ -520,8 +432,8 @@ class FrankaEnv(DirectRLEnv):
         """Configure the action and observation spaces for the Gym environment."""
         # observation space (unbounded since we don't impose any limits)
         self.num_gt_observations = self.cfg.num_gt_observations*self.obs_stack  # is temporary!!!!
-        self.num_tactile_observations = 2 * self.obs_stack
-        self.num_prop_observations = (9 + 9 + 1 + 7 + 9)*self.obs_stack
+        self.num_tactile_observations = self.cfg.num_tactile_observations * self.obs_stack
+        self.num_prop_observations = self.cfg.num_prop_observations*self.obs_stack
 
         self.num_actions = self.cfg.num_actions
         self.num_states = self.cfg.num_states
@@ -530,7 +442,7 @@ class FrankaEnv(DirectRLEnv):
         self.num_img_observations = (
             self.cfg.tiled_camera.height,
             self.cfg.tiled_camera.width,
-            self.cfg.frame_stack * 3 * self.cfg.num_cameras,
+            self.cfg.obs_stack * 3 * self.cfg.num_cameras,
         )
 
         gym_dict = {}
@@ -546,22 +458,6 @@ class FrankaEnv(DirectRLEnv):
 
         self.single_observation_space = gym.spaces.Dict()
         self.single_observation_space["policy"] = gym.spaces.Dict(gym_dict)
-
-        # option to record states not used in policy
-        if self.cfg.aux_list is not None:
-            state_dict = {}
-            for k in self.cfg.aux_list:
-                if k == "prop":
-                    state_dict[k] = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(self.num_prop_observations,))
-                elif k == "pixels":
-                    state_dict[k] = gym.spaces.Box(low=-np.inf, high=np.inf, shape=self.num_img_observations)
-                elif k == "gt":
-                    state_dict[k] = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(self.num_gt_observations,))
-
-            self.single_observation_space["aux"] = gym.spaces.Dict(state_dict)
-            self.aux_space = gym.vector.utils.batch_space(self.single_observation_space["aux"], self.num_envs)
-            
-
         self.observation_space = gym.vector.utils.batch_space(self.single_observation_space, self.num_envs)
         self.single_action_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(self.num_actions,))
         self.action_space = gym.vector.utils.batch_space(self.single_action_space, self.num_envs)
@@ -569,8 +465,7 @@ class FrankaEnv(DirectRLEnv):
         print("Single observation space:", self.single_observation_space)
         print("Batched observation space:", self.observation_space)
 
-        if "pixels" in self.cfg.obs_list or "pixels" in self.cfg.aux_list:
-
+        if "pixels" in self.cfg.obs_list:
             eyes = (
                 torch.tensor(self.cfg.eye, dtype=torch.float, device=self.device).repeat((self.num_envs, 1))
                 + self.scene.env_origins
@@ -634,42 +529,8 @@ class FrankaEnv(DirectRLEnv):
 
         obs_dict = {"policy": obs_dict}
 
-        # if self.cfg.aux_list is not None:
-        #     aux_dict = {"aux": self._compute_states()}
-        #     obs_dict.update(aux_dict)
-
-        self.aux_loss = 0 # self.auxiliary_task.compute_reward(obs_dict)
-
         return obs_dict
     
-    def _compute_states(self) -> dict:
-
-        # (num_envs, num_bodies, 3)
-        forces = self.wholebody_contact_sensor.data.net_forces_w.clone() # .reshape(self.num_envs, 3)
-        # (num_envs, num_bodies)
-        norm = torch.linalg.vector_norm(forces, dim=2, keepdim=True)
-        bad_indices = [7, 10]
-        # Create a mask to keep all indices except the bad ones
-        mask = torch.ones(norm.shape[1], dtype=torch.bool, device=norm.device)
-        mask[bad_indices] = False
-        total_contact_force = norm[:, mask].sum(dim=1) #.squeeze(1)
-        self.in_contact = torch.where(total_contact_force > 0, 1, 0) #.unsqueeze(1)
-        # print(total_contact_force.shape, self.in_contact.shape)
-        
-        aux_dict = {}
-        for k in self.cfg.aux_list:
-            if k == "prop":
-                aux_dict[k] = self._get_proprioception()
-            elif k == "pixels":
-                aux_dict[k] = self._get_images()
-            elif k == "gt":
-                aux_dict[k] = self.in_contact # self._get_gt()
-            elif k == "tactile":
-                aux_dict[k] = self._get_tactile()
-            else:
-                print("Unknown observations type!")
-        return aux_dict
-
 
     def _get_proprioception(self):
         prop = torch.cat(
@@ -723,34 +584,10 @@ class FrankaEnv(DirectRLEnv):
         )
 
         return self.normalised_forces
-    
-    def _rotate_world_to_local(self, forcesL_world, forcesR_world):
-        """
-        todo: fix this to get 3d forces. left frame is broken for some reason
-        see google slide
-        
-        """
-        # make force vector into quaternion with 0 scalar
-        zeros_column = torch.zeros(self.num_envs, 1).to(self.device)
-        q_forcesL_world = torch.cat((zeros_column, forcesL_world), dim=1)
-        q_forcesR_world = torch.cat((zeros_column, forcesR_world), dim=1)
-
-        # To apply a rotation to a vector v, one computes the quaternion product q v q^*,
-        # where v is implicitly identified with the quaternion with real (scalar) part 0
-        # and v as its imaginary part, and q^* denotes the conjugate of q.
-        q_left = self.left_sensor_frame.data.target_quat_source[..., 0, :]
-        q_right = self.right_sensor_frame.data.target_quat_source[..., 0, :]
-
-        # forces in frames of contact bodies
-        forces_left_frame = quat_mul(quat_mul(q_left, q_forcesL_world), quat_conjugate(q_left))[:, 1:]
-        forces_right_frame = quat_mul(quat_mul(q_right, q_forcesR_world), quat_conjugate(q_right))[:, 1:]
-        return forces_left_frame, forces_right_frame
         
     def _get_tactile(self):
         # contact sensor data is [num_envs, 2, 3]
         forcesL_world, forcesR_world = self._read_force_matrix()
-
-        # forces_left_frame, forces_right_frame = self._rotate_world_to_local(forcesL_world, forcesR_world)
 
         # absolute value the whole thing, and sum it
         forcesL_net = torch.linalg.vector_norm(forcesL_world, dim=1, keepdim=True)
@@ -779,30 +616,9 @@ class FrankaEnv(DirectRLEnv):
             return self.normalised_forces
 
 
-    def _get_tactile_old(self):
-        # contact sensor data is [num_envs, 2, 3]
-        # print("Received max contact force of: ", torch.max(self.contact_sensor.data.net_forces_w).item())
-        # forces_world = self.contact_sensor.data.net_forces_w[:].clone()
-        # forces_world = forces_world
-
-        # separate into left and right for frame transform force_matrix_w net_forces_w
-        forcesL_world = self.left_contact_sensor.data.force_matrix_w[:].clone().reshape(self.num_envs, 3)
-        forcesR_world = self.right_contact_sensor.data.force_matrix_w[:].clone().reshape(self.num_envs, 3)
-
-        forces_left_frame, forces_right_frame = self._rotate_world_to_local(forcesL_world, forcesR_world)
-
-        norm_forces = self._normalise_forces(forces_left_frame, forces_right_frame)
-
-        return norm_forces
-
     def _get_images(self):
 
         camera_data = self._tiled_camera.data.output["rgb"].clone()
-
-        # if self.cfg.num_cameras > 1:
-        #     camera_data_front = self._tiled_camera_front.data.output["rgb"].clone()
-        #     save_single_image(camera_data, img_name=f"lift_front.png", nchw=False)
-        #     camera_data = torch.cat((camera_data, camera_data_front), dim=-1)
 
         # normalize the camera data for better training results
         # convert to float 32 to subtract mean, then back to uint8 for memory storage
@@ -812,11 +628,6 @@ class FrankaEnv(DirectRLEnv):
             camera_data -= mean_tensor
             camera_data *= 255
             camera_data = camera_data.to(torch.uint8)
-
-        if self.cfg.write_image_to_file:
-            self.count += 1
-            # save_single_image(camera_data, img_name=f"lift_{self.count}.png", nchw=False)
-            save_image_grid(camera_data, img_name=f"lift_{self.count}.png", nchw=False)
 
         return camera_data
 
@@ -829,16 +640,13 @@ class FrankaEnv(DirectRLEnv):
         # reset goals
         self._reset_target_pose(env_ids)
 
-        # reset table (ISSUES! SO REMOVING FOR NOW)
-        # table_state = self.table.data.default_root_state.clone()[env_ids]
-        # self.table.write_root_state_to_sim(table_state, env_ids)
-
         # reset object
         if self.cfg.object_type == "rigid":
             self._reset_object_pose(env_ids)
             
         # reset robot
         self._reset_robot(env_ids)
+
         # refresh intermediate values for _get_observations()
         self._compute_intermediate_values(reset=True, env_ids=env_ids)
 
@@ -924,7 +732,6 @@ class FrankaEnv(DirectRLEnv):
         return termination, time_out
     
 
-
 # scales an input between lower and upper
 @torch.jit.script
 def scale(x, lower, upper):
@@ -953,40 +760,11 @@ def rotation_distance(object_rot, target_rot):
 
 ### reward functions
 
-
 @torch.jit.script
 def distance_reward(object_ee_distance, std: float = 0.1):
     r_reach = (1 - torch.tanh(object_ee_distance / std))
     return r_reach
 
-@torch.jit.script
-def distance_reward(object_ee_distance, std: float = 0.1):
-    r_reach = (1 - torch.tanh(object_ee_distance / std))
-    return r_reach
-
-@torch.jit.script
-def contact_reward(normalised_forces, aperture, binary: bool = False):
-    
-    # only reward contacts not from contacting the other finger
-    min_aperture = 0.3
-    aperture_mask = (aperture > min_aperture).float()
-    f_left, f_right = normalised_forces[:, 0], normalised_forces[:, 1]
-
-    if binary:
-        min_force = 0.0
-        r_contact_left = torch.where(f_left > min_force, 0.5, 0.0)
-        r_contact_right = torch.where(f_right > min_force, 0.5, 0.0)
-
-    else:
-        r_contact_left = 2 * f_left * (1 - f_left)
-        r_contact_right = 2 * f_right * (1 - f_right) 
-
-    r_contact_left *= aperture_mask
-    r_contact_right *= aperture_mask
-
-    r_contact = r_contact_left + r_contact_right
-    
-    return r_contact
 
 @torch.jit.script
 def lift_reward(object_pos, minimal_height: float, episode_timestep_counter):
@@ -1001,39 +779,11 @@ def object_goal_reward(object_goal_distance, r_lift, std: float = 0.1):
     # tracking
     std = 0.3
     object_goal_tracking = (1 - torch.tanh(object_goal_distance / std)) 
-    
+    # only recieve reward if object is lifted
+    object_goal_tracking *= (r_lift > 0).float()
     return object_goal_tracking
 
 @torch.jit.script
 def joint_vel_penalty(robot_joint_vel):
     r_joint_vel = torch.sum(torch.square(robot_joint_vel), dim=1)
     return r_joint_vel
-
-@torch.jit.script
-def compute_in_box_reward(
-        ee_positions: torch.Tensor,  # (num_envs, 3) - End-effector source positions
-        box_center: torch.Tensor,    # (num_envs, 3) - Center of the virtual box (per env)
-        box_size: torch.Tensor,      # (num_envs, 3) - Box dimensions (width, height, depth)
-    ):
-        """
-        Computes a reward based on whether the end effector is inside the virtual box.
-        Args:
-            ee_positions: (num_envs, 3) - End-effector world positions.
-            box_center: (num_envs, 3) - Center of each box in world coordinates.
-            box_size: (num_envs, 3) - Width, height, depth of the box.
-        Returns:
-            reward: (num_envs,) - Reward for each environment.
-        """
-        # Compute box limits in world coordinates
-        box_min = box_center - (box_size / 2)
-        box_max = box_center + (box_size / 2)
-
-        # Check if EE is inside the box (per environment, element-wise comparison)
-        inside_box = (
-            (ee_positions[:, 0] >= box_min[:, 0]) & (ee_positions[:, 0] <= box_max[:, 0]) &
-            (ee_positions[:, 1] >= box_min[:, 1]) & (ee_positions[:, 1] <= box_max[:, 1]) &
-            (ee_positions[:, 2] >= box_min[:, 2]) & (ee_positions[:, 2] <= box_max[:, 2])
-        )
-
-        # Convert boolean mask to reward (1 if inside, 0 if outside)
-        return inside_box.float()

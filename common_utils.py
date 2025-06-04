@@ -4,12 +4,16 @@ import gymnasium as gym
 import os
 import random
 import torch
-from torch.utils.tensorboard import SummaryWriter
 import traceback
 from datetime import datetime
 from copy import deepcopy
+import numpy as np
 
-import wandb
+# stop log files from being generated!!
+import logging
+logging.getLogger('hydra').setLevel(logging.CRITICAL)
+logging.getLogger('hydra._internal').setLevel(logging.CRITICAL)
+
 from isaaclab_rl.models.encoder import Encoder
 from isaaclab_rl.algorithms.memories import Memory
 from isaaclab_rl.algorithms.policy_value import DeterministicValue, GaussianPolicy
@@ -18,7 +22,7 @@ from isaaclab_rl.algorithms.sequential import SequentialTrainer
 from isaaclab_rl.wrappers.frame_stack import FrameStack
 from isaaclab_rl.wrappers.skrl_wrapper import SkrlVecEnvWrapper, process_skrl_cfg
 from isaaclab_rl.models.running_standard_scaler import RunningStandardScaler
-
+from isaaclab_rl.tools.writer import Writer
 
 # Import extensions to set up environment tasks
 from tasks import franka  # noqa: F401
@@ -28,7 +32,6 @@ os.environ["WANDB_CACHE_DIR"] = "./wandb"
 os.environ["WANDB_CONFIG_DIR"] = "./wandb"
 os.environ["WANDB_DATA_DIR"] = "./wandb"
 
-LOG_ROOT_DIR = os.getcwd()
 
 
 def print_all_modules(model):
@@ -53,11 +56,6 @@ def make_env(env_cfg, args_cli, obs_stack=1):
             "disable_logger": True,
         }
         print("[INFO] Recording videos during training.")
-        print("[INFO] Recording videos during training.")
-        print("[INFO] Recording videos during training.")
-
-        # print_dict(video_kwargs, nesting=4)
-        # Should we only record during eval? Probably...
         env = gym.wrappers.RecordVideo(env, **video_kwargs)
 
     # wrap around environment for skrl
@@ -125,32 +123,6 @@ def make_memory(env, env_cfg, size, num_envs):
     return memory
 
 
-def setup_wandb(agent_cfg, skrl_config_dict, group_name=None, run_name=None):
-    # setup wandb
-    if agent_cfg["agent"]["experiment"]["wandb"] == True:
-
-        if group_name is None:
-            group_name = agent_cfg["agent"]["experiment"]["wandb_kwargs"]["group"]
-
-        if run_name is None:
-            run_name = agent_cfg["agent"]["experiment"]["wandb_kwargs"]["name"]
-
-        code_to_save = os.path.abspath(os.path.join(os.getcwd(), '..', '..'))
-        print("saving code in...", code_to_save)
-        wandb.init(
-            project=agent_cfg["agent"]["experiment"]["wandb_kwargs"]["project"],
-            entity="my-phd",
-            group=group_name,
-            name=run_name,
-            config=skrl_config_dict,
-            settings=wandb.Settings(code_dir=code_to_save)
-        )
-        # global step is what all metrics are logged against, and must be included as a key in the log dict
-        wandb.define_metric("global_step")
-        wandb_session = wandb
-    else:
-        wandb_session = None
-    return wandb_session
 
 def make_agent_cfg(env, agent_cfg):
 
@@ -167,7 +139,7 @@ def make_agent_cfg(env, agent_cfg):
     return default_agent_cfg
 
 
-def make_trainer(env, agent, agent_cfg, auxiliary_task=None):
+def make_trainer(env, agent, agent_cfg, auxiliary_task=None, writer=None):
 
     train_timesteps = int(agent_cfg["trainer"]["max_global_timesteps_M"] * 1e6 / env.num_envs)
     agent_cfg["trainer"]["timesteps"] = train_timesteps
@@ -178,7 +150,7 @@ def make_trainer(env, agent, agent_cfg, auxiliary_task=None):
     trainer_cfg["disable_progressbar"] = True
     trainer_cfg["observation_spaces"] = env.observation_space
     num_eval_envs = trainer_cfg["num_eval_envs"]
-    trainer = SequentialTrainer(cfg=trainer_cfg, env=env, agents=agent, num_eval_envs=num_eval_envs, auxiliary_task=auxiliary_task)
+    trainer = SequentialTrainer(cfg=trainer_cfg, env=env, agents=agent, num_eval_envs=num_eval_envs, auxiliary_task=auxiliary_task, writer=writer)
     return trainer
 
 def update_env_cfg(args_cli, env_cfg, agent_cfg, skrl_config_dict):
@@ -216,44 +188,9 @@ def update_env_cfg(args_cli, env_cfg, agent_cfg, skrl_config_dict):
 
     return env_cfg
 
-def setup_logging(agent_cfg):
-    # specify directory for logging experiments
-    log_root_path = os.path.join(
-        LOG_ROOT_DIR,
-        "logs",
-        "skrl",
-        agent_cfg["agent"]["experiment"]["directory"],
-        agent_cfg["agent"]["experiment"]["experiment_name"],
-    )
-    # log directory e.g. prop_gt
-    log_root_path = os.path.abspath(log_root_path)
-    agent_cfg["agent"]["experiment"]["directory"] = log_root_path
-    print(f"[INFO] Logging experiment in directory: {log_root_path}")
-    # specific run by time OR NAME
-    if "run_name" in agent_cfg["agent"]["experiment"].keys():
-        log_dir = agent_cfg["agent"]["experiment"]["run_name"]
-    else:
-        log_dir = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    agent_cfg["agent"]["experiment"]["experiment_name"] = log_dir
-    log_dir = os.path.join(log_root_path, log_dir)
 
-    # tensorboard writer
-    if agent_cfg["agent"]["experiment"]["tb_log"]:
-        tb_writer = SummaryWriter(log_dir=log_dir)
-        print("Created tensorboard summary writer")
-    else:
-        tb_writer = None
-
-    return tb_writer, agent_cfg
-
-
-from skrl import config, logger
-import numpy as np
 
 def set_seed(seed: int = 42) -> None:
-
-
-    logger.info(f"Seed: {seed}")
     
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)

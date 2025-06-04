@@ -48,19 +48,22 @@ agent:
   kl_threshold: 0
   rewards_shaper_scale: 1.0
   augment: False
-  # logging and checkpoint
-  experiment:
-    directory: "test"
-    experiment_name: "test"
-    tb_log: True
-    wandb: 0
-    wandb_kwargs: {
-      "project": "isaac_lab",
-      "group": "test",
-      "name": "test run",
-    }
+
 
 trainer:
   num_eval_envs: 100
   max_global_timesteps_M: 200
-  environment_info: "log"
+
+# logging and checkpoints
+experiment:
+  directory: "franka"
+  experiment_name: "lift"
+  save_checkpoints: 1
+  tb_log: True
+  wandb: 1
+  wandb_kwargs: {
+    "entity": "my-phd",
+    "project": "isaac_lab",
+    "group": "franka_lift",
+    "name": "test",
+  }
