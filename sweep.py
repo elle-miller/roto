@@ -44,6 +44,7 @@ import isaaclab_tasks  # noqa: F401
 from isaaclab_tasks.utils.hydra import hydra_task_config, register_task_to_hydra
 from isaaclab_rl.utils.skrl.run_utils import *
 from isaaclab_rl.utils.models.running_standard_scaler import RunningStandardScaler
+from isaaclab_rl.wrappers.isaaclab_wrapper import IsaacLabWrapper
 
 
 # hparam_dir = agent_cfg["agent"]["experiment"]["directory"]
@@ -242,7 +243,7 @@ if __name__ == "__main__":
     if obs_stack != 1:
         env = FrameStack(env, num_stack=obs_stack)
     
-    env = SkrlVecEnvWrapper(env, ml_framework="torch")
+    env = IsaacLabWrapper(env)
     
     # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.create_study.html
     storage = "sqlite:///paper_agents5.db"

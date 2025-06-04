@@ -44,6 +44,7 @@ from common_utils import *
 import isaaclab_tasks  # noqa: F401
 from isaaclab_rl.models.running_standard_scaler import RunningStandardScaler
 from isaaclab_tasks.utils.hydra import hydra_task_config
+from isaaclab_rl.wrappers.isaaclab_wrapper import IsaacLabWrapper
 
 
 @hydra_task_config(args_cli.task, "skrl_cfg_entry_point")
@@ -56,7 +57,7 @@ def main(env_cfg, agent_cfg: dict):
     set_seed(agent_cfg["seed"])
 
     # UPDATE CFGS
-    skrl_config_dict = process_skrl_cfg(agent_cfg["models"], ml_framework="torch")
+    skrl_config_dict = agent_cfg["models"]
     env_cfg = update_env_cfg(args_cli, env_cfg, agent_cfg, skrl_config_dict)
 
     # LOGGING SETUP
@@ -71,10 +72,9 @@ def main(env_cfg, agent_cfg: dict):
     if obs_stack != 1:
         env = FrameStack(env, num_stack=obs_stack)
     
-    env = SkrlVecEnvWrapper(env, ml_framework="torch")
-    # env.configure_gym_env_spaces(obs_stack)
+    env = IsaacLabWrapper(env)
     
-    models, encoder = make_models(env, env_cfg, agent_cfg, skrl_config_dict)
+    policy, value, encoder = make_models(env, env_cfg, agent_cfg, skrl_config_dict)
     num_training_envs = env_cfg.scene.num_envs - agent_cfg["trainer"]["num_eval_envs"]
     rl_memory = make_memory(env, env_cfg, size=agent_cfg["agent"]["rollouts"], num_envs=num_training_envs)
     default_agent_cfg = make_agent_cfg(env, agent_cfg)
@@ -86,8 +86,9 @@ def main(env_cfg, agent_cfg: dict):
     # PPO
     agent = PPO(
         encoder,
+        policy, 
+        value,
         value_preprocessor,
-        models=models,
         memory=rl_memory,
         cfg=default_agent_cfg,
         observation_space=env.observation_space,

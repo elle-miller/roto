@@ -1,7 +1,6 @@
 seed: 42
 
 models:
-  separate: True
   obs_list: ["prop", "tactile", "gt"]
   obs_stack: 1
   preprocess:

@@ -42,6 +42,7 @@ simulation_app = app_launcher.app
 
 from isaaclab_tasks.utils.hydra import hydra_task_config
 from isaaclab_rl.utils.models.running_standard_scaler import RunningStandardScaler
+from isaaclab_rl.wrappers.isaaclab_wrapper import IsaacLabWrapper
 
 from isaaclab_rl.utils.skrl.run_utils import *
 
@@ -84,7 +85,7 @@ def main(env_cfg, agent_cfg: dict):
     if obs_stack != 1:
         env = FrameStack(env, num_stack=obs_stack)
     
-    env = SkrlVecEnvWrapper(env, ml_framework="torch")
+    env = IsaacLabWrapper(env)
     models, encoder = make_models(env, env_cfg, agent_cfg, skrl_config_dict)
     num_training_envs = env.num_envs - agent_cfg["trainer"]["num_eval_envs"]
     default_agent_cfg = make_agent_cfg(env, agent_cfg)
