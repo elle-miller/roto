@@ -22,7 +22,6 @@ INSTALL_REQUIRES = [
     "autoflake",
 ]
 
-
 # Installation operation
 setup(
     name="isaaclab_rl",

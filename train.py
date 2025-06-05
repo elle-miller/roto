@@ -18,7 +18,6 @@ import sys
 import torch
 import traceback
 
-import carb
 from isaaclab.app import AppLauncher
 
 # add argparse arguments
@@ -67,6 +66,7 @@ def main(env_cfg, agent_cfg: dict):
     agent_cfg["seed"] = args_cli.seed if args_cli.seed is not None else agent_cfg["seed"]
     set_seed(agent_cfg["seed"])
     agent_cfg["log_path"] = LOG_PATH
+    args_cli.video = agent_cfg["experiment"]["upload_videos"]
 
     # Update the environment config
     env_cfg = update_env_cfg(args_cli, env_cfg, agent_cfg)
@@ -75,7 +75,7 @@ def main(env_cfg, agent_cfg: dict):
     writer = Writer(agent_cfg)
 
     # Make environment. Order must be gymnasium Env -> FrameStack -> IsaacLab
-    env = make_env(env_cfg, args_cli, agent_cfg["models"]["obs_stack"])
+    env = make_env(env_cfg, writer, args_cli, agent_cfg["models"]["obs_stack"])
 
     # setup models
     policy, value, encoder, value_preprocessor = make_models(env, env_cfg, agent_cfg, dtype)
@@ -86,7 +86,8 @@ def main(env_cfg, agent_cfg: dict):
     auxiliary_task = None
 
     # configure and instantiate PPO agent
-    ppo_agent_cfg = PPO_DEFAULT_CONFIG.copy().update(agent_cfg["agent"])
+    ppo_agent_cfg = PPO_DEFAULT_CONFIG.copy()
+    ppo_agent_cfg.update(agent_cfg["agent"])
     agent = PPO(
         encoder,
         policy,
@@ -98,7 +99,7 @@ def main(env_cfg, agent_cfg: dict):
         action_space=env.action_space,
         device=env.device,
         writer=writer,
-        auxiliary_task=None,
+        auxiliary_task=auxiliary_task,
         dtype=dtype,
     )
 

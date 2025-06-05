@@ -15,12 +15,13 @@ from isaaclab_rl.wrappers.frame_stack import FrameStack
 from isaaclab_rl.wrappers.isaaclab_wrapper import IsaacLabWrapper
 
 # ADD YOUR ENVS HERE
+from tasks import franka  # noqa: F401
 
 # change this to something else if you want
 LOG_PATH = os.getcwd()
 
 
-def make_env(env_cfg, args_cli, obs_stack=1):
+def make_env(env_cfg, writer, args_cli, obs_stack=1):
 
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
 
@@ -30,10 +31,10 @@ def make_env(env_cfg, args_cli, obs_stack=1):
 
     # wrap for video recording
     if args_cli.video:
-        log_dir = os.cwd()
         video_kwargs = {
-            "video_folder": os.path.join(log_dir, "videos"),
+            "video_folder": writer.video_dir,
             "step_trigger": lambda step: step % args_cli.video_interval == 0,
+            # "step_trigger": lambda step: step == 0,
             "video_length": args_cli.video_length,
             "disable_logger": True,
         }

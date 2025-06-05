@@ -116,8 +116,8 @@ class FrankaEnvCfg(DirectRLEnvCfg):
     )
 
     default_object_pos = [0.5, 0, 0.03]
-    eye = (1.2, 0.9, 0.7)
-    lookat = (0.5, 0, 0.05)
+    eye = (3, 3, 3)
+    lookat = (0, 0, 0)
 
     viewer: ViewerCfg = ViewerCfg(eye=eye, lookat=lookat, resolution=(1920, 1080))
 
@@ -392,7 +392,7 @@ class FrankaEnv(DirectRLEnv):
 
         yellow = (1.0, 0.96, 0.0)
         orange = (1.0, 0.5, 0.0)
-        light_cfg = sim_utils.DomeLightCfg(intensity=100.0, color=(0.75, 0.75, 0.75))
+        light_cfg = sim_utils.DomeLightCfg(intensity=1000.0, color=(0.75, 0.75, 0.75))
         light_cfg.func("/World/Light", light_cfg)
         light_cfg_1 = sim_utils.SphereLightCfg(intensity=10000.0, color=yellow)
         light_cfg_1.func("/World/ds", light_cfg_1, translation=(1, 0, 1))

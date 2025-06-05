@@ -24,8 +24,15 @@ cd my_cool_project_name
 4. Test everything is working OK with the Franka Lift environment
 ```
 python train.py --task Franka_Lift --num_envs 8192 --headless
-```
-You should hit a return of ~6000 by 40 million timesteps. 
 
-5. Make your own environment
+# play checkpoint with viewer
+python play.py --task Franka_Lift --num_envs 256 --checkpoint logs/franka/lift/.../checkpoints/best_agent.pt
+
+# save video
+```
+You should hit a return of ~8000 by 40 million timesteps (check "Eval episode returns / returns" on wandb)
+
+5. Make your own environment!
+
+TODO
 

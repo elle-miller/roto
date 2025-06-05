@@ -4,7 +4,7 @@
 
 # Formatting code with autoflake, black, and isort
 format:
-	autoflake --remove-all-unused-imports --remove-unused-variables --in-place --recursive .
+	autoflake --remove-all-unused-imports --in-place --recursive .
 	black .
 	isort .
 
