@@ -5,17 +5,15 @@
 
 from __future__ import annotations
 
-
 import torch
-
-from tasks.franka.franka import FrankaEnv, FrankaEnvCfg, randomize_rotation
 
 import isaaclab.sim as sim_utils
 from isaaclab.assets import RigidObjectCfg
+from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
+from isaaclab.sim.schemas.schemas_cfg import CollisionPropertiesCfg, MassPropertiesCfg, RigidBodyPropertiesCfg
+from isaaclab.sim.spawners.from_files.from_files_cfg import UsdFileCfg
 from isaaclab.utils import configclass
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
-from isaaclab.sim.schemas.schemas_cfg import RigidBodyPropertiesCfg
-from isaaclab.sim.spawners.from_files.from_files_cfg import UsdFileCfg
 from isaaclab.utils.math import (
     quat_conjugate,
     quat_from_angle_axis,
@@ -23,10 +21,8 @@ from isaaclab.utils.math import (
     sample_uniform,
     saturate,
 )
-from isaaclab.sim.schemas.schemas_cfg import CollisionPropertiesCfg, MassPropertiesCfg, RigidBodyPropertiesCfg
-from isaaclab.markers import VisualizationMarkersCfg, VisualizationMarkers
 
-from tasks.franka.franka import rotation_distance
+from tasks.franka.franka import FrankaEnv, FrankaEnvCfg, randomize_rotation, rotation_distance
 
 
 @configclass
@@ -47,7 +43,7 @@ class LiftEnvCfg(FrankaEnvCfg):
         init_state=RigidObjectCfg.InitialStateCfg(pos=default_object_pos, rot=[1, 0, 0, 0]),
         spawn=UsdFileCfg(
             usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Blocks/DexCube/dex_cube_instanceable.usd",
-              scale=(0.8, 0.8, 0.8),
+            scale=(0.8, 0.8, 0.8),
             rigid_props=RigidBodyPropertiesCfg(
                 solver_position_iteration_count=16,
                 solver_velocity_iteration_count=1,
@@ -93,7 +89,7 @@ class LiftEnv(FrankaEnv):
         self.goal_pos[:, :] = torch.tensor(self.cfg.default_goal_pos, device=self.device)
         self.goal_rot = torch.zeros((self.num_envs, 4), dtype=torch.float, device=self.device)
         # self.goal_rot[:, :] = torch.tensor(self.cfg.default_goal_rot, device=self.device)
-        
+
         self.object_goal_distance = torch.zeros((self.num_envs, 3), device=self.device)
         self.object_goal_euclidean_distance = torch.zeros((self.num_envs,), device=self.device)
         self.object_goal_rotation = torch.zeros((self.num_envs, 4), device=self.device)
@@ -109,7 +105,6 @@ class LiftEnv(FrankaEnv):
     def _setup_scene(self):
         super()._setup_scene()
         self.goal_markers = VisualizationMarkers(self.cfg.goal_object_cfg)
-
 
     def _get_gt(self):
 
@@ -131,7 +126,6 @@ class LiftEnv(FrankaEnv):
             dim=-1,
         )
         return gt
-
 
     def _get_rewards(self) -> torch.Tensor:
 
@@ -172,7 +166,6 @@ class LiftEnv(FrankaEnv):
 
         return rewards
 
-
     def _reset_target_pose(self, env_ids):
         # reset goal rotation
         rand_floats = sample_uniform(-1.0, 1.0, (len(env_ids), 2), device=self.device)
@@ -193,16 +186,15 @@ class LiftEnv(FrankaEnv):
         super()._compute_intermediate_values()
         if env_ids is None:
             env_ids = self.robot._ALL_INDICES
-        
+
         self.object_goal_distance[env_ids] = self.object_pos[env_ids] - self.goal_pos[env_ids]
         self.object_goal_euclidean_distance[env_ids] = torch.norm(self.object_goal_distance[env_ids], dim=1)
-        self.object_goal_rotation[env_ids] = quat_mul(
-            self.object_rot[env_ids], quat_conjugate(self.goal_rot[env_ids])
-        )
+        self.object_goal_rotation[env_ids] = quat_mul(self.object_rot[env_ids], quat_conjugate(self.goal_rot[env_ids]))
         self.object_goal_angular_distance[env_ids] = rotation_distance(self.object_rot[env_ids], self.goal_rot[env_ids])
 
 
-from tasks.franka.franka import distance_reward, lift_reward, object_goal_reward, joint_vel_penalty
+from tasks.franka.franka import distance_reward, joint_vel_penalty, lift_reward, object_goal_reward
+
 
 @torch.jit.script
 def compute_rewards(
@@ -222,18 +214,7 @@ def compute_rewards(
     r_lift = lift_reward(object_pos, minimal_height, episode_timestep_counter) * lift_object_scale
     r_object_goal = object_goal_reward(object_goal_distance, r_lift, std=0.3) * object_goal_tracking_scale
     r_joint_vel = joint_vel_penalty(robot_joint_vel) * joint_vel_penalty_scale
-    
-    rewards = (
-        r_ee_object
-        + r_lift
-        + r_object_goal
-        + r_joint_vel
-    )
 
-    return (
-        rewards,
-        r_ee_object,
-        r_lift,
-        r_object_goal,
-        r_joint_vel
-    )
+    rewards = r_ee_object + r_lift + r_object_goal + r_joint_vel
+
+    return (rewards, r_ee_object, r_lift, r_object_goal, r_joint_vel)

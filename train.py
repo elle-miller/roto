@@ -13,8 +13,6 @@ a more user-friendly way.
 """Launch Isaac Sim Simulator first."""
 
 
-
-
 import argparse
 import sys
 
@@ -39,17 +37,20 @@ sys.argv = [sys.argv[0]] + hydra_args
 app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
-from common_utils import *
-
 import isaaclab_tasks  # noqa: F401
 from isaaclab_rl.models.running_standard_scaler import RunningStandardScaler
-from isaaclab_tasks.utils.hydra import hydra_task_config
 from isaaclab_rl.wrappers.isaaclab_wrapper import IsaacLabWrapper
+from isaaclab_tasks.utils.hydra import hydra_task_config
+
+from common_utils import *
 
 
 @hydra_task_config(args_cli.task, "skrl_cfg_entry_point")
 def main(env_cfg, agent_cfg: dict):
     """Train with skrl agent."""
+
+    # Choose the precision you want. Lower precision means you can fit more environments.
+    dtype = torch.float32
 
     # SEED (environment AND agent)
     # note: we lose determinism when using pixels due to GPU renderer
@@ -57,36 +58,29 @@ def main(env_cfg, agent_cfg: dict):
     set_seed(agent_cfg["seed"])
 
     # UPDATE CFGS
-    skrl_config_dict = agent_cfg["models"]
-    env_cfg = update_env_cfg(args_cli, env_cfg, agent_cfg, skrl_config_dict)
+    env_cfg = update_env_cfg(args_cli, env_cfg, agent_cfg)
+    num_training_envs = env_cfg.scene.num_envs - agent_cfg["trainer"]["num_eval_envs"]
 
     # LOGGING SETUP
     writer = Writer(agent_cfg)
 
-    # Expose environment creation so I can configure obs_stack as tunable hparam
-    obs_stack=skrl_config_dict["obs_stack"]
-    env_cfg.obs_stack = obs_stack
+    # Make environment. Order must be gymnasium Env -> FrameStack -> IsaacLab
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
-
-    # FrameStack expects a gymnasium.Env
-    if obs_stack != 1:
-        env = FrameStack(env, num_stack=obs_stack)
-    
+    if agent_cfg["models"]["obs_stack"] > 1:
+        env = FrameStack(env, num_stack=agent_cfg["models"]["obs_stack"])
     env = IsaacLabWrapper(env)
-    
-    policy, value, encoder = make_models(env, env_cfg, agent_cfg, skrl_config_dict)
-    num_training_envs = env_cfg.scene.num_envs - agent_cfg["trainer"]["num_eval_envs"]
+
+    # setup stuff
+    policy, value, encoder = make_models(env, env_cfg, agent_cfg)
     rl_memory = make_memory(env, env_cfg, size=agent_cfg["agent"]["rollouts"], num_envs=num_training_envs)
     default_agent_cfg = make_agent_cfg(env, agent_cfg)
-
-    value_preprocessor = RunningStandardScaler(size=1, device=env.device)
-
+    value_preprocessor = RunningStandardScaler(size=1, device=env.device, dtype=dtype)
     auxiliary_task = None
 
     # PPO
     agent = PPO(
         encoder,
-        policy, 
+        policy,
         value,
         value_preprocessor,
         memory=rl_memory,
@@ -96,6 +90,7 @@ def main(env_cfg, agent_cfg: dict):
         device=env.device,
         writer=writer,
         auxiliary_task=auxiliary_task,
+        dtype=dtype
     )
 
     # Let's go!
@@ -104,6 +99,7 @@ def main(env_cfg, agent_cfg: dict):
 
     # close the simulator
     env.close()
+
 
 if __name__ == "__main__":
     try:

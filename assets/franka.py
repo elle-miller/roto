@@ -12,16 +12,16 @@ The following configurations are available:
 
 Reference: https://github.com/frankaemika/franka_ros
 """
-import isaaclab.sim as sim_utils
-
-from isaaclab.actuators import ImplicitActuatorCfg
-from isaaclab.assets.articulation import ArticulationCfg
-from isaaclab.utils.assets import ISAACLAB_NUCLEUS_DIR
-
 ##
 # Configuration
 ##
 import os
+
+import isaaclab.sim as sim_utils
+from isaaclab.actuators import ImplicitActuatorCfg
+from isaaclab.assets.articulation import ArticulationCfg
+from isaaclab.utils.assets import ISAACLAB_NUCLEUS_DIR
+
 parent_dir = os.getcwd()
 
 

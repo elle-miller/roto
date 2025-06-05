@@ -14,10 +14,10 @@ a more user-friendly way.
 
 
 import argparse
-import sys
-import optuna
 import gc
+import sys
 
+import optuna
 from isaaclab.app import AppLauncher
 
 # add argparse arguments
@@ -41,27 +41,26 @@ app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
 import isaaclab_tasks  # noqa: F401
-from isaaclab_tasks.utils.hydra import hydra_task_config, register_task_to_hydra
-from isaaclab_rl.utils.skrl.run_utils import *
 from isaaclab_rl.utils.models.running_standard_scaler import RunningStandardScaler
+from isaaclab_rl.utils.skrl.run_utils import *
 from isaaclab_rl.wrappers.isaaclab_wrapper import IsaacLabWrapper
-
+from isaaclab_tasks.utils.hydra import hydra_task_config, register_task_to_hydra
 
 # hparam_dir = agent_cfg["agent"]["experiment"]["directory"]
 # hparam_exp = agent_cfg["agent"]["experiment"]["experiment_name"]
+
 
 class OptimisationRunner:
     def __init__(self, study_name, n_startup_trials, n_warmup_steps, interval_steps):
 
         self.sampler = optuna.samplers.TPESampler(n_startup_trials=n_startup_trials)
-    
+
         # self.pruner = optuna.pruners.MedianPruner(
         #     n_startup_trials=n_startup_trials,
         #     n_warmup_steps=n_warmup_steps,
         #     interval_steps=interval_steps
         # )
         self.pruner = optuna.pruners.NopPruner()
-
 
         self.study = optuna.create_study(
             storage=storage,
@@ -75,10 +74,12 @@ class OptimisationRunner:
     def run(self, n_trials=50):
 
         self.study.optimize(
-            lambda trial: self.objective(trial, env=env, env_cfg=env_cfg, agent_cfg=agent_cfg, skrl_config_dict=skrl_config_dict), 
-            n_trials=n_trials, 
+            lambda trial: self.objective(
+                trial, env=env, env_cfg=env_cfg, agent_cfg=agent_cfg, skrl_config_dict=skrl_config_dict
+            ),
+            n_trials=n_trials,
             show_progress_bar=True,
-            gc_after_trial=True
+            gc_after_trial=True,
         )
 
         # Antonin's code
@@ -97,7 +98,6 @@ class OptimisationRunner:
     def free_memory(self):
         torch.cuda.empty_cache()
         gc.collect()
-
 
     def objective(self, trial: optuna.Trial, env, env_cfg, agent_cfg, skrl_config_dict) -> float:
         print(f"Starting trial: {trial.number}")
@@ -131,10 +131,9 @@ class OptimisationRunner:
             elif skrl_config_dict["auxiliary_task"]["type"] == "forward_dynamics":
 
                 # it can take quite long, cap at8
-                n_f = trial.suggest_categorical("n_f", [2,3,4,10])
+                n_f = trial.suggest_categorical("n_f", [2, 3, 4, 10])
                 skrl_config_dict["auxiliary_task"]["n_f"] = n_f
 
-        
         tb_writer, agent_cfg = setup_logging(agent_cfg)
         wandb_session = setup_wandb(agent_cfg, skrl_config_dict, group_name=study_name, run_name=f"{trial.number}")
         models, encoder = make_models(env, env_cfg, agent_cfg, skrl_config_dict)
@@ -142,7 +141,17 @@ class OptimisationRunner:
         rl_memory = make_memory(env, env_cfg, num_envs=num_training_envs, size=agent_cfg["agent"]["rollouts"])
         default_agent_cfg = make_agent_cfg(env, agent_cfg)
         value_preprocessor = RunningStandardScaler(size=1, device=env.device)
-        auxiliary_task = make_aux(env, rl_memory, encoder, models["value"], value_preprocessor, env_cfg, agent_cfg, skrl_config_dict, wandb_session)
+        auxiliary_task = make_aux(
+            env,
+            rl_memory,
+            encoder,
+            models["value"],
+            value_preprocessor,
+            env_cfg,
+            agent_cfg,
+            skrl_config_dict,
+            wandb_session,
+        )
 
         # update default_agent_cfg with trial
         # default_agent_cfg["rollouts"] = rollouts
@@ -165,7 +174,7 @@ class OptimisationRunner:
             action_space=env.action_space,
             device=env.device,
             wandb_session=wandb_session,
-            auxiliary_task=auxiliary_task
+            auxiliary_task=auxiliary_task,
         )
 
         trainer = make_trainer(env, agent, agent_cfg, auxiliary_task)
@@ -195,7 +204,7 @@ class OptimisationRunner:
             # for t in completed_trials:
             #     if step in t.intermediate_values:
             #         other_values.append(t.intermediate_values[step])
-                    
+
             # if other_values:
             #     median_value = np.median(other_values)
             #     current_value = best_return
@@ -205,7 +214,6 @@ class OptimisationRunner:
             #     logger.info(f"   - Difference: {current_value - median_value:.4f}")
             #     logger.info(f"   - Warmup steps: {self.pruner._n_warmup_steps}")
             #     logger.info(f"   - Startup trials needed: {self.pruner._n_startup_trials}")
-
 
         return best_return
 
@@ -233,7 +241,7 @@ if __name__ == "__main__":
     ep_length = env.unwrapped.max_episode_length
     train_timesteps = agent_cfg["trainer"]["max_global_timesteps_M"] * 1e6
     num_envs = env.unwrapped.num_envs
-    num_env_train_steps = int( train_timesteps / num_envs )
+    num_env_train_steps = int(train_timesteps / num_envs)
     num_evaluations = int(num_env_train_steps / ep_length)
     print("TRAINING STEPS:", train_timesteps)
     print("NUM EVALUATIONS: ", num_evaluations)
@@ -242,9 +250,9 @@ if __name__ == "__main__":
     # env.configure_gym_env_spaces(obs_stack)
     if obs_stack != 1:
         env = FrameStack(env, num_stack=obs_stack)
-    
+
     env = IsaacLabWrapper(env)
-    
+
     # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.create_study.html
     storage = "sqlite:///paper_agents5.db"
     study_name = args_cli.study
@@ -252,11 +260,10 @@ if __name__ == "__main__":
     # Usage
     total_trials = 50
     n_startup_trials = 5
-    n_warmup_steps = int(num_evaluations/3)
-    interval_steps=10
+    n_warmup_steps = int(num_evaluations / 3)
+    interval_steps = 10
 
     runner = OptimisationRunner(study_name, n_startup_trials, n_warmup_steps, interval_steps)
-
 
     try:
         best_trial = runner.run(total_trials)
@@ -269,10 +276,7 @@ if __name__ == "__main__":
         pass
     finally:
         # close sim app
-        simulation_app.close()    
-
-    
-
+        simulation_app.close()
 
     # rewards_shaper_scale = trial.suggest_categorical("rewards_shaper_scale", [1, 0.1, 0.01])
     # value_loss_scale = trial.suggest_categorical("value_loss_scale", [1.0, 2.0])

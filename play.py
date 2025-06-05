@@ -40,13 +40,12 @@ sys.argv = [sys.argv[0]] + hydra_args
 app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
-from isaaclab_tasks.utils.hydra import hydra_task_config
 from isaaclab_rl.utils.models.running_standard_scaler import RunningStandardScaler
-from isaaclab_rl.wrappers.isaaclab_wrapper import IsaacLabWrapper
-
 from isaaclab_rl.utils.skrl.run_utils import *
+from isaaclab_rl.wrappers.isaaclab_wrapper import IsaacLabWrapper
+from isaaclab_tasks.utils.hydra import hydra_task_config
 
-    
+
 @hydra_task_config(args_cli.task, "skrl_cfg_entry_point")
 def main(env_cfg, agent_cfg: dict):
     """Train with skrl agent."""
@@ -65,7 +64,7 @@ def main(env_cfg, agent_cfg: dict):
     tb_writer, agent_cfg = setup_logging(agent_cfg)
 
     # Expose environment creation so I can configure obs_stack as tunable hparam
-    obs_stack=skrl_config_dict["obs_stack"]
+    obs_stack = skrl_config_dict["obs_stack"]
     env_cfg.obs_stack = obs_stack
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
 
@@ -84,7 +83,7 @@ def main(env_cfg, agent_cfg: dict):
     # FrameStack expects a gymnasium.Env
     if obs_stack != 1:
         env = FrameStack(env, num_stack=obs_stack)
-    
+
     env = IsaacLabWrapper(env)
     models, encoder = make_models(env, env_cfg, agent_cfg, skrl_config_dict)
     num_training_envs = env.num_envs - agent_cfg["trainer"]["num_eval_envs"]
@@ -132,6 +131,7 @@ def main(env_cfg, agent_cfg: dict):
 
     # Let's go!
     import time
+
     # get environment (step) dt for real-time evaluation
     try:
         dt = env.step_dt
@@ -153,7 +153,7 @@ def main(env_cfg, agent_cfg: dict):
 
             # env stepping
             states, _, _, _, _ = env.step(actions)
-        
+
         if args_cli.video:
             timestep += 1
             # exit the play loop after recording one video
@@ -164,7 +164,6 @@ def main(env_cfg, agent_cfg: dict):
         sleep_time = dt - (time.time() - start_time)
         if real_time and sleep_time > 0:
             time.sleep(sleep_time)
-
 
     # close the simulator
     env.close()

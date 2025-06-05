@@ -22,23 +22,22 @@ import isaaclab.sim as sim_utils
 from isaaclab.assets import Articulation, ArticulationCfg, RigidObject, RigidObjectCfg
 from isaaclab.envs import DirectRLEnv, DirectRLEnvCfg, ViewerCfg
 from isaaclab.scene import InteractiveSceneCfg
-from isaaclab.sim import SimulationCfg
-from isaaclab.utils import configclass
-from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
 from isaaclab.sensors import (
+    ContactSensor,
+    ContactSensorCfg,
     FrameTransformer,
     FrameTransformerCfg,
     OffsetCfg,
     TiledCamera,
     TiledCameraCfg,
-    ContactSensor,
-    ContactSensorCfg
 )
 from isaaclab.sim import PhysxCfg, SimulationCfg
 from isaaclab.sim.schemas.schemas_cfg import CollisionPropertiesCfg, MassPropertiesCfg, RigidBodyPropertiesCfg
 from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
 from isaaclab.sim.spawners.from_files.from_files_cfg import UsdFileCfg
 from isaaclab.sim.spawners.materials.physics_materials_cfg import RigidBodyMaterialCfg
+from isaaclab.utils import configclass
+from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
 from isaaclab.utils.math import (
     quat_conjugate,
     quat_from_angle_axis,
@@ -53,15 +52,13 @@ from isaaclab.markers.config import FRAME_MARKER_CFG  # isort: skip
 from assets.franka import FRANKA_PANDA_CFG  # isort: skip
 
 
-
-
 @configclass
 class FrankaEnvCfg(DirectRLEnvCfg):
     # physics sim
-    physics_dt = 1/120 #0.002 #1 / 500 # 120 # 500 Hz
+    physics_dt = 1 / 120  # 0.002 #1 / 500 # 120 # 500 Hz
 
     # number of physics step per control step
-    decimation = 2 #10 # # 50 Hz
+    decimation = 2  # 10 # # 50 Hz
 
     # the number of physics simulation steps per rendering steps (default=1)
     render_interval = 2
@@ -91,7 +88,7 @@ class FrankaEnvCfg(DirectRLEnvCfg):
     contact_reward_scale = 10
     lift_object_scale = 15.0
     object_goal_tracking_scale = 16.0
-    joint_vel_penalty_scale = 0 #-0.01
+    joint_vel_penalty_scale = 0  # -0.01
     object_out_of_bounds = 1.5
 
     # reach stuff
@@ -116,13 +113,15 @@ class FrankaEnvCfg(DirectRLEnvCfg):
 
     # temp
     replicate_physics = True
-    scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=4096, env_spacing=1.5, replicate_physics=replicate_physics)
+    scene: InteractiveSceneCfg = InteractiveSceneCfg(
+        num_envs=4096, env_spacing=1.5, replicate_physics=replicate_physics
+    )
 
     default_object_pos = [0.5, 0, 0.03]
     eye = (1.2, 0.9, 0.7)
     lookat = (0.5, 0, 0.05)
 
-    viewer: ViewerCfg = ViewerCfg(eye=eye, lookat=lookat, resolution=(1920,1080))
+    viewer: ViewerCfg = ViewerCfg(eye=eye, lookat=lookat, resolution=(1920, 1080))
 
     # robot
     robot_cfg: ArticulationCfg = FRANKA_PANDA_CFG.replace(prim_path="/World/envs/env_.*/Robot")
@@ -181,7 +180,7 @@ class FrankaEnvCfg(DirectRLEnvCfg):
         init_state=RigidObjectCfg.InitialStateCfg(pos=default_object_pos, rot=[1, 0, 0, 0]),
         spawn=UsdFileCfg(
             usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Blocks/DexCube/dex_cube_instanceable.usd",
-              scale=(0.8, 0.8, 0.8),
+            scale=(0.8, 0.8, 0.8),
             rigid_props=RigidBodyPropertiesCfg(
                 solver_position_iteration_count=16,
                 solver_velocity_iteration_count=1,
@@ -243,7 +242,7 @@ class FrankaEnvCfg(DirectRLEnvCfg):
             ),
         ],
     )
-    img_dim=84
+    img_dim = 84
     eye = [1.2, -0.3, 0.5]
     target = [0, 0, 0]
     tiled_camera: TiledCameraCfg = TiledCameraCfg(
@@ -319,7 +318,7 @@ class FrankaEnv(DirectRLEnv):
 
         self.object_ee_distance = torch.zeros((self.num_envs, 3), device=self.device)
         self.object_ee_rotation = torch.zeros((self.num_envs, 4), device=self.device)
-        self.object_ee_angular_distance = torch.zeros((self.num_envs, ), device=self.device)
+        self.object_ee_angular_distance = torch.zeros((self.num_envs,), device=self.device)
         self.object_ee_euclidean_distance = torch.zeros((self.num_envs,), device=self.device)
 
         # save reward weights so they can be adjusted online
@@ -328,7 +327,6 @@ class FrankaEnv(DirectRLEnv):
         self.lift_object_scale = cfg.lift_object_scale
         self.joint_vel_penalty_scale = cfg.joint_vel_penalty_scale
         self.object_goal_tracking_scale = cfg.object_goal_tracking_scale
-
 
         # unit tensors
         self.x_unit_tensor = torch.tensor([1, 0, 0], dtype=torch.float, device=self.device).repeat((self.num_envs, 1))
@@ -406,8 +404,10 @@ class FrankaEnv(DirectRLEnv):
         if "pixels" in self.cfg.obs_list or "pixels" in self.cfg.aux_list:
             print("This won't work at the moment - talk to Elle")
             from omni.isaac.core.utils.extensions import enable_extension
+
             enable_extension("omni.replicator.core")
             import omni.replicator.core as rep
+
             rep.settings.set_render_rtx_realtime(antialiasing="DLAA")
             self._tiled_camera = TiledCamera(self.cfg.tiled_camera)
             self.scene.sensors["tiled_camera"] = self._tiled_camera
@@ -422,7 +422,6 @@ class FrankaEnv(DirectRLEnv):
             self.wholebody_contact_sensor = ContactSensor(self.cfg.wholebody_contact_cfg)
             self.scene.sensors["wholebody_contact_sensor"] = self.wholebody_contact_sensor
 
-
     def configure_gym_env_spaces(self, obs_stack=1):
         self.obs_stack = obs_stack
         self._configure_gym_env_spaces()
@@ -431,9 +430,9 @@ class FrankaEnv(DirectRLEnv):
         print("CONFIGURING GYM SPACES", self.obs_stack)
         """Configure the action and observation spaces for the Gym environment."""
         # observation space (unbounded since we don't impose any limits)
-        self.num_gt_observations = self.cfg.num_gt_observations*self.obs_stack  # is temporary!!!!
+        self.num_gt_observations = self.cfg.num_gt_observations * self.obs_stack  # is temporary!!!!
         self.num_tactile_observations = self.cfg.num_tactile_observations * self.obs_stack
-        self.num_prop_observations = self.cfg.num_prop_observations*self.obs_stack
+        self.num_prop_observations = self.cfg.num_prop_observations * self.obs_stack
 
         self.num_actions = self.cfg.num_actions
         self.num_states = self.cfg.num_states
@@ -490,9 +489,7 @@ class FrankaEnv(DirectRLEnv):
         """
         scaled_actions = self.scale_action(self.actions)
 
-        self.robot.set_joint_position_target(
-            scaled_actions, joint_ids=self.actuated_dof_indices
-        )
+        self.robot.set_joint_position_target(scaled_actions, joint_ids=self.actuated_dof_indices)
 
     def scale_action(self, action):
         self.robot_dof_targets[:, self.actuated_dof_indices] = scale(
@@ -506,12 +503,12 @@ class FrankaEnv(DirectRLEnv):
             self.robot_dof_lower_limits[self.actuated_dof_indices],
             self.robot_dof_upper_limits[self.actuated_dof_indices],
         )
-        return self.robot_dof_targets[:, self.actuated_dof_indices] 
+        return self.robot_dof_targets[:, self.actuated_dof_indices]
 
     def get_observations(self):
         # public method
         return self._get_observations()
-    
+
     def _get_observations(self) -> dict:
 
         obs_dict = {}
@@ -530,17 +527,18 @@ class FrankaEnv(DirectRLEnv):
         obs_dict = {"policy": obs_dict}
 
         return obs_dict
-    
 
     def _get_proprioception(self):
         prop = torch.cat(
-            (self.normalised_joint_pos, 
-             self.normalised_joint_vel, 
-             self.aperture.unsqueeze(1), 
-             self.ee_pos, 
-             self.ee_rot, 
-             self.actions
-             ), dim=-1
+            (
+                self.normalised_joint_pos,
+                self.normalised_joint_vel,
+                self.aperture.unsqueeze(1),
+                self.ee_pos,
+                self.ee_rot,
+                self.actions,
+            ),
+            dim=-1,
         )
 
         return prop
@@ -552,7 +550,7 @@ class FrankaEnv(DirectRLEnv):
                 # xyz diffs (3,)
                 self.object_ee_distance,
                 # rotation quaternion (4,)
-                self.object_ee_rotation, 
+                self.object_ee_rotation,
                 # rotation difference (1,)
                 self.object_ee_angular_distance.unsqueeze(1),
                 # euclidean distances (1,) [transform from (num_envs,) to (num_envs,1)]
@@ -561,7 +559,7 @@ class FrankaEnv(DirectRLEnv):
             dim=-1,
         )
         return gt
-    
+
     def _read_force_matrix(self, filter=False):
         # separate into left and right for frame transform force_matrix_w net_forces_w
         if filter:
@@ -572,19 +570,21 @@ class FrankaEnv(DirectRLEnv):
             forcesR_world = self.right_contact_sensor.data.net_forces_w[:].clone().reshape(self.num_envs, 3)
 
         return forcesL_world, forcesR_world
-    
+
     def _normalise_forces(self, forcesL, forcesR):
         # only return the normal component
         return_forces = torch.abs(torch.cat((forcesL, forcesR), dim=1))
 
         # Clip the tensor values and normalise 0 to 1
-        self.unnormalised_forces = torch.clamp(return_forces, min=self.cfg.tactile_min_val, max=self.cfg.tactile_max_val)
-        self.normalised_forces = (
-            ((self.unnormalised_forces - self.cfg.tactile_min_val) / (self.cfg.tactile_max_val - self.cfg.tactile_min_val))
+        self.unnormalised_forces = torch.clamp(
+            return_forces, min=self.cfg.tactile_min_val, max=self.cfg.tactile_max_val
+        )
+        self.normalised_forces = (self.unnormalised_forces - self.cfg.tactile_min_val) / (
+            self.cfg.tactile_max_val - self.cfg.tactile_min_val
         )
 
         return self.normalised_forces
-        
+
     def _get_tactile(self):
         # contact sensor data is [num_envs, 2, 3]
         forcesL_world, forcesR_world = self._read_force_matrix()
@@ -601,11 +601,12 @@ class FrankaEnv(DirectRLEnv):
                 forcesL_norm = (forcesL_net > 0).float()
                 forcesR_norm = (forcesR_net > 0).float()
 
-            tactile = torch.cat((
-                forcesL_norm,
-                forcesR_norm,
-                ), 
-                dim=-1
+            tactile = torch.cat(
+                (
+                    forcesL_norm,
+                    forcesR_norm,
+                ),
+                dim=-1,
             )
             self.tactile = tactile
             return tactile
@@ -614,7 +615,6 @@ class FrankaEnv(DirectRLEnv):
             self.normalised_forces = self._normalise_forces(forcesL_net, forcesR_net)
             self.tactile = self.normalised_forces
             return self.normalised_forces
-
 
     def _get_images(self):
 
@@ -631,7 +631,6 @@ class FrankaEnv(DirectRLEnv):
 
         return camera_data
 
-
     def _reset_idx(self, env_ids: Sequence[int] | None):
         if env_ids is None:
             env_ids = self.robot._ALL_INDICES
@@ -643,7 +642,7 @@ class FrankaEnv(DirectRLEnv):
         # reset object
         if self.cfg.object_type == "rigid":
             self._reset_object_pose(env_ids)
-            
+
         # reset robot
         self._reset_robot(env_ids)
 
@@ -682,7 +681,6 @@ class FrankaEnv(DirectRLEnv):
     def _reset_target_pose(self, env_ids):
         pass
 
-
     def _compute_intermediate_values(self, env_ids: torch.Tensor | None = None):
         if env_ids is None:
             env_ids = self.robot._ALL_INDICES
@@ -702,12 +700,12 @@ class FrankaEnv(DirectRLEnv):
             self.joint_pos[env_ids], self.robot_dof_lower_limits, self.robot_dof_upper_limits
         )
 
-        # joint vel roughly between -2.5, 2.5, so dividing by 3. 
+        # joint vel roughly between -2.5, 2.5, so dividing by 3.
         self.normalised_joint_vel[env_ids] = self.joint_vel[env_ids] / self.cfg.vel_max_magnitude
-    
+
         # object
         self.object_pos[env_ids] = self.object.data.root_pos_w[env_ids] - self.scene.env_origins[env_ids]
-        
+
         # deformable doesn't have quat
         if self.cfg.object_type == "rigid":
             self.object_rot[env_ids] = self.object.data.root_quat_w[env_ids]
@@ -715,11 +713,9 @@ class FrankaEnv(DirectRLEnv):
         # relative distances
         self.object_ee_distance[env_ids] = self.object_pos[env_ids] - self.ee_pos[env_ids]
         self.object_ee_euclidean_distance[env_ids] = torch.norm(self.object_ee_distance[env_ids], dim=1)
-        self.object_ee_rotation[env_ids] = quat_mul(
-            self.object_rot[env_ids], quat_conjugate(self.ee_rot[env_ids])
-        )
+        self.object_ee_rotation[env_ids] = quat_mul(self.object_rot[env_ids], quat_conjugate(self.ee_rot[env_ids]))
         self.object_ee_angular_distance[env_ids] = rotation_distance(self.object_rot[env_ids], self.ee_rot[env_ids])
-        
+
     def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:
         self._compute_intermediate_values()
 
@@ -730,7 +726,7 @@ class FrankaEnv(DirectRLEnv):
         time_out = self.episode_length_buf >= self.max_episode_length - 1
 
         return termination, time_out
-    
+
 
 # scales an input between lower and upper
 @torch.jit.script
@@ -760,9 +756,10 @@ def rotation_distance(object_rot, target_rot):
 
 ### reward functions
 
+
 @torch.jit.script
 def distance_reward(object_ee_distance, std: float = 0.1):
-    r_reach = (1 - torch.tanh(object_ee_distance / std))
+    r_reach = 1 - torch.tanh(object_ee_distance / std)
     return r_reach
 
 
@@ -770,18 +767,20 @@ def distance_reward(object_ee_distance, std: float = 0.1):
 def lift_reward(object_pos, minimal_height: float, episode_timestep_counter):
     # reward for lifting object
     object_height = object_pos[:, 2]
-    is_lifted = torch.where(object_height > minimal_height, 1.0, 0.0) 
+    is_lifted = torch.where(object_height > minimal_height, 1.0, 0.0)
     is_lifted *= (episode_timestep_counter > 15).float()
     return is_lifted
+
 
 @torch.jit.script
 def object_goal_reward(object_goal_distance, r_lift, std: float = 0.1):
     # tracking
     std = 0.3
-    object_goal_tracking = (1 - torch.tanh(object_goal_distance / std)) 
+    object_goal_tracking = 1 - torch.tanh(object_goal_distance / std)
     # only recieve reward if object is lifted
     object_goal_tracking *= (r_lift > 0).float()
     return object_goal_tracking
+
 
 @torch.jit.script
 def joint_vel_penalty(robot_joint_vel):

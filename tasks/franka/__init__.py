@@ -5,8 +5,7 @@
 import gymnasium as gym
 import os
 
-from . import agents
-from . import lift
+from . import agents, lift
 
 print("Registering franka environments")
 

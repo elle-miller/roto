@@ -1,32 +1,32 @@
 """Rest everything follows."""
 
 import gymnasium as gym
+
+# stop log files from being generated!!
+import logging
+import numpy as np
 import os
 import random
 import torch
 import traceback
-from datetime import datetime
 from copy import deepcopy
-import numpy as np
+from datetime import datetime
 
-# stop log files from being generated!!
-import logging
-logging.getLogger('hydra').setLevel(logging.CRITICAL)
-logging.getLogger('hydra._internal').setLevel(logging.CRITICAL)
+logging.getLogger("hydra").setLevel(logging.CRITICAL)
+logging.getLogger("hydra._internal").setLevel(logging.CRITICAL)
 
-from isaaclab_rl.models.encoder import Encoder
 from isaaclab_rl.algorithms.memories import Memory
 from isaaclab_rl.algorithms.policy_value import DeterministicValue, GaussianPolicy
 from isaaclab_rl.algorithms.ppo import PPO, PPO_DEFAULT_CONFIG
-from isaaclab_rl.algorithms.sequential import SequentialTrainer
-from isaaclab_rl.wrappers.frame_stack import FrameStack
-from isaaclab_rl.wrappers.isaaclab_wrapper import IsaacLabWrapper
+from isaaclab_rl.algorithms.trainer import Trainer
+from isaaclab_rl.models.encoder import Encoder
 from isaaclab_rl.models.running_standard_scaler import RunningStandardScaler
 from isaaclab_rl.tools.writer import Writer
+from isaaclab_rl.wrappers.frame_stack import FrameStack
+from isaaclab_rl.wrappers.isaaclab_wrapper import IsaacLabWrapper
 
-# Import extensions to set up environment tasks
-from tasks import franka  # noqa: F401
-
+# ADD YOUR ENVS HERE
+from tasks import franka
 
 
 def make_env(env_cfg, args_cli, obs_stack=1):
@@ -50,13 +50,12 @@ def make_env(env_cfg, args_cli, obs_stack=1):
     env = IsaacLabWrapper(env)
     return env
 
-def make_models(env, env_cfg, agent_cfg, skrl_config_dict):
+
+def make_models(env, env_cfg, agent_cfg):
     observation_space = env.observation_space["policy"]
     action_space = env.action_space
 
-    models = {}
-
-    encoder = Encoder(observation_space, action_space, env_cfg, skrl_config_dict, device=env.device)
+    encoder = Encoder(observation_space, action_space, env_cfg, agent_cfg["models"], device=env.device)
     z_dim = encoder.num_outputs
 
     policy = GaussianPolicy(
@@ -64,7 +63,7 @@ def make_models(env, env_cfg, agent_cfg, skrl_config_dict):
         observation_space=observation_space,
         action_space=env.action_space,
         device=env.device,
-        **skrl_config_dict["policy"],
+        **agent_cfg["models"]["policy"],
     )
 
     value = DeterministicValue(
@@ -72,9 +71,9 @@ def make_models(env, env_cfg, agent_cfg, skrl_config_dict):
         observation_space=observation_space,
         action_space=env.action_space,
         device=env.device,
-        **skrl_config_dict["value"],
+        **agent_cfg["models"]["value"],
     )
-    
+
     print("*****Encoder*****")
     print(encoder)
     print("*****RL models*****")
@@ -82,6 +81,7 @@ def make_models(env, env_cfg, agent_cfg, skrl_config_dict):
     print(value)
 
     return policy, value, encoder
+
 
 def make_memory(env, env_cfg, size, num_envs):
     memory = Memory(
@@ -93,7 +93,6 @@ def make_memory(env, env_cfg, size, num_envs):
     return memory
 
 
-
 def make_agent_cfg(env, agent_cfg):
 
     # configure and instantiate PPO agent
@@ -101,8 +100,12 @@ def make_agent_cfg(env, agent_cfg):
     agent_cfg["agent"]["rewards_shaper"] = None  # avoid 'dictionary changed size during iteration'
     default_agent_cfg.update(agent_cfg["agent"])
     default_agent_cfg["state_preprocessor"] = None
-    default_agent_cfg["state_preprocessor_kwargs"].update({"size": env.observation_space["policy"], "device": env.device})
-    default_agent_cfg["rewards_shaper"] = lambda rewards, *args, **kwargs: rewards * agent_cfg["agent"]["rewards_shaper_scale"]
+    default_agent_cfg["state_preprocessor_kwargs"].update(
+        {"size": env.observation_space["policy"], "device": env.device}
+    )
+    default_agent_cfg["rewards_shaper"] = (
+        lambda rewards, *args, **kwargs: rewards * agent_cfg["agent"]["rewards_shaper_scale"]
+    )
     print(default_agent_cfg)
     return default_agent_cfg
 
@@ -111,48 +114,37 @@ def make_trainer(env, agent, agent_cfg, auxiliary_task=None, writer=None):
 
     num_timesteps_M = agent_cfg["trainer"]["max_global_timesteps_M"]
     num_eval_envs = agent_cfg["trainer"]["num_eval_envs"]
-    trainer = SequentialTrainer(env=env, agents=agent, num_timesteps_M=num_timesteps_M, num_eval_envs=num_eval_envs, auxiliary_task=auxiliary_task, writer=writer)
+    trainer = Trainer(
+        env=env,
+        agents=agent,
+        num_timesteps_M=num_timesteps_M,
+        num_eval_envs=num_eval_envs,
+        auxiliary_task=auxiliary_task,
+        writer=writer,
+    )
     return trainer
 
-def update_env_cfg(args_cli, env_cfg, agent_cfg, skrl_config_dict):
+
+def update_env_cfg(args_cli, env_cfg, agent_cfg):
 
     env_cfg.seed = agent_cfg["seed"]
 
     # override configurations with either config file or args
     env_cfg.scene.num_envs = args_cli.num_envs if args_cli.num_envs is not None else env_cfg.scene.num_envs
     env_cfg.sim.device = args_cli.device if args_cli.device is not None else env_cfg.sim.device
-    env_cfg.obs_list = skrl_config_dict["obs_list"]
+    env_cfg.obs_list = agent_cfg["models"]["obs_list"]
     env_cfg.num_eval_envs = agent_cfg["trainer"]["num_eval_envs"]
+    env_cfg.obs_stack = agent_cfg["models"]["obs_stack"]
 
     # variables that impact how env obs are processed
-    env_cfg.normalise_prop = (
-        skrl_config_dict["preprocess"]["normalise_prop"]
-        if "normalise_prop" in skrl_config_dict["preprocess"]
-        else False
-    )
-    env_cfg.binary_tactile = (
-        skrl_config_dict["preprocess"]["binary_tactile"]
-        if "binary_tactile" in skrl_config_dict["preprocess"]
-        else False
-    )
-    env_cfg.normalise_pixels = (
-        skrl_config_dict["preprocess"]["normalise_pixels"]
-        if "normalise_pixels" in skrl_config_dict["preprocess"]
-        else False
-    )
-    env_cfg.random_crop = (
-        skrl_config_dict["preprocess"]["random_crop"] if "random_crop" in skrl_config_dict["preprocess"] else False
-    )
-    # variables that impact the network construction
-    if "pixels" in skrl_config_dict:
-        env_cfg.img_dim = skrl_config_dict["pixels"]["img_dim"]
-
+    env_cfg.normalise_prop = agent_cfg["models"]["preprocess"]["normalise_prop"]
+    env_cfg.binary_tactile = agent_cfg["models"]["preprocess"]["binary_tactile"]
+    
     return env_cfg
 
 
-
 def set_seed(seed: int = 42) -> None:
-    
+
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
