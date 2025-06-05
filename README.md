@@ -2,6 +2,8 @@
 
 ![isaaclab_rl](https://github.com/user-attachments/assets/72036a2f-41ab-4317-ad30-8a165afa83a5)
 
+## Installation 
+
 1. Follow instructions here to install Isaac Lab and twin library [isaaclab_rl](https://github.com/elle-miller/isaaclab_rl)
 
 2. Create your own project repo 
