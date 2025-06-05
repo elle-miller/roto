@@ -186,8 +186,6 @@ class OptimisationRunner:
         if skrl_config_dict["auxiliary_task"]["type"] == "reconstruction":
             agent.checkpoint_modules["decoder"] = auxiliary_task.decoder
 
-        nan_encountered = False
-
         try:
             best_return, should_prune = trainer.train(wandb_session=wandb_session, tb_writer=tb_writer, trial=trial)
         except AssertionError as e:

@@ -1,42 +1,36 @@
 """Rest everything follows."""
 
 import gymnasium as gym
-
-# stop log files from being generated!!
-import logging
 import numpy as np
 import os
 import random
 import torch
-import traceback
-from copy import deepcopy
-from datetime import datetime
-
-logging.getLogger("hydra").setLevel(logging.CRITICAL)
-logging.getLogger("hydra._internal").setLevel(logging.CRITICAL)
 
 from isaaclab_rl.algorithms.memories import Memory
 from isaaclab_rl.algorithms.policy_value import DeterministicValue, GaussianPolicy
-from isaaclab_rl.algorithms.ppo import PPO, PPO_DEFAULT_CONFIG
 from isaaclab_rl.algorithms.trainer import Trainer
 from isaaclab_rl.models.encoder import Encoder
 from isaaclab_rl.models.running_standard_scaler import RunningStandardScaler
-from isaaclab_rl.tools.writer import Writer
 from isaaclab_rl.wrappers.frame_stack import FrameStack
 from isaaclab_rl.wrappers.isaaclab_wrapper import IsaacLabWrapper
 
 # ADD YOUR ENVS HERE
-from tasks import franka
+
+# change this to something else if you want
+LOG_PATH = os.getcwd()
 
 
 def make_env(env_cfg, args_cli, obs_stack=1):
-    # create isaac environment
+
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
+
+    # FrameStack expects a gym env
+    if obs_stack > 1:
+        env = FrameStack(env, num_stack=obs_stack)
 
     # wrap for video recording
     if args_cli.video:
         log_dir = os.cwd()
-        log_dir = "/home/elle/code/external/IsaacLab/isaaclab_rl"
         video_kwargs = {
             "video_folder": os.path.join(log_dir, "videos"),
             "step_trigger": lambda step: step % args_cli.video_interval == 0,
@@ -46,12 +40,12 @@ def make_env(env_cfg, args_cli, obs_stack=1):
         print("[INFO] Recording videos during training.")
         env = gym.wrappers.RecordVideo(env, **video_kwargs)
 
-    # wrap around environment for skrl
+    # Isaac Lab wrapper
     env = IsaacLabWrapper(env)
     return env
 
 
-def make_models(env, env_cfg, agent_cfg):
+def make_models(env, env_cfg, agent_cfg, dtype):
     observation_space = env.observation_space["policy"]
     action_space = env.action_space
 
@@ -74,13 +68,16 @@ def make_models(env, env_cfg, agent_cfg):
         **agent_cfg["models"]["value"],
     )
 
+    value_preprocessor = RunningStandardScaler(size=1, device=env.device, dtype=dtype)
+
     print("*****Encoder*****")
     print(encoder)
     print("*****RL models*****")
     print(policy)
     print(value)
+    print(value_preprocessor)
 
-    return policy, value, encoder
+    return policy, value, encoder, value_preprocessor
 
 
 def make_memory(env, env_cfg, size, num_envs):
@@ -91,23 +88,6 @@ def make_memory(env, env_cfg, size, num_envs):
         env_cfg=env_cfg,
     )
     return memory
-
-
-def make_agent_cfg(env, agent_cfg):
-
-    # configure and instantiate PPO agent
-    default_agent_cfg = PPO_DEFAULT_CONFIG.copy()
-    agent_cfg["agent"]["rewards_shaper"] = None  # avoid 'dictionary changed size during iteration'
-    default_agent_cfg.update(agent_cfg["agent"])
-    default_agent_cfg["state_preprocessor"] = None
-    default_agent_cfg["state_preprocessor_kwargs"].update(
-        {"size": env.observation_space["policy"], "device": env.device}
-    )
-    default_agent_cfg["rewards_shaper"] = (
-        lambda rewards, *args, **kwargs: rewards * agent_cfg["agent"]["rewards_shaper_scale"]
-    )
-    print(default_agent_cfg)
-    return default_agent_cfg
 
 
 def make_trainer(env, agent, agent_cfg, auxiliary_task=None, writer=None):
@@ -139,7 +119,7 @@ def update_env_cfg(args_cli, env_cfg, agent_cfg):
     # variables that impact how env obs are processed
     env_cfg.normalise_prop = agent_cfg["models"]["preprocess"]["normalise_prop"]
     env_cfg.binary_tactile = agent_cfg["models"]["preprocess"]["binary_tactile"]
-    
+
     return env_cfg
 
 

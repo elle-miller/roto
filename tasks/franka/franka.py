@@ -12,9 +12,7 @@ Shared Franka parent environment
 from __future__ import annotations
 
 import gymnasium as gym
-import math
 import numpy as np
-import os
 import torch
 from collections.abc import Sequence
 
@@ -32,7 +30,7 @@ from isaaclab.sensors import (
     TiledCameraCfg,
 )
 from isaaclab.sim import PhysxCfg, SimulationCfg
-from isaaclab.sim.schemas.schemas_cfg import CollisionPropertiesCfg, MassPropertiesCfg, RigidBodyPropertiesCfg
+from isaaclab.sim.schemas.schemas_cfg import RigidBodyPropertiesCfg
 from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
 from isaaclab.sim.spawners.from_files.from_files_cfg import UsdFileCfg
 from isaaclab.sim.spawners.materials.physics_materials_cfg import RigidBodyMaterialCfg

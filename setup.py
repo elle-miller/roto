@@ -19,6 +19,7 @@ INSTALL_REQUIRES = [
     "isort",
     "mypy",
     "flake8",
+    "autoflake",
 ]
 
 
