@@ -4,17 +4,26 @@
 
 ## Installation 
 
-1. Follow instructions here to install Isaac Lab and twin library [isaaclab_rl](https://github.com/elle-miller/isaaclab_rl)
+### 1. Follow install instructions [here](https://github.com/elle-miller/isaaclab_rl)
 
-2. Create your own project repo 
+### 2. Create your own project repo
+
+Two options:
+
+a) Make a fork (this will be public) to track upstream changes
+
+b) Clone a private copy by creating a [new repository](https://github.com/new) (choose new name, do not initialise with readme etc)
 
 ```
 git clone git@github.com:elle-miller/isaaclab_rl_project.git
 mv isaaclab_rl_project my_cool_project_name
 cd my_cool_project_name
+git remote remove origin
+git remote add origin git@github.com:yourusername/my_cool_project_name.git
+git push -u origin main
 ```
 
-3. Test everything is working OK with the Franka Lift environment
+### 3. Test everything is working OK
 ```
 python train.py --task Franka_Lift --num_envs 8192 --headless
 
@@ -23,6 +32,6 @@ python play.py --task Franka_Lift --num_envs 256 --checkpoint logs/franka/lift/.
 ```
 You should hit a return of ~8000 by 40 million timesteps (check "Eval episode returns / returns" on wandb)
 
-4. Make your own environment
+### 4. Make your own environment
 
 TODO
