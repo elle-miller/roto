@@ -23,15 +23,30 @@ git remote add origin git@github.com:yourusername/my_cool_project_name.git
 git push -u origin main
 ```
 
-### 3. Test everything is working OK
+### 3. Setup wandb
+Log into wandb if not already setup
 ```
-python train.py --task Franka_Lift --num_envs 8192 --headless
+wandb login
+```
+Update the config in `tasks/franka/agents/lift.yaml`
+```
+wandb_kwargs: {
+    "entity": "my-phd",
+    "project": "isaac_lab",
+    "group": "franka_lift",
+    "name": "test",
+  }
+```
+
+### 4. Test everything is working OK
+```
+python train.py --task Franka_Lift --num_envs 8192 --headless --enable_cameras
 
 # play checkpoint with viewer
 python play.py --task Franka_Lift --num_envs 256 --checkpoint logs/franka/lift/.../checkpoints/best_agent.pt
 ```
 You should hit a return of ~8000 by 40 million timesteps (check "Eval episode returns / returns" on wandb)
 
-### 4. Make your own environment
+### 5. Make your own environment
 
 TODO
