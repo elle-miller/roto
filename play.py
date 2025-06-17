@@ -75,7 +75,7 @@ def main(env_cfg, agent_cfg: dict):
     writer = Writer(agent_cfg, play=True)
 
     # Make environment. Order must be gymnasium Env -> FrameStack -> IsaacLab
-    env = make_env(env_cfg, args_cli, agent_cfg["models"]["obs_stack"])
+    env = make_env(env_cfg, writer, args_cli, agent_cfg["models"]["obs_stack"])
 
     # setup models
     policy, value, encoder, value_preprocessor = make_models(env, env_cfg, agent_cfg, dtype)
