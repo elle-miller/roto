@@ -31,7 +31,7 @@ wandb login
 Update the config in `tasks/franka/agents/lift.yaml`
 ```
 wandb_kwargs: {
-    "entity": "my-phd",
+    "entity": "%ENTER_YOURS",
     "project": "isaac_lab",
     "group": "franka_lift",
     "name": "test",
@@ -40,12 +40,17 @@ wandb_kwargs: {
 
 ### 4. Test everything is working OK
 ```
-python train.py --task Franka_Lift --num_envs 8192 --headless --enable_cameras
+# the enable_cameras flag is to save progress videos on wandb (can disable via cfg)
+python train.py --task Franka_Lift --num_envs 8192 --headless --seed 1234 --enable_cameras
 
 # play checkpoint with viewer
 python play.py --task Franka_Lift --num_envs 256 --checkpoint logs/franka/lift/.../checkpoints/best_agent.pt
 ```
-You should hit a return of ~8000 by 40 million timesteps (check "Eval episode returns / returns" on wandb)
+In wandb, change the x-axis to `global_step`. The agent's progress should look like this, but there will be variation between PCs. The learning should also be reproducible for the same seed. 
+
+<img src="images/example_returns.png" width="400"/>
+<img src="images/example_media.png" width="350"/>
+
 
 ### 5. Make your own environment
 
