@@ -48,8 +48,8 @@ python play.py --task Franka_Lift --num_envs 256 --checkpoint logs/franka/lift/.
 ```
 In wandb, change the x-axis to `global_step`. The agent's progress should look like this, but there will be variation between PCs. The learning should also be reproducible for the same seed. 
 
-<img src="images/example_returns.png" width="400"/>
-<img src="images/example_media.png" width="350"/>
+<img src="images/example_returns.png" width="350"/>
+<img src="images/example_media.png" width="300"/>
 
 
 ### 5. Make your own environment
