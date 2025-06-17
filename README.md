@@ -12,7 +12,9 @@ Two options:
 
 a) Make a fork (this will be public) to track upstream changes
 
-b) Clone a private copy by creating a [new repository](https://github.com/new) (choose new name, do not initialise with readme etc)
+b) Make a private repo 
+
+Create an empty unitialised [new repository](https://github.com/new) with your project name, then: 
 
 ```
 git clone git@github.com:elle-miller/isaaclab_rl_project.git
@@ -21,6 +23,10 @@ cd my_cool_project_name
 git remote remove origin
 git remote add origin git@github.com:yourusername/my_cool_project_name.git
 git push -u origin main
+
+# if you want to pull upstream changes
+git remote add upstream git@github.com:elle-miller/isaaclab_rl_project.git
+git pull upstream main
 ```
 
 ### 3. Setup wandb
