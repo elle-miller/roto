@@ -25,9 +25,23 @@ def make_env(env_cfg, writer, args_cli, obs_stack=1):
 
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
 
+    obs, reward = env.reset()
+
+    gym_dict = {}
+    for k, v in obs["policy"].items():
+        obs_shape = v.shape[1] * obs_stack
+        gym_dict[k] = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(obs_shape,))
+
+    single_obs_space = gym.spaces.Dict()
+    single_obs_space["policy"] = gym.spaces.Dict(gym_dict)
+    obs_space = gym.vector.utils.batch_space(single_obs_space, env_cfg.scene.num_envs)
+    single_action_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(env_cfg.num_actions,))
+    action_space = gym.vector.utils.batch_space(single_action_space, env_cfg.scene.num_envs)
+    env.unwrapped.set_spaces(single_obs_space, obs_space, single_action_space, action_space)
+
     # FrameStack expects a gym env
     if obs_stack > 1:
-        env = FrameStack(env, num_stack=obs_stack)
+        env = FrameStack(env, obs_stack=obs_stack)
 
     # wrap for video recording
     if args_cli.video:
