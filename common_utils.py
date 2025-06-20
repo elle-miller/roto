@@ -38,10 +38,7 @@ def make_env(env_cfg, writer, args_cli, obs_stack=1):
     single_action_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(env_cfg.num_actions,))
     action_space = gym.vector.utils.batch_space(single_action_space, env_cfg.scene.num_envs)
     env.unwrapped.set_spaces(single_obs_space, obs_space, single_action_space, action_space)
-
-    # FrameStack expects a gym env
-    if obs_stack > 1:
-        env = FrameStack(env, obs_stack=obs_stack)
+    env.obs_stack = obs_stack
 
     # wrap for video recording
     if args_cli.video:
@@ -54,9 +51,13 @@ def make_env(env_cfg, writer, args_cli, obs_stack=1):
         }
         print("[INFO] Recording videos during training.")
         env = gym.wrappers.RecordVideo(env, **video_kwargs)
+    
+    # FrameStack expects a gym env
+    if obs_stack > 1:
+        env = FrameStack(env, obs_stack=obs_stack)
 
     # Isaac Lab wrapper
-    env = IsaacLabWrapper(env)
+    env = IsaacLabWrapper(env, env_cfg.num_eval_envs)
     return env
 
 
