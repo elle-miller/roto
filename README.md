@@ -47,7 +47,7 @@ wandb_kwargs: {
 ### 4. Test everything is working OK
 ```
 # the enable_cameras flag is to save progress videos on wandb (can disable via cfg)
-python train.py --task Franka_Lift --num_envs 8192 --headless --seed 1234 --enable_cameras
+python train.py --task Franka_Lift --num_envs 8192 --headless --seed 1234
 
 # play checkpoint with viewer
 python play.py --task Franka_Lift --num_envs 256 --checkpoint logs/franka/lift/.../checkpoints/best_agent.pt
@@ -55,7 +55,7 @@ python play.py --task Franka_Lift --num_envs 256 --checkpoint logs/franka/lift/.
 In wandb, change the x-axis to `global_step`. The agent's progress should look like this, but there will be variation between PCs. The learning should also be reproducible for the same seed. 
 
 <img src="images/example_returns.png" width="350"/>
-<img src="images/example_media.png" width="300"/>
+<!-- <img src="images/example_media.png" width="300"/> -->
 
 
 ### 5. Make your own environment

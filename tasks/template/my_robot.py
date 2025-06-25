@@ -69,8 +69,6 @@ class MyRobotEnvCfg(DirectRLEnvCfg):
     action_space = num_actions
     observation_space = num_observations
     state_space = num_states
-    num_prop_observations = 9 + 9 + 1 + 7 + 9
-    num_tactile_observations = 2
 
     # configure this to get the right dimensions for fusion network
     obs_stack = 1
@@ -317,6 +315,12 @@ class MyRobotEnv(DirectRLEnv):
             self.object = RigidObject(self.cfg.object_cfg)
             self.scene.rigid_objects["object"] = self.object
 
+    def set_spaces(self, single_obs, obs, single_action, action):
+        self.single_observation_space = single_obs
+        self.observation_space = obs
+        self.single_action_space = single_action
+        self.action_space = action
+
     def _setup_scene(self):
         self.robot = Articulation(self.cfg.robot_cfg)
 
@@ -370,59 +374,6 @@ class MyRobotEnv(DirectRLEnv):
 
             self.wholebody_contact_sensor = ContactSensor(self.cfg.wholebody_contact_cfg)
             self.scene.sensors["wholebody_contact_sensor"] = self.wholebody_contact_sensor
-
-    def configure_gym_env_spaces(self, obs_stack=1):
-        self.obs_stack = obs_stack
-        self._configure_gym_env_spaces()
-
-    def _configure_gym_env_spaces(self):
-        print("CONFIGURING GYM SPACES", self.obs_stack)
-        """Configure the action and observation spaces for the Gym environment."""
-        # observation space (unbounded since we don't impose any limits)
-        self.num_gt_observations = self.cfg.num_gt_observations * self.obs_stack  # is temporary!!!!
-        self.num_tactile_observations = self.cfg.num_tactile_observations * self.obs_stack
-        self.num_prop_observations = self.cfg.num_prop_observations * self.obs_stack
-
-        self.num_actions = self.cfg.num_actions
-        self.num_states = self.cfg.num_states
-        self.state_space = None
-
-        self.num_img_observations = (
-            self.cfg.tiled_camera.height,
-            self.cfg.tiled_camera.width,
-            self.cfg.obs_stack * 3 * self.cfg.num_cameras,
-        )
-
-        gym_dict = {}
-        for k in self.cfg.obs_list:
-            if k == "prop":
-                gym_dict[k] = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(self.num_prop_observations,))
-            if k == "gt":
-                gym_dict[k] = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(self.num_gt_observations,))
-            if k == "tactile":
-                gym_dict[k] = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(self.num_tactile_observations,))
-            elif k == "pixels":
-                gym_dict[k] = gym.spaces.Box(low=-np.inf, high=np.inf, shape=self.num_img_observations)
-
-        self.single_observation_space = gym.spaces.Dict()
-        self.single_observation_space["policy"] = gym.spaces.Dict(gym_dict)
-        self.observation_space = gym.vector.utils.batch_space(self.single_observation_space, self.num_envs)
-        self.single_action_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(self.num_actions,))
-        self.action_space = gym.vector.utils.batch_space(self.single_action_space, self.num_envs)
-
-        print("Single observation space:", self.single_observation_space)
-        print("Batched observation space:", self.observation_space)
-
-        if "pixels" in self.cfg.obs_list:
-            eyes = (
-                torch.tensor(self.cfg.eye, dtype=torch.float, device=self.device).repeat((self.num_envs, 1))
-                + self.scene.env_origins
-            )
-            targets = (
-                torch.tensor(self.cfg.target, dtype=torch.float, device=self.device).repeat((self.num_envs, 1))
-                + self.scene.env_origins
-            )
-            self._tiled_camera.set_world_poses_from_view(eyes=eyes, targets=targets)
 
     def _pre_physics_step(self, actions: torch.Tensor) -> None:
         """

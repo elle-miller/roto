@@ -58,7 +58,7 @@ experiment:
   directory: "franka"
   experiment_name: "lift"
   save_checkpoints: 1
-  upload_videos: 1
+  upload_videos: 0
   tb_log: True
   wandb: 1
   wandb_kwargs: {
