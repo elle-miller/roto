@@ -357,6 +357,9 @@ class FrankaEnv(DirectRLEnv):
             "object_found_hard": None,
         }
 
+    def _configure_gym_env_spaces(self):
+        pass
+    
     def set_spaces(self, single_obs, obs, single_action, action):
         self.single_observation_space = single_obs
         self.observation_space = obs
