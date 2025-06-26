@@ -150,6 +150,7 @@ class OptimisationRunner:
             writer=writer,
             auxiliary_task=auxiliary_task,
             dtype=dtype,
+            debug=agent_cfg["experiment"]["debug"]
         )
 
         # Let's go!

@@ -57,7 +57,7 @@ def make_env(env_cfg, writer, args_cli, obs_stack=1):
         env = FrameStack(env, obs_stack=obs_stack)
 
     # Isaac Lab wrapper
-    env = IsaacLabWrapper(env, env_cfg.num_eval_envs)
+    env = IsaacLabWrapper(env, env_cfg.num_eval_envs, debug=env_cfg.debug)
     return env
 
 
@@ -84,7 +84,7 @@ def make_models(env, env_cfg, agent_cfg, dtype):
         **agent_cfg["models"]["value"],
     )
 
-    value_preprocessor = RunningStandardScaler(size=1, device=env.device, dtype=dtype)
+    value_preprocessor = RunningStandardScaler(size=1, device=env.device, dtype=dtype, debug=env_cfg.debug)
 
     print("*****Encoder*****")
     print(encoder)
@@ -124,6 +124,7 @@ def make_trainer(env, agent, agent_cfg, auxiliary_task=None, writer=None):
 def update_env_cfg(args_cli, env_cfg, agent_cfg):
 
     env_cfg.seed = agent_cfg["seed"]
+    env_cfg.debug = agent_cfg["experiment"]["debug"]
 
     # override configurations with either config file or args
     env_cfg.scene.num_envs = args_cli.num_envs if args_cli.num_envs is not None else env_cfg.scene.num_envs

@@ -60,6 +60,7 @@ experiment:
   save_checkpoints: 1
   upload_videos: 0
   tb_log: True
+  debug: 0
   wandb: 0
   wandb_kwargs: {
     "entity": "my-phd",
