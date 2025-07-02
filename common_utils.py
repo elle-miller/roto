@@ -57,7 +57,7 @@ def make_env(env_cfg, writer, args_cli, obs_stack=1):
         env = FrameStack(env, obs_stack=obs_stack)
 
     # Isaac Lab wrapper
-    env = IsaacLabWrapper(env, env_cfg.num_eval_envs, debug=env_cfg.debug)
+    env = IsaacLabWrapper(env, env_cfg.num_eval_envs, obs_stack=obs_stack, debug=env_cfg.debug)
     return env
 
 
