@@ -134,6 +134,10 @@ class OptimisationRunner:
         rl_memory = make_memory(env, env_cfg, size=agent_cfg["agent"]["rollouts"], num_envs=num_training_envs)
         auxiliary_task = None
 
+        # restart wandb
+        writer.close_wandb()
+        writer.setup_wandb(name=trial.number)
+
         # configure and instantiate PPO agent
         ppo_agent_cfg = PPO_DEFAULT_CONFIG.copy()
         ppo_agent_cfg.update(agent_cfg["agent"])
@@ -164,7 +168,6 @@ class OptimisationRunner:
 
         # prune trial
         if should_prune:
-            wandb.finish()
             raise optuna.TrialPruned()
         return best_return
 
@@ -188,7 +191,7 @@ if __name__ == "__main__":
     env_cfg = update_env_cfg(args_cli, env_cfg, agent_cfg)
 
     # LOGGING SETUP
-    writer = Writer(agent_cfg)
+    writer = Writer(agent_cfg, delay_wandb_startup=True)
 
     # Make environment. Order must be gymnasium Env -> FrameStack -> IsaacLab
     env = make_env(env_cfg, writer, args_cli, agent_cfg["models"]["obs_stack"])
