@@ -30,20 +30,20 @@ models:
     hiddens: [128, 64]
     activations: ["elu", "elu", "identity"]
 
-  auxiliary_task:
-    type: null
-    memory_type: "vanilla"
-    loss_weight: 1
-    learning_rate: 1
-    last_n_obs: 1
-    n_f: 1
-    rl_per_aux: 4
-    learning_epochs: 1
-    mini_batches: 8
-    clip_grad: False
-    augment: False
-    memory_size: 0
-    pretrain: False 
+auxiliary_task:
+  type: null
+  memory_type: "vanilla"
+  loss_weight: 1
+  learning_rate: 1
+  last_n_obs: 1
+  n_f: 1
+  rl_per_aux: 4
+  learning_epochs: 1
+  mini_batches: 8
+  clip_grad: False
+  augment: False
+  memory_size: 0
+  pretrain: False 
 
 
 # PPO agent configuration (field names are from PPO_DEFAULT_CONFIG)
@@ -58,8 +58,7 @@ agent:
   discount_factor: 0.99
   lambda: 0.95
   learning_rate: 1.0595873261695062e-05
-  # value_preprocessor: RunningStandardScaler
-  # value_preprocessor_kwargs: null
+
 
   random_timesteps: 0
   learning_starts: 0
@@ -75,7 +74,7 @@ agent:
 
 # logging and checkpoint
 experiment:
-  directory: "rebuttal"
+  directory: "clean_up"
   debug: 0
   upload_videos: 0 
   save_checkpoints: 1
@@ -84,9 +83,9 @@ experiment:
   wandb: 1
   wandb_kwargs: {
     "project": "isaac_lab",
-    "group": "rebuttal",
+    "group": "clean_up",
     "entity": "my-phd",
-    "name": "1",
+    "name": "act 0.5",
   }
 
 # Sequential trainer

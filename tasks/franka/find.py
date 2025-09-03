@@ -33,25 +33,21 @@ user = os.getlogin()
 
 """
 
-Why do we need a different file for each object?
-
-Each object has its own
-- initial position and rotation
-
-- reset randomisation conditions
-
-e.g. dont want to randomise bowl rotation
+FrankaFind
 
 """
 
 
 @configclass
-class TouchEnvCfg(FrankaEnvCfg):
+class FindEnvCfg(FrankaEnvCfg):
+
+    act_moving_average = 0.5
 
     default_object_pos = [0.5, 0, 0.03]
     reset_object_position_noise = 0.1
 
-    brat_pink = (0.9882352941176471, 0.011764705882352941, 0.7098039215686275)
+    brat = (0.5411764705882353, 0.807843137254902, 0)
+    brat_pink = (0.3294117647058823, 0.3176470588235294, 0.9137254901960784)
 
     object_cfg: RigidObjectCfg = RigidObjectCfg(
         prim_path="/World/envs/env_.*/Object",
@@ -61,31 +57,10 @@ class TouchEnvCfg(FrankaEnvCfg):
             physics_material=sim_utils.RigidBodyMaterialCfg(static_friction=1.0, dynamic_friction=1.0, restitution=0.0),
             visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=brat_pink),
             rigid_props=RigidBodyPropertiesCfg(kinematic_enabled=False),
-            # rigid_props=RigidBodyPropertiesCfg(
-            #     solver_position_iteration_count=16,
-            #     solver_velocity_iteration_count=1,
-            #     max_angular_velocity=1000.0,
-            #     max_linear_velocity=1000.0,
-            #     max_depenetration_velocity=5.0,
-            #     disable_gravity=False,
-            # ),
             mass_props=sim_utils.MassPropertiesCfg(mass=1000000),
             collision_props=CollisionPropertiesCfg(collision_enabled=True)
         ),
     )
-
-    colour_1 = (0.4, 0.9882352941176471, 0.011764705882352941)
-    colour_2 = (0.0, 1.0, 1.0)
-
-    brat = (0.5411764705882353, 0.807843137254902, 0)
-    brat_pink = (0.7294117647058823, 0.3176470588235294, 0.7137254901960784)
-
-    colour_1 = (0.80392, 0.7058, 0.858823) 
-    colour_2 = (0.741176, 0.878, 0.9960784)
-    brat_pink = (0.3294117647058823, 0.3176470588235294, 0.9137254901960784)
-
-    colour_1 = (0.4, 0.9882352941176471, 0.011764705882352941)
-    colour_2 = (0.0, 1.0, 1.0)
 
     workspace_pos = [0.5, 0, 0.0]
     workspace_cfg: VisualizationMarkersCfg = VisualizationMarkersCfg(
@@ -93,20 +68,16 @@ class TouchEnvCfg(FrankaEnvCfg):
         markers={
             "workspace": sim_utils.CuboidCfg(
             size=(0.2, 0.2, 0.01),
-            visual_material=sim_utils.PreviewSurfaceCfg(opacity=0.1, diffuse_color=brat))
-            ,
-            "box": sim_utils.CuboidCfg(
-            size=(0.2, 0.2, 0.01),
-            visual_material=sim_utils.PreviewSurfaceCfg(opacity=0.1, diffuse_color=(1.0, 1.0, 0.0)))    
+            visual_material=sim_utils.PreviewSurfaceCfg(opacity=0.1, diffuse_color=brat)) 
         },
     )
 
 
 
-class TouchEnv(FrankaEnv):
-    cfg: TouchEnvCfg
+class FindEnv(FrankaEnv):
+    cfg: FindEnvCfg
 
-    def __init__(self, cfg: TouchEnvCfg, render_mode: str | None = None, **kwargs):
+    def __init__(self, cfg: FindEnvCfg, render_mode: str | None = None, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
         self.cfg = cfg
         self.timesteps_to_find_object_easy = torch.zeros((self.num_envs,), dtype=torch.float, device=self.device)
@@ -121,13 +92,10 @@ class TouchEnv(FrankaEnv):
         super()._setup_scene()
 
         self.workspace = VisualizationMarkers(self.cfg.workspace_cfg)
-        self.goal_pos = torch.zeros((self.num_envs, 3), dtype=torch.float, device=self.device)
-        self.goal_pos[:, :] = torch.tensor(self.cfg.workspace_pos, device=self.device)
-        self.goal_rot = torch.zeros((self.num_envs, 4), dtype=torch.float, device=self.device)
-        goal_pos_world = self.goal_pos + self.scene.env_origins
-        self.workspace.visualize(goal_pos_world, self.goal_rot)
-
-
+        self.workspace_pos = torch.zeros((self.num_envs, 3), dtype=torch.float, device=self.device)
+        self.workspace_pos[:, :] = torch.tensor(self.cfg.workspace_pos, device=self.device)
+        self.workspace_rot = torch.zeros((self.num_envs, 4), dtype=torch.float, device=self.device)
+        self.workspace.visualize(self.workspace_pos + self.scene.env_origins, self.workspace_rot)
 
 
     def _compute_intermediate_values(self, reset=False, env_ids=None):
@@ -185,14 +153,6 @@ class TouchEnv(FrankaEnv):
             rewards,
             dist_reward,
         ) = compute_rewards(
-            self.reaching_object_scale,
-            self.contact_reward_scale,
-            self.joint_vel_penalty_scale,
-            self.joint_vel,
-            self.aperture,
-            self.binary_tactile,
-            self.tactile,
-            self.ee_pos,
             self.object_ee_euclidean_distance
         )
         self.extras["log"] = {
@@ -214,16 +174,6 @@ class TouchEnv(FrankaEnv):
             }
             self.extras["log"].update(tactile_dict)
 
-            if not self.binary_tactile:
-                tactile_dict = {
-                    "unnormalised_forces_left_x": (self.unnormalised_forces[:, 0]),
-                    "unnormalised_forces_right_x": (self.unnormalised_forces[:, 1]),
-                    "normalised_forces_left_x": (self.normalised_forces[:, 0]),
-                    "normalised_forces_right_x": (self.normalised_forces[:, 1]),
-                }
-                self.extras["log"].update(tactile_dict)
-
-
         return rewards
 
 
@@ -231,14 +181,6 @@ from tasks.franka.franka import distance_reward
 
 @torch.jit.script
 def compute_rewards(
-    reaching_scale: float,
-    contact_reward_scale: float,
-    joint_vel_penalty_scale: float,
-    robot_joint_vel: torch.Tensor,
-    aperture: torch.Tensor,
-    binary_tactile: bool,
-    tactile: torch.Tensor,
-    ee_pos: torch.Tensor,
     object_ee_distance: torch.Tensor,
 ):
 
