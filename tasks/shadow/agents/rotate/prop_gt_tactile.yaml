@@ -1,0 +1,84 @@
+seed: 42
+
+# Models are instantiated using skrl's model instantiator utility
+# https://skrl.readthedocs.io/en/latest/api/utils/model_instantiators.html
+models:
+  separate: True
+  obs_list: ["prop", "tactile", "gt"]
+  obs_stack: 1
+  aux_list: []
+  preprocess:
+    normalise_prop: True
+
+  encoder:
+    method: "early"
+    hiddens: [512, 512, 256, 128]
+    activations: ["elu", "elu", "elu", "elu"]
+    state_preprocessor: RunningStandardScalerDict
+
+  policy:
+    clip_log_std: True
+    initial_log_std: 0
+    min_log_std: -20.0
+    max_log_std: 2.0
+    hiddens: [64, 32]
+    activations: ["elu", "elu", "identity"]
+    
+  value:
+    hiddens: [64, 32]
+    activations: ["elu", "elu", "identity"]
+
+  auxiliary_task:
+    type: null
+    loss_weight: 1
+    learning_rate: 1
+    rl_per_aux: 1
+    learning_epochs: 1
+    mini_batches: 1
+    clip_grad: False
+    augment: False
+    memory_size: 0
+    pretrain: False
+
+# PPO agent configuration (field names are from PPO_DEFAULT_CONFIG)
+# https://skrl.readthedocs.io/en/latest/api/agents/ppo.html
+agent:
+  optimise_encoder: True
+  augment: False
+  rollouts: 16
+  learning_epochs: 5
+  mini_batches: 4
+  discount_factor: 0.99
+  lambda: 0.95
+  learning_rate: 5.0e-04
+  value_preprocessor: RunningStandardScaler
+  value_preprocessor_kwargs: null
+
+  random_timesteps: 0
+  learning_starts: 0
+  grad_norm_clip: 1.0
+  ratio_clip: 0.2
+  value_clip: 0.2
+  clip_predicted_values: True
+  entropy_loss_scale: 0.0
+  value_loss_scale: 1.0
+  kl_threshold: 0
+  rewards_shaper_scale: 0.01
+  # logging and checkpoint
+  experiment:
+    directory: "shadow"
+    experiment_name: "rotate"
+    tb_log: False
+    wandb: False
+    wandb_kwargs: {
+      "project": "isaac_lab",
+      "group": "rotate",
+      "name": "rotate pgt 4096 abs",
+    }
+
+# Sequential trainer
+# https://skrl.readthedocs.io/en/latest/api/trainers/sequential.html
+trainer:
+  num_eval_envs: 8
+  max_global_timesteps_M: 1000
+  environment_info: "log"

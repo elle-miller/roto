@@ -109,6 +109,8 @@ def main(env_cfg, agent_cfg: dict):
         device=env.device,
         writer=writer,
         auxiliary_task=None,
+        dtype=dtype,
+        debug=agent_cfg["experiment"]["debug"]
     )
 
     # initialize agent
@@ -127,21 +129,49 @@ def main(env_cfg, agent_cfg: dict):
         dt = env.unwrapped.step_dt
 
     # reset environment
-    states, _ = env.reset()
+    states, infos = env.reset(hard=True)
     timestep = 0
     real_time = True
+
+    ep_length = env.env.unwrapped.max_episode_length - 1
+
+    returns = torch.zeros(size=(env.num_envs, 1), device=env.device)
+    mask = torch.Tensor([[1] for _ in range(env.num_envs)]).to(env.device)
+
     # simulate environment
     while simulation_app.is_running():
         start_time = time.time()
 
         # run everything in inference mode
         with torch.inference_mode():
+
+            # mask the states
+            tactile_reading = states["policy"]["tactile"][:].clone()
+            states["policy"]["tactile"] = torch.zeros_like(tactile_reading).to(env.device)
+
             # agent stepping
             z = encoder(states)
             actions, _, _ = agent.policy.act(z, deterministic=True)
 
             # env stepping
-            states, _, _, _, _ = env.step(actions)
+            states, rewards, terminated, truncated, infos = env.step(actions)
+
+            # compute eval rewards
+            mask_update = 1 - torch.logical_or(terminated, truncated).float()
+
+            # update eval dicts
+            returns += rewards * mask
+            mask *= mask_update
+
+            # the eval episodes get manually reset every ep_length
+            if timestep > 0 and (timestep % ep_length == 0):
+                mean_eval_return = returns.mean().item()
+                print("Mean eval return", mean_eval_return)
+                print("RESETING")
+                states, infos = env.reset(hard=True)
+
+                returns = torch.zeros(size=(env.num_envs, 1), device=env.device)
+                mask = torch.Tensor([[1] for _ in range(env.num_envs)]).to(env.device)
 
         if args_cli.video:
             timestep += 1
@@ -150,9 +180,11 @@ def main(env_cfg, agent_cfg: dict):
                 break
 
         # time delay for real-time evaluation
-        sleep_time = dt - (time.time() - start_time)
-        if real_time and sleep_time > 0:
-            time.sleep(sleep_time)
+        # sleep_time = dt - (time.time() - start_time)
+        # if real_time and sleep_time > 0:
+        #     time.sleep(sleep_time)
+
+        timestep += 1
 
     # close the simulator
     env.close()

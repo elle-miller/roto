@@ -13,13 +13,35 @@ from isaaclab_rl.models.encoder import Encoder
 from isaaclab_rl.models.running_standard_scaler import RunningStandardScaler
 from isaaclab_rl.wrappers.frame_stack import FrameStack
 from isaaclab_rl.wrappers.isaaclab_wrapper import IsaacLabWrapper
+from isaaclab_rl.auxiliary.reconstruction import Reconstruction
+from isaaclab_rl.auxiliary.dynamics import ForwardDynamics
 
 # ADD YOUR ENVS HERE
-from tasks import franka  # noqa: F401
+from tasks import franka,shadow  # noqa: F401
 
 # change this to something else if you want
 LOG_PATH = os.getcwd()
 
+def make_aux(env, rl_memory, encoder, value, value_preprocessor, env_cfg, agent_cfg, writer):
+
+    # configure auxiliary task
+    rl_rollout = agent_cfg["agent"]["rollouts"]
+    if agent_cfg["auxiliary_task"]["type"] != None:
+        aux_rollout = rl_rollout * agent_cfg["auxiliary_task"]["rl_per_aux"]
+        assert aux_rollout > 0
+
+        match agent_cfg["auxiliary_task"]["type"]:
+            case "reconstruction":
+                auxiliary_task = Reconstruction(agent_cfg["auxiliary_task"], rl_rollout, rl_memory, encoder, value, value_preprocessor, env, env_cfg, writer)
+            case "forward_dynamics":
+                auxiliary_task = ForwardDynamics(agent_cfg["auxiliary_task"], rl_rollout, rl_memory, encoder, value, value_preprocessor, env, env_cfg, writer)
+            case _:  # default case
+                print("No auxiliary task")
+                auxiliary_task = None
+
+    else:
+        auxiliary_task = None
+    return auxiliary_task
 
 def make_env(env_cfg, writer, args_cli, obs_stack=1):
 

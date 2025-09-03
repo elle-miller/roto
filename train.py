@@ -60,6 +60,7 @@ from isaaclab_tasks.utils.hydra import hydra_task_config
 from common_utils import (
     LOG_PATH,
     make_env,
+    make_aux,
     make_memory,
     make_models,
     make_trainer,
@@ -96,7 +97,7 @@ def main(env_cfg, agent_cfg: dict):
     # create tensors in memory for RL stuff [only for the training envs]
     num_training_envs = env_cfg.scene.num_envs - agent_cfg["trainer"]["num_eval_envs"]
     rl_memory = make_memory(env, env_cfg, size=agent_cfg["agent"]["rollouts"], num_envs=num_training_envs)
-    auxiliary_task = None
+    auxiliary_task = make_aux(env, rl_memory, encoder, value, value_preprocessor, env_cfg, agent_cfg, writer)
 
     # configure and instantiate PPO agent
     ppo_agent_cfg = PPO_DEFAULT_CONFIG.copy()

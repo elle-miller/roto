@@ -283,6 +283,9 @@ class FrankaEnv(DirectRLEnv):
         self.dtype = torch.float32
         self.binary_tactile = cfg.binary_tactile
 
+        self.num_prop_observations = 560
+        self.num_tactile_observations = 16 * 2
+
         # create auxiliary variables for computing applied action, observations and rewards
         self.robot_dof_lower_limits = self.robot.data.soft_joint_pos_limits[0, :, 0].to(device=self.device)
         self.robot_dof_upper_limits = self.robot.data.soft_joint_pos_limits[0, :, 1].to(device=self.device)

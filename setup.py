@@ -24,11 +24,11 @@ INSTALL_REQUIRES = [
 
 # Installation operation
 setup(
-    name="isaaclab_rl",
-    packages=["isaaclab_rl"],
+    name="roto",
+    packages=["roto"],
     author="Elle Miller",
     maintainer="Elle Miller",
-    url="https://github.com/elle-miller/isaaclab_rl",
+    url="https://github.com/elle-miller/roto",
     version="1.0.0",
     description="project",
     keywords=["isaac lab"],
