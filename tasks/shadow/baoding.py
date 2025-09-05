@@ -259,21 +259,13 @@ class BaodingEnv(ShadowEnv):
 
         (
             total_reward,
-            self.reset_goal_1_buf,
-            self.reset_goal_2_buf,
-            self.successes[:],
-            self.consecutive_successes[:],
             reach_goal_reward,
-            fall_penalty,
-            transition_reward,
-            tactile_reward
+
 
         ) = compute_rewards(
-            self.reset_goal_1_buf,
-            self.reset_goal_2_buf,
+            goal_reached,
             self.ball_1_goal_dist,
             self.ball_2_goal_dist,
-            self.cfg.success_tolerance,
             self.cfg.reach_goal_bonus,
 
         )
@@ -391,11 +383,9 @@ def distance_reward(object_ee_distance, std: float = 0.1):
 
 @torch.jit.script
 def compute_rewards(
-    reset_goal_1_buf: torch.Tensor,
-    reset_goal_2_buf: torch.Tensor,
+    goal_reached: torch.Tensor,
     ball_1_goal_dist: torch.Tensor,
     ball_2_goal_dist: torch.Tensor,
-    success_tolerance: float,
     reach_goal_bonus: float,
 ):
     reach_goal_bonus = 10
@@ -409,7 +399,7 @@ def compute_rewards(
 
     total_reward = reach_goal_reward + dense_dist_reward 
 
-    return total_reward, goal_1_resets, goal_2_resets,  reach_goal_reward, 
+    return total_reward,  reach_goal_reward
 
 
 

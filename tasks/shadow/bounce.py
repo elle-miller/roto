@@ -249,7 +249,7 @@ def compute_rewards(
 
 ):
 
-    bounce_reward = new_bounces * 1
+    bounce_reward = new_bounces * 10
     air_reward = time_without_contact * 0
 
     total_reward = bounce_reward
