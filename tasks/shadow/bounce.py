@@ -8,7 +8,11 @@ from __future__ import annotations
 
 
 import torch
-
+from isaaclab.assets import Articulation, RigidObject
+from isaaclab.envs import DirectRLEnv
+from isaaclab.markers import VisualizationMarkers
+from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
+from isaaclab.utils.math import quat_conjugate, quat_from_angle_axis, quat_mul, sample_uniform, saturate
 import isaaclab.sim as sim_utils
 
 
@@ -17,8 +21,7 @@ from isaaclab.assets import ArticulationCfg, RigidObjectCfg
 from isaaclab.sim.spawners.materials.physics_materials_cfg import RigidBodyMaterialCfg
 from isaaclab.sim.schemas.schemas_cfg import CollisionPropertiesCfg, MassPropertiesCfg, RigidBodyPropertiesCfg
 
-from tasks.shadow.shadow_hand_env_cfg import ShadowHandEnvCfg
-from tasks.shadow.inhand import InHandManipulationEnv, scale, unscale, randomize_rotation, rotation_distance
+from tasks.shadow.shadow import ShadowEnvCfg, ShadowEnv
 
 """
 Repose environment
@@ -32,7 +35,17 @@ every child env should implement own
 """
 
 @configclass
-class BounceCfg(ShadowHandEnvCfg):
+class BounceCfg(ShadowEnvCfg):
+    episode_length_s = 10.0  # Episode length in seconds
+
+    act_moving_average  = 1
+    fall_height = 0.3
+    reset_position_noise = 0.01  # range of position at reset
+    object_y_pos = -0.39
+    object_z_pos = 0.6
+    default_object_pos = (0.0, object_y_pos, object_z_pos)
+    out_of_bounds = 0.2
+    min_timesteps_between_contact = 5
 
     brat = (0.5411764705882353, 0.807843137254902, 0)
     brat_pink = (0.7294117647058823, 0.3176470588235294, 0.7137254901960784)
@@ -47,7 +60,7 @@ class BounceCfg(ShadowHandEnvCfg):
     mass_kg = mass_g / 1000 
     object_cfg: RigidObjectCfg = RigidObjectCfg(
         prim_path="/World/envs/env_.*/Object",
-        init_state=RigidObjectCfg.InitialStateCfg(pos=(0.0, -0.39, 0.6), rot=(1.0, 0.0, 0.0, 0.0)),
+        init_state=RigidObjectCfg.InitialStateCfg(pos=default_object_pos, rot=(1.0, 0.0, 0.0, 0.0)),
         spawn=sim_utils.SphereCfg(
             radius=radius_m,
             physics_material=sim_utils.RigidBodyMaterialCfg(static_friction=1.0, dynamic_friction=1.0, restitution=0.0),
@@ -67,70 +80,58 @@ class BounceCfg(ShadowHandEnvCfg):
         ),
     )
 
-    # reward scales
-    action_penalty_scale = -0.0002
-    reach_goal_bonus = 250
-    fall_penalty = 0
-
-    # fall_dist = 0.25
-    fall_dist = 0.15
-
-    # success_tolerance=0.10
-
     num_gt_observations = 14
 
 
-class BounceEnv(InHandManipulationEnv):
+class BounceEnv(ShadowEnv):
     cfg: BounceCfg
 
     def __init__(self, cfg: BounceCfg, render_mode: str | None = None, **kwargs):
 
-        self.obs_stack = 1
         super().__init__(cfg, render_mode, **kwargs)
 
-        self.object_height_above_hand = torch.zeros((self.num_envs, ), dtype=self.dtype, device=self.device)
+        # Object and tracking tensors
+        self.object_pos = torch.zeros((self.num_envs, 3), device=self.device)
+        self.object_rot = torch.zeros((self.num_envs, 4), device=self.device)
+        self.object_linvel = torch.zeros((self.num_envs, 3), device=self.device)
+        self.object_angvel = torch.zeros((self.num_envs, 3), device=self.device)
+
         self.num_transitions = torch.zeros((self.num_envs, ), dtype=self.dtype, device=self.device)
         self.num_bounces = torch.zeros((self.num_envs, ), dtype=self.dtype, device=self.device)
         self.waiting_for_contact = torch.zeros((self.num_envs, ), dtype=torch.bool, device=self.device)
         self.new_bounces = torch.zeros((self.num_envs, ), dtype=self.dtype, device=self.device)
         self.time_without_contact = torch.zeros((self.num_envs, ), dtype=torch.int, device=self.device)
 
-        self.total_rew = 0
-
-        self.bounce_rew = 0
-        self.time = 0
-
     
     def _get_gt(self):
 
         gt = torch.cat(
             (
-                # object
                 self.object_pos,
                 self.object_rot,
                 self.object_linvel,
-                self.cfg.vel_obs_scale * self.object_angvel,
-                self.object_height_above_hand.unsqueeze(1),
+                self.object_angvel,
             ),
             dim=-1,
         )
-        # print("gt", gt.size())
         return gt
     
+    def _setup_scene(self):
+        super()._setup_scene()
 
-    def _compute_intermediate_values(self, reset=False, env_ids=None):
-        self.hand_dof_pos = self.hand.data.joint_pos
-        self.hand_dof_vel = self.hand.data.joint_vel
+        self.object = RigidObject(self.cfg.object_cfg)
+        self.scene.rigid_objects["object"] = self.object
 
-        # data for object
-        self.object_pos = self.object.data.root_pos_w - self.scene.env_origins
-        self.object_rot = self.object.data.root_quat_w
-        self.object_velocities = self.object.data.root_vel_w
-        self.object_linvel = self.object.data.root_lin_vel_w
-        self.object_angvel = self.object.data.root_ang_vel_w
+    def _compute_intermediate_values(self, env_ids=None):
+        if env_ids is None:
+            env_ids = self.robot._ALL_INDICES
+        super()._compute_intermediate_values(env_ids)
 
-        # compute tactile
-        self._get_tactile()
+        # Object pose and relative distances
+        self.object_pos[env_ids] = self.object.data.root_pos_w[env_ids] - self.scene.env_origins[env_ids]
+        self.object_rot[env_ids] = self.object.data.root_quat_w[env_ids]
+        self.object_linvel[env_ids] = self.object.data.root_lin_vel_w[env_ids]
+        self.object_angvel[env_ids] = self.object.data.root_ang_vel_w[env_ids]
 
         # Check if there was any contact
         prev_contact = (torch.sum(self.last_tactile, dim=1) > 0).int()
@@ -150,11 +151,8 @@ class BounceEnv(InHandManipulationEnv):
             torch.zeros_like(self.time_without_contact)  # Reset counter if contact
         )
 
-        # Minimum number of timesteps required between transitions
-        min_timesteps = 10  # Adjust this value based on your simulation frequency
-
         # Valid transitions are those that happen after minimum time
-        valid_new_contact = new_contact & (prev_time_without_contact >= min_timesteps)
+        valid_new_contact = new_contact & (prev_time_without_contact >= self.cfg.min_timesteps_between_contact)
    
         # If we're waiting for contact and it happens, count a bounce
         self.new_bounces = (self.waiting_for_contact & valid_new_contact).float()
@@ -169,62 +167,75 @@ class BounceEnv(InHandManipulationEnv):
         # Update transitions count if you still want to track this
         self.num_transitions += (lost_contact | valid_new_contact).float()
 
-        if reset == True:
-            # print("reset, ", env_ids)
-            self.num_transitions[env_ids] = 0
-            self.num_bounces[env_ids] = 0
-            self.new_bounces[env_ids] = 0
-            self.waiting_for_contact[env_ids] = False
-            self.time_without_contact[env_ids] = 0
+
+    def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:
+        self._compute_intermediate_values()
+
+        # reset when cube has fallen
+        fall = self.object_pos[:,2] < self.cfg.fall_height
+        out_of_bounds = (torch.abs(self.object_pos[:,1] - self.cfg.object_y_pos) > self.cfg.out_of_bounds)
+        termination = fall | out_of_bounds
+        time_out = self.episode_length_buf >= self.max_episode_length - 1
+
+        return termination, time_out
+    
+
+    def _reset_idx(self, env_ids: Sequence[int] | None):
+        
+        if env_ids is None:
+            env_ids = self.robot._ALL_INDICES
+
+        # resets articulation and rigid body attributes
+        super()._reset_idx(env_ids)
+
+        # reset object
+        self._reset_object(env_ids)
+
+        self.num_transitions[env_ids] = 0
+        self.num_bounces[env_ids] = 0
+        self.new_bounces[env_ids] = 0
+        self.waiting_for_contact[env_ids] = False
+        self.time_without_contact[env_ids] = 0
+
+
+    def _reset_object(self, env_ids):
+
+        object_default_state = self.object.data.default_root_state.clone()[env_ids]
+        pos_noise = sample_uniform(-1.0, 1.0, (len(env_ids), 3), device=self.device)
+        object_default_state[:, 0:3] = (
+            object_default_state[:, 0:3] + self.cfg.reset_position_noise * pos_noise + self.scene.env_origins[env_ids]
+        )
+
+        object_default_state[:, 7:] = torch.zeros_like(self.object.data.default_root_state[env_ids, 7:])
+        self.object.write_root_pose_to_sim(object_default_state[:, :7], env_ids)
+        self.object.write_root_velocity_to_sim(object_default_state[:, 7:], env_ids)
         
 
     def _get_rewards(self) -> torch.Tensor:
-
 
         (
             total_reward,
             bounce_reward,
             air_reward,
-            fall_penalty,
-            self.successes[:],
-            self.consecutive_successes[:]
+            
         ) = compute_rewards(
-            self.reset_buf,
-            self.successes,
-            self.consecutive_successes,
-            self.tactile,
-            self.object_pos,
-            self.in_hand_pos,
             self.new_bounces,
             self.time_without_contact
         )
 
-        # print(self.time, self.num_bounces[0])
-        # self.time += 1
-        # self.total_rew += total_reward[10]
 
-        # self.bounce_rew += bounce_reward[10]
-        # print(self.time, self.total_rew, self.bounce_rew, self.time_without_contact[10])
-        # print(self.successes)
-        # do not provide county things here!!!!
-        # these things are all added up
         self.extras["log"] = {
-            "fall_penalty": (fall_penalty).float(),
-            "object_height": (self.object_height_above_hand.half()),
             "object_z_linvel": (self.object_linvel[:,2].half()),
             "object_z_angvel": (self.object_angvel[:,2].half()),
             "sum_forces": (torch.sum(self.tactile, dim=1)),
-            "air_reward": (air_reward).float(),
             "bounce_reward": (bounce_reward).float(),
         }
 
-        self.extras["counters"] = {
-            "num_transitions": (self.num_transitions).float(),
-            "time_without_contact": (self.time_without_contact).float(),
-            "num_bounces": (self.num_bounces).float(),
-            "consecutive_successes": (self.consecutive_successes),
-            "successes": (self.successes),
-        }
+        # self.extras["counters"] = {
+        #     "num_transitions": (self.num_transitions).float(),
+        #     "time_without_contact": (self.time_without_contact).float(),
+        #     "num_bounces": (self.num_bounces).float(),
+        # }
         
         return total_reward
     
@@ -233,46 +244,14 @@ class BounceEnv(InHandManipulationEnv):
 
 @torch.jit.script
 def compute_rewards(
-    reset_buf: torch.Tensor,
-    successes: torch.Tensor,
-    consecutive_successes: torch.Tensor,
-    tactile: torch.Tensor,
-    object_pos: torch.Tensor,
-    in_hand_pos: torch.Tensor,
     new_bounces: torch.Tensor,
     time_without_contact: torch.Tensor
 
 ):
-    success_bonus = 1.0
-    fall_penalty = -10.0
-    fall_dist = 0.15
-    av_factor = 0.1
 
-    # sum of forces in each environment
-    sum_forces = torch.sum(tactile, dim=1)
-    no_contact = sum_forces == 0.0
-    # success_reward = torch.where(no_contact, success_bonus, 0).float()
-    # success_reward = time_without_contact #torch.where(no_contact, success_bonus, 0).float()
-    bounce_reward = new_bounces * 10
-    air_reward = time_without_contact * 0.01
+    bounce_reward = new_bounces * 1
+    air_reward = time_without_contact * 0
 
-    # penalties
-    hand_object_dist =  torch.norm(object_pos - in_hand_pos, p=2, dim=-1)
-    failed_envs = hand_object_dist > fall_dist
-    fall_penalty = torch.where(failed_envs, fall_penalty, 0).float()
-    resets = torch.where(failed_envs, torch.ones_like(reset_buf), reset_buf)
-    num_resets = torch.sum(resets)
+    total_reward = bounce_reward
 
-    # Find out which envs hit the goal and update successes count
-    new_successes = torch.where(bounce_reward > 0, 1, 0)
-    successes = successes + new_successes
-    finished_cons_successes = torch.sum(successes * resets.float())
-    cons_successes = torch.where(
-        num_resets > 0,
-        av_factor * finished_cons_successes / num_resets + (1.0 - av_factor) * consecutive_successes,
-        consecutive_successes,
-    )
-
-    total_reward = bounce_reward + air_reward + fall_penalty
-
-    return total_reward, bounce_reward, air_reward, fall_penalty, successes, cons_successes
+    return total_reward, bounce_reward, air_reward,

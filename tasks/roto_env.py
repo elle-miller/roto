@@ -43,7 +43,6 @@ class RotoEnvCfg(DirectRLEnvCfg):
     physics_dt = 1 / 120  # Simulation timestep (seconds)
     decimation = 2        # Number of physics steps per control step
     render_interval = 2   # Physics steps per rendering step
-    episode_length_s = 5.0  # Episode length in seconds
 
     # Isaac 4.5 compatibility
     observation_space = 0
@@ -117,13 +116,14 @@ class RotoEnv(DirectRLEnv):
         # Action and state tensors
         self.actions = torch.zeros((self.num_envs, self.cfg.num_actions), device=self.device)
         default_joint_pos = self.robot.data.default_joint_pos
-        self.cur_targets[:, :] = default_joint_pos[:, self.actuated_dof_indices]
-        self.prev_targets[:, :] = default_joint_pos[:, self.actuated_dof_indices]
+        self.cur_targets[:, self.actuated_dof_indices] = default_joint_pos[:, self.actuated_dof_indices]
+        self.prev_targets[:, self.actuated_dof_indices] = default_joint_pos[:, self.actuated_dof_indices]
 
-        self.joint_pos = torch.zeros((self.num_envs, self.cfg.num_actions), device=self.device)
-        self.joint_vel = torch.zeros((self.num_envs, self.cfg.num_actions), device=self.device)
-        self.normalised_joint_pos = torch.zeros((self.num_envs, self.cfg.num_actions), device=self.device)
-        self.normalised_joint_vel = torch.zeros((self.num_envs, self.cfg.num_actions), device=self.device)
+        self.num_joints = self.robot.num_joints
+        self.joint_pos = torch.zeros((self.num_envs, self.num_joints), device=self.device)
+        self.joint_vel = torch.zeros((self.num_envs, self.num_joints), device=self.device)
+        self.normalised_joint_pos = torch.zeros((self.num_envs, self.num_joints), device=self.device)
+        self.normalised_joint_vel = torch.zeros((self.num_envs, self.num_joints), device=self.device)
         
         # Unit vectors for rotation calculations
         self.x_unit_tensor = torch.tensor([1, 0, 0], dtype=torch.float, device=self.device).repeat((self.num_envs, 1))
@@ -214,7 +214,7 @@ class RotoEnv(DirectRLEnv):
         obs_dict = {"policy": obs_dict}
         return obs_dict
     
-    def _reset_robot(self, env_ids):
+    def _reset_robot(self, env_ids, joint_pos_noise=0.125):
         """
         Reset the robot joint positions and velocities.
 
@@ -222,8 +222,8 @@ class RotoEnv(DirectRLEnv):
             env_ids (Sequence[int]): Environment indices to reset.
         """
         joint_pos = self.robot.data.default_joint_pos[env_ids] + sample_uniform(
-            -0.125,
-            0.125,
+            -joint_pos_noise,
+            joint_pos_noise,
             (len(env_ids), self.robot.num_joints),
             self.device,
         )

@@ -31,6 +31,7 @@ class FindEnvCfg(FrankaEnvCfg):
     Configuration for the Franka 'Find' RL task.
     Sets object and workspace properties, including randomization and visualization.
     """
+    episode_length_s = 5.0  # Episode length in seconds
     act_moving_average = 0.3
     default_object_pos = [0.5, 0, 0.03]
     reset_object_position_noise = 0.2
@@ -193,7 +194,6 @@ class FindEnv(FrankaEnv):
 
         self._reset_object_pose(env_ids)
         self._reset_robot(env_ids)
-        self._compute_intermediate_values(env_ids)
 
         # Reset counters and flags
         self.object_found_easy[env_ids] = 0
@@ -248,6 +248,18 @@ class FindEnv(FrankaEnv):
             }
             self.extras["log"].update(tactile_dict)
         return rewards
+    
+    def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:
+        """
+        Determine episode termination and timeout.
+
+        Returns:
+            tuple: (termination tensor, timeout tensor)
+        """
+        self._compute_intermediate_values()
+        termination = torch.zeros((self.num_envs,)).to(device=self.device)
+        time_out = self.episode_length_buf >= self.max_episode_length - 1
+        return termination, time_out
 
 @torch.jit.script
 def distance_reward(object_ee_distance, std: float = 0.1):

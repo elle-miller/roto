@@ -146,8 +146,8 @@ def main(env_cfg, agent_cfg: dict):
         with torch.inference_mode():
 
             # mask the states
-            tactile_reading = states["policy"]["tactile"][:].clone()
-            states["policy"]["tactile"] = torch.zeros_like(tactile_reading).to(env.device)
+            # tactile_reading = states["policy"]["tactile"][:].clone()
+            # states["policy"]["tactile"] = torch.zeros_like(tactile_reading).to(env.device)
 
             # agent stepping
             z = encoder(states)

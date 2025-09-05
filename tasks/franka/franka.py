@@ -292,16 +292,6 @@ class FrankaEnv(RotoEnv):
         max_aperture = 0.08
         self.aperture = (self.joint_pos[:, 7] + self.joint_pos[:, 8]) / max_aperture
 
-    def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:
-        """
-        Determine episode termination and timeout.
-
-        Returns:
-            tuple: (termination tensor, timeout tensor)
-        """
-        termination = torch.zeros((self.num_envs,)).to(device=self.device)
-        time_out = self.episode_length_buf >= self.max_episode_length - 1
-        return termination, time_out
 
 @torch.jit.script
 def randomize_rotation(rand0, rand1, x_unit_tensor, y_unit_tensor):
