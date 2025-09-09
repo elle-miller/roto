@@ -103,8 +103,8 @@ class RotoEnv(DirectRLEnv):
         self.robot_joint_pos_upper_limits = self.robot.data.soft_joint_pos_limits[0, :, 1].to(device=self.device)
         self.robot_joint_vel_limits = self.robot.data.joint_vel_limits[0, :].to(device=self.device)
 
-        self.cur_targets = torch.zeros((self.num_envs, self.robot.num_joints), device=self.device)
-        self.prev_targets = torch.zeros((self.num_envs, self.robot.num_joints), device=self.device)
+        self.joint_pos_cmd = torch.zeros((self.num_envs, self.robot.num_joints), device=self.device)
+        self.prev_joint_pos_cmd = torch.zeros((self.num_envs, self.robot.num_joints), device=self.device)
 
         # Indices of actuated joints
         self.actuated_dof_indices = [
@@ -116,12 +116,14 @@ class RotoEnv(DirectRLEnv):
         # Action and state tensors
         self.actions = torch.zeros((self.num_envs, self.cfg.num_actions), device=self.device)
         default_joint_pos = self.robot.data.default_joint_pos
-        self.cur_targets[:, self.actuated_dof_indices] = default_joint_pos[:, self.actuated_dof_indices]
-        self.prev_targets[:, self.actuated_dof_indices] = default_joint_pos[:, self.actuated_dof_indices]
+        self.joint_pos_cmd[:, self.actuated_dof_indices] = default_joint_pos[:, self.actuated_dof_indices]
+        self.prev_joint_pos_cmd[:, self.actuated_dof_indices] = default_joint_pos[:, self.actuated_dof_indices]
 
         self.num_joints = self.robot.num_joints
         self.joint_pos = torch.zeros((self.num_envs, self.num_joints), device=self.device)
         self.joint_vel = torch.zeros((self.num_envs, self.num_joints), device=self.device)
+        self.joint_acc = torch.zeros((self.num_envs, self.num_joints), device=self.device)
+
         self.normalised_joint_pos = torch.zeros((self.num_envs, self.num_joints), device=self.device)
         self.normalised_joint_vel = torch.zeros((self.num_envs, self.num_joints), device=self.device)
         
@@ -156,32 +158,32 @@ class RotoEnv(DirectRLEnv):
         Args:
             actions (torch.Tensor): Actions from the policy.
         """
-        self.last_action = self.cur_targets[:, self.actuated_dof_indices]
+        self.last_action = self.joint_pos_cmd[:, self.actuated_dof_indices]
         self.actions = actions.clone()
 
     def _apply_action(self) -> None:
         """
         Apply actions to the robot. Called multiple times per RL step for decimation.
         """
-        self.cur_targets[:, self.actuated_dof_indices] = scale(
+        self.joint_pos_cmd[:, self.actuated_dof_indices] = scale(
             self.actions,
             self.robot_joint_pos_lower_limits[self.actuated_dof_indices],
             self.robot_joint_pos_upper_limits[self.actuated_dof_indices],
         )
-        self.cur_targets[:, self.actuated_dof_indices] = (
-            self.cfg.act_moving_average * self.cur_targets[:, self.actuated_dof_indices]
-            + (1.0 - self.cfg.act_moving_average) * self.prev_targets[:, self.actuated_dof_indices]
+        self.joint_pos_cmd[:, self.actuated_dof_indices] = (
+            self.cfg.act_moving_average * self.joint_pos_cmd[:, self.actuated_dof_indices]
+            + (1.0 - self.cfg.act_moving_average) * self.prev_joint_pos_cmd[:, self.actuated_dof_indices]
         )
-        self.cur_targets[:, self.actuated_dof_indices] = saturate(
-            self.cur_targets[:, self.actuated_dof_indices],
+        self.joint_pos_cmd[:, self.actuated_dof_indices] = saturate(
+            self.joint_pos_cmd[:, self.actuated_dof_indices],
             self.robot_joint_pos_lower_limits[self.actuated_dof_indices],
             self.robot_joint_pos_upper_limits[self.actuated_dof_indices],
         )
 
-        self.prev_targets[:, self.actuated_dof_indices] = self.cur_targets[:, self.actuated_dof_indices]
+        self.prev_joint_pos_cmd[:, self.actuated_dof_indices] = self.joint_pos_cmd[:, self.actuated_dof_indices]
 
         self.robot.set_joint_position_target(
-            self.cur_targets[:, self.actuated_dof_indices], joint_ids=self.actuated_dof_indices
+            self.joint_pos_cmd[:, self.actuated_dof_indices], joint_ids=self.actuated_dof_indices
         )
 
     def get_observations(self):
@@ -237,6 +239,8 @@ class RotoEnv(DirectRLEnv):
         # Get robot data
         self.joint_pos[env_ids] = self.robot.data.joint_pos[env_ids]
         self.joint_vel[env_ids] = self.robot.data.joint_vel[env_ids]
+        self.joint_acc[env_ids] = self.robot.data.joint_acc[env_ids]
+
         # Normalize joint positions and velocities
         self.normalised_joint_pos[env_ids] = unscale(
             self.joint_pos[env_ids], self.robot_joint_pos_lower_limits, self.robot_joint_pos_upper_limits

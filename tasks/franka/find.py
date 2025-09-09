@@ -32,9 +32,9 @@ class FindEnvCfg(FrankaEnvCfg):
     Sets object and workspace properties, including randomization and visualization.
     """
     episode_length_s = 5.0  # Episode length in seconds
-    act_moving_average = 0.3
+    act_moving_average = 0.1  # Action smoothing factor
     default_object_pos = [0.5, 0, 0.03]
-    reset_object_position_noise = 0.2
+    reset_object_position_noise = 0.1
 
     brat = (0.541, 0.808, 0)
     brat_pink = (0.329, 0.318, 0.914)
@@ -42,12 +42,14 @@ class FindEnvCfg(FrankaEnvCfg):
     object_cfg: RigidObjectCfg = RigidObjectCfg(
         prim_path="/World/envs/env_.*/Object",
         init_state=RigidObjectCfg.InitialStateCfg(pos=default_object_pos, rot=[1, 0, 0, 0]),
-        spawn=sim_utils.SphereCfg(
-            radius=0.03,
-            physics_material=sim_utils.RigidBodyMaterialCfg(static_friction=1.0, dynamic_friction=1.0, restitution=0.0),
+        # spawn=sim_utils.SphereCfg(
+        #     radius=0.03,
+        spawn=sim_utils.CuboidCfg(
+            size=[0.03, 0.03, 0.03],
+            physics_material=sim_utils.RigidBodyMaterialCfg(static_friction=1.0, dynamic_friction=0.8, restitution=0.8),
             visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=brat_pink),
             rigid_props=RigidBodyPropertiesCfg(kinematic_enabled=False),
-            mass_props=sim_utils.MassPropertiesCfg(mass=1e6),
+            mass_props=sim_utils.MassPropertiesCfg(mass=10),
             collision_props=CollisionPropertiesCfg(collision_enabled=True)
         ),
     )
@@ -75,6 +77,8 @@ class FindEnv(FrankaEnv):
         self.cfg = cfg
 
         # Object and tracking tensors
+        self.default_object_pos = torch.zeros((self.num_envs, 3), device=self.device)
+        self.default_object_pos[:, :] = torch.tensor(self.cfg.default_object_pos)
         self.object_pos = torch.zeros((self.num_envs, 3), device=self.device)
         self.object_rot = torch.zeros((self.num_envs, 4), device=self.device)
         self.object_ee_distance = torch.zeros((self.num_envs, 3), device=self.device)
@@ -94,6 +98,8 @@ class FindEnv(FrankaEnv):
         self.extras["log"].update({
             "dist_reward": None,
             "object_ee_distance": None,
+            "contact_reward": None,
+            "height_bonus": None,
         })
         self.extras["counters"].update({
             "timesteps_to_find_object_easy": None,
@@ -161,6 +167,7 @@ class FindEnv(FrankaEnv):
         hard_threshold = 0.005
 
         # Update found flags and counters
+        # this is triggered once
         self.object_found_easy = torch.logical_or(self.object_ee_euclidean_distance < easy_threshold, self.object_found_easy)
         self.object_found_med = torch.logical_or(self.object_ee_euclidean_distance < med_threshold, self.object_found_med)
         self.object_found_hard = torch.logical_or(self.object_ee_euclidean_distance < hard_threshold, self.object_found_hard)
@@ -228,11 +235,13 @@ class FindEnv(FrankaEnv):
         Returns:
             torch.Tensor: Reward values.
         """
-        rewards, dist_reward = compute_rewards(self.object_ee_euclidean_distance)
+        rewards, dist_reward, contact_reward, height_bonus = compute_rewards(self.object_pos, self.object_ee_euclidean_distance, self.tactile, self.aperture)
         self.extras["log"] = {
             "aperture": self.aperture,
             "dist_reward": dist_reward,
-            "object_ee_distance": self.object_ee_euclidean_distance
+            "contact_reward": contact_reward,
+            "object_ee_distance": self.object_ee_euclidean_distance,
+            "height_bonus": height_bonus,
         }
         self.extras["counters"] = {
             "timesteps_to_find_object_easy": self.timesteps_to_find_object_easy.float(),
@@ -257,7 +266,10 @@ class FindEnv(FrankaEnv):
             tuple: (termination tensor, timeout tensor)
         """
         self._compute_intermediate_values()
-        termination = torch.zeros((self.num_envs,)).to(device=self.device)
+        success = self.object_pos[:, 2] > 0.04
+        failure = torch.norm(self.object_pos - self.default_object_pos, dim=1) > 0.3
+        termination = success | failure
+
         time_out = self.episode_length_buf >= self.max_episode_length - 1
         return termination, time_out
 
@@ -277,7 +289,19 @@ def distance_reward(object_ee_distance, std: float = 0.1):
     return r_reach
 
 @torch.jit.script
-def compute_rewards(object_ee_distance: torch.Tensor):
+def contact_reward(tactile, aperture):
+    
+    # only reward contacts not from contacting the other finger
+    min_aperture = 0.3
+    aperture_mask = (aperture > min_aperture).float()
+
+    total_tactile = torch.mean(tactile, dim=1) 
+    total_tactile *= aperture_mask
+
+    return total_tactile
+
+@torch.jit.script
+def compute_rewards(object_pos: torch.Tensor, object_ee_distance: torch.Tensor, tactile: torch.Tensor, aperture: torch.Tensor):
     """
     Compute distance-based rewards.
 
@@ -287,9 +311,17 @@ def compute_rewards(object_ee_distance: torch.Tensor):
     Returns:
         Tuple[Tensor, Tensor]: (reward, distance reward)
     """
-    r_dist = distance_reward(object_ee_distance, std=0.03)
-    rewards = r_dist
-    return rewards, r_dist
+    std = 0.03
+    r_dist = distance_reward(object_ee_distance, std=std)
+    r_contact = contact_reward(tactile, aperture)
+
+    object_height = object_pos[:, 2]
+    # give a small bonus for lifting the object off the table
+    in_contact = (r_contact > 0).float()
+    height_bonus = (object_height > 0.04).float() * in_contact * 100
+    
+    rewards = r_dist + height_bonus
+    return rewards, r_dist, r_contact, height_bonus
 
 @torch.jit.script
 def rotation_distance(object_rot, target_rot):

@@ -228,7 +228,7 @@ class FrankaEnv(RotoEnv):
         Returns:
             torch.Tensor: Proprioceptive observation vector.
         """
-        control_errors = self.cur_targets - self.joint_pos
+        control_errors = self.joint_pos_cmd - self.joint_pos
         prop = torch.cat(
             (
                 self.normalised_joint_pos,
@@ -270,6 +270,10 @@ class FrankaEnv(RotoEnv):
             ),
             dim=-1,
         )
+
+        # try  bipolar encoding
+        tactile[tactile == 0] = -1
+
         self.tactile = tactile
         return tactile
 

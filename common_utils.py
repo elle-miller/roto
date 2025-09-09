@@ -27,8 +27,6 @@ def make_aux(env, rl_memory, encoder, value, value_preprocessor, env_cfg, agent_
     # configure auxiliary task
     rl_rollout = agent_cfg["agent"]["rollouts"]
     if agent_cfg["auxiliary_task"]["type"] != None:
-        aux_rollout = rl_rollout * agent_cfg["auxiliary_task"]["rl_per_aux"]
-        assert aux_rollout > 0
 
         match agent_cfg["auxiliary_task"]["type"]:
             case "reconstruction":
@@ -66,8 +64,8 @@ def make_env(env_cfg, writer, args_cli, obs_stack=1):
     if args_cli.video:
         video_kwargs = {
             "video_folder": writer.video_dir,
-            "step_trigger": lambda step: step % args_cli.video_interval == 0,
-            # "step_trigger": lambda step: step == 0,
+            # "step_trigger": lambda step: step % args_cli.video_interval == 0,
+            "step_trigger": lambda step: step == 0,
             "video_length": args_cli.video_length,
             "disable_logger": True,
         }
