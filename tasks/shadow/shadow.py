@@ -159,10 +159,6 @@ class ShadowEnv(RotoEnv):
         self.tactile = torch.zeros((self.num_envs, self.num_tactile_observations), device=self.device)
         self.last_tactile = torch.zeros((self.num_envs, self.num_tactile_observations), device=self.device)
 
-        # track successes
-        self.successes = torch.zeros(self.num_envs, dtype=self.dtype, device=self.device)
-        self.consecutive_successes = torch.zeros(1, dtype=self.dtype, device=self.device)
-
         self.extras["log"] = {
             "tactile_penalty": None,
             "success_reward": None,
@@ -225,13 +221,14 @@ class ShadowEnv(RotoEnv):
 
     def _get_proprioception(self):
 
-        control_errors = self.cur_targets - self.joint_pos
+        control_errors = self.joint_pos_cmd - self.joint_pos
 
         prop = torch.cat(
             (
                 # hand (48)
                 self.normalised_joint_pos,
                 self.normalised_joint_vel,
+                # self.joint_accel,
                 # actions (20 = 68)
                 self.actions,
                 control_errors
@@ -284,17 +281,6 @@ class ShadowEnv(RotoEnv):
         self.tactile = tactile
         return tactile
     
-    def tactile_pretty(self, tactile):
-        # print(tactile.shape)
-        assert len(tactile.shape) == 1 
-        assert tactile.shape[0] == self.cfg.num_tactile_observations
-        distal = [f"{val:.1f}" for val in tactile[:5].tolist()]
-        proximal = [f"{val:.1f}" for val in tactile[5:10].tolist()]
-        middle = [f"{val:.1f}" for val in tactile[10:15].tolist()]
-        palm = tactile[15]
-        meta = tactile[16]
-        print(f"dist: {distal} prox: {proximal} mid: {middle} palm: {palm:.1f} meta: {meta:.1f}")
-
 
     def _reset_idx(self, env_ids: Sequence[int] | None):
         if env_ids is None:
@@ -305,8 +291,6 @@ class ShadowEnv(RotoEnv):
 
         # reset hand
         self._reset_robot(env_ids, joint_pos_noise=self.cfg.reset_joint_pos_noise)
-
-        self.successes[env_ids] = 0
 
 
 

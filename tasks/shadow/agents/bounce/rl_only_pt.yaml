@@ -32,44 +32,28 @@ models:
 
 auxiliary_task:
   type: null
-  loss_weight: 1
-  learning_rate: 1
-  rl_per_aux: 1
-  learning_epochs: 1
-  mini_batches: 1
-  clip_grad: False
-  augment: False
-  memory_size: 0
-  pretrain: False
+
 
 # PPO agent configuration (field names are from PPO_DEFAULT_CONFIG)
 # https://skrl.readthedocs.io/en/latest/api/agents/ppo.html
 agent:
-  optimise_encoder: True
-  augment: False
+
   rollouts: 16
   learning_epochs: 4
   mini_batches: 8
   discount_factor: 0.99
   lambda: 0.95
   learning_rate: 0.0003212610229453532
-  # value_preprocessor: RunningStandardScaler
-  # value_preprocessor_kwargs: null
-
-  random_timesteps: 0
-  learning_starts: 0
   grad_norm_clip: 1.0
   ratio_clip: 0.2
   value_clip: 0.2
-  clip_predicted_values: True
   entropy_loss_scale: 0.0
   value_loss_scale: 1.0
   kl_threshold: 0
-  rewards_shaper_scale: 0.01
-  # logging and checkpoint
+
 experiment:
-  directory: "shadow_bounce_cleanup"
-  experiment_name: "debug"
+  directory: "shadow_bounce_sweep"
+  experiment_name: "shadow_bounce_sweep"
   upload_videos: False
   save_checkpoints: True
   debug: False
@@ -77,14 +61,12 @@ experiment:
   wandb: 1
   wandb_kwargs: {
     "project": "isaac_lab",
-    "group": "clean_up",
-    "name": "bounce r16 OOB min5 10s",
+    "group": "shadow_bounce_sweep",
+    "name": "1",
     "entity": "my-phd",
   }
 
-# Sequential trainer
-# https://skrl.readthedocs.io/en/latest/api/trainers/sequential.html
 trainer:
   num_eval_envs: 100
-  max_global_timesteps_M: 200
+  max_global_timesteps_M: 50
   environment_info: "log"

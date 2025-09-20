@@ -16,7 +16,7 @@ models:
     hiddens: [1024, 512, 256]
     activations: ["elu", "elu", "elu"]
     layernorm: True
-    state_preprocessor: None # RunningStandardScalerDict
+    state_preprocessor: null # RunningStandardScalerDict
 
   policy:
     clip_log_std: True
@@ -31,61 +31,45 @@ models:
     activations: ["elu", "elu", "identity"]
 
 auxiliary_task:
-  type: null
-  memory_type: "vanilla"
+  type: "reconstruction"
+  n_rollouts: 1
   tactile_only: True
-  loss_weight: 0.004477246728426353
-  learning_rate: 2.5503140974226334e-05
-  n_f: 1
-  last_n_obs: 16
-  rl_per_aux: 4
-  learning_epochs: 1
-  mini_batches: 16
-  clip_grad: False
-  augment: False
-  memory_size: 0
-  pretrain: False
+  loss_weight: 0.4744668526525511
+  learning_rate: 0.0005343910761338679
+  learning_epochs_ratio: 1
+
 
 # PPO agent configuration (field names are from PPO_DEFAULT_CONFIG)
 # https://skrl.readthedocs.io/en/latest/api/agents/ppo.html
 agent:
-  optimise_encoder: True
-  augment: False
-  rollouts: 64
-  learning_epochs: 8
-  mini_batches: 16
+  # hparams
+  learning_rate: 1.5176600549117507e-06
+  rollouts: 16
+  learning_epochs: 5
+  mini_batches: 32
+  ratio_clip: 0.030186063243092892
+  value_clip: 0.22080281090748716
+  entropy_loss_scale: 0.46262413630138044
+  value_loss_scale: 0.8301260120652513
 
   discount_factor: 0.99
-  lambda: 0.95
-  learning_rate: 1.3601715732483034e-05
-  # value_preprocessor: RunningStandardScaler
-  # value_preprocessor_kwargs: null
-
-  random_timesteps: 0
-  learning_starts: 0
+  lambda: 0.9371248667795103
   grad_norm_clip: 1.0
-  ratio_clip: 0.2
-  value_clip: 0.2
-  clip_predicted_values: True
-  entropy_loss_scale: 0.1
-  value_loss_scale: 1.0
   kl_threshold: 0
-  rewards_shaper_scale: 1.0
-# logging and checkpoint
 
 experiment:
-  directory: "rebuttal"
+  directory: "franka_find"
   debug: 0
   upload_videos: 0 
   save_checkpoints: 1
-  experiment_name: "franka_find_tac_recon"
+  experiment_name: "tac_recon_50M_seeded"
   tb_log: True
   wandb: 1
   wandb_kwargs: {
     "project": "isaac_lab",
-    "group": "franka_find_tac_recon",
+    "group": "tac_recon_50M_seeded",
     "entity": "my-phd",
-    "name": "tac recon+null",
+    "name": "1",
   }
 
 # Sequential trainer

@@ -16,7 +16,7 @@ models:
     hiddens: [1024, 512, 256]
     activations: ["elu", "elu", "elu"]
     layernorm: True
-    state_preprocessor: null # RunningStandardScalerDict
+    state_preprocessor: None # RunningStandardScalerDict
 
   policy:
     clip_log_std: True
@@ -30,52 +30,63 @@ models:
     hiddens: [128, 64]
     activations: ["elu", "elu", "identity"]
 
-auxiliary_task:
-  type: "forward_dynamics"
-  tactile_only: False
-  loss_weight: 0.701442305058738
-  learning_rate: 0.0007355855634320232
-  n_rollouts: 1
-  seq_length: 4
+  auxiliary_task:
+    type: "forward_dynamics"
+    memory_type: "reduced_vanilla" # "vanilla", "reduced_vanilla"
+    tactile_only: True
+    loss_weight: 0.0024563011888180755
+    learning_rate: 0.00015653936173824111
+    last_n_obs: 1
+    n_f: 4
+    rl_per_aux: 4
+    learning_epochs: 1
+    mini_batches: 8
+    clip_grad: False
+    augment: False
+    memory_size: 0
+    pretrain: False 
 
 # PPO agent configuration (field names are from PPO_DEFAULT_CONFIG)
 # https://skrl.readthedocs.io/en/latest/api/agents/ppo.html
 agent:
+  optimise_encoder: True
 
+  augment: False
   rollouts: 64
-  learning_epochs: 8
-  mini_batches: 32
+  learning_epochs: 4
+  mini_batches: 64
 
   discount_factor: 0.99
   lambda: 0.95
-  learning_rate: 2.2023161423384864e-05
+  learning_rate: 2.3186205584376127e-05
+  # value_preprocessor: RunningStandardScaler
+  # value_preprocessor_kwargs: null
 
-
+  random_timesteps: 0
+  learning_starts: 0
   grad_norm_clip: 1.0
   ratio_clip: 0.2
   value_clip: 0.2
-  entropy_loss_scale: 0.05
+  clip_predicted_values: True
+  entropy_loss_scale: 0.0
   value_loss_scale: 1.0
   kl_threshold: 0
-
+  rewards_shaper_scale: 1.0
   # logging and checkpoint
-experiment:
-  directory: "franka_find"
-  debug: 0
-  upload_videos: 0 
-  save_checkpoints: 1
-  experiment_name: "franka_find_dynamics_sweep_all"
-  tb_log: True
-  wandb: 0
-  wandb_kwargs: {
-    "project": "isaac_lab",
-    "group": "franka_find_dynamics_sweep_all",
-    "entity": "my-phd",
-    "name": "nf=4",
-  }
+  experiment:
+    directory: "franka_find"
+    experiment_name: "franka_find_tactile_dynamics_london_seeded"
+    tb_log: True
+    wandb: 1
+    wandb_kwargs: {
+      "project": "isaac_lab",
+      "group": "franka_find_tactile_dynamics_london_seeded", 
+      "name": "1",
+    }
 
 # Sequential trainer
 # https://skrl.readthedocs.io/en/latest/api/trainers/sequential.html
 trainer:
   num_eval_envs: 100
   max_global_timesteps_M: 200
+  environment_info: "log"

@@ -32,43 +32,30 @@ models:
 
 auxiliary_task:
   type: null
-  memory_type: "vanilla"
-  loss_weight: 1
-  learning_rate: 1
-  last_n_obs: 1
-  n_f: 1
-  rl_per_aux: 4
-  learning_epochs: 1
-  mini_batches: 8
-  clip_grad: False
-  augment: False
-  memory_size: 0
-  pretrain: False 
 
 
 # PPO agent configuration (field names are from PPO_DEFAULT_CONFIG)
 # https://skrl.readthedocs.io/en/latest/api/agents/ppo.html
 agent:
-  optimise_encoder: True
-  augment: False
+  # rollout collection
   rollouts: 32
-  learning_epochs: 32
-  mini_batches: 8
+  learning_epochs: 20
+  mini_batches: 16
 
+  # values
   discount_factor: 0.99
-  lambda: 0.95
-  learning_rate: 1.000425e-05
+  lambda: 0.9066813033152197
+  value_clip: 0.203740908288308
 
-  random_timesteps: 0
-  learning_starts: 0
-  grad_norm_clip: 1.0
-  ratio_clip: 0.2
-  value_clip: 0.2
-  clip_predicted_values: True
-  entropy_loss_scale: 0.05
-  value_loss_scale: 1.0
+  # policy optimisation
+  ratio_clip: 0.13500339418789895
   kl_threshold: 0
-  rewards_shaper_scale: 1.0
+
+  # gradients
+  learning_rate: 9.238029902773938e-05
+  entropy_loss_scale: 0.0010332144235249002
+  value_loss_scale: 0.6264567935379245
+  grad_norm_clip: 1.0
 
 
 # logging and checkpoint
@@ -77,13 +64,13 @@ experiment:
   debug: 0
   upload_videos: 0 
   save_checkpoints: 1
-  experiment_name: "franka_find_sweep_fixed"
+  experiment_name: "e2e_detailed_sweep_50M_seeded"
   tb_log: True
   wandb: 1
   wandb_kwargs: {
     "project": "isaac_lab",
     "entity": "my-phd",
-    "group": "franka_find_sweep_fixed",
+    "group": "e2e_detailed_sweep_50M_seeded",
     "name": "1",
   }
 

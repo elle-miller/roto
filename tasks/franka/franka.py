@@ -237,7 +237,8 @@ class FrankaEnv(RotoEnv):
                 self.ee_pos,
                 self.ee_rot,
                 self.actions,
-                control_errors
+                control_errors,
+                self.episode_length_buf.unsqueeze(1)
             ),
             dim=-1,
         )

@@ -5,7 +5,7 @@ seed: 42
 models:
   separate: True
   obs_list: ["prop", "tactile"]
-  obs_stack: 4
+  obs_stack: 16
   aux_list: []
   preprocess:
     normalise_prop: True
@@ -24,48 +24,68 @@ models:
     min_log_std: -20.0
     max_log_std: 2.0
     hiddens: [128, 64]
-    activations: ["elu", "elu", "identity"]
+    activations: ["elu", "elu", "tanh"]
     
   value:
     hiddens: [128, 64]
     activations: ["elu", "elu", "identity"]
 
 auxiliary_task:
-  type: "forward_dynamics"
-  tactile_only: False
-  loss_weight: 0.701442305058738
-  learning_rate: 0.0007355855634320232
-  n_rollouts: 1
-  n_f: 10
+  type: null
+  memory_type: "vanilla"
+  tactile_only: True
+  loss_weight: 0.004477246728426353
+  learning_rate: 2.5503140974226334e-05
+  n_f: 1
+  last_n_obs: 16
+  rl_per_aux: 4
+  learning_epochs: 1
+  mini_batches: 16
+  clip_grad: False
+  augment: False
+  memory_size: 0
+  pretrain: False
 
+# PPO agent configuration (field names are from PPO_DEFAULT_CONFIG)
+# https://skrl.readthedocs.io/en/latest/api/agents/ppo.html
 agent:
-  rollouts: 32
-  learning_epochs: 4
-  mini_batches: 64
+  optimise_encoder: True
+  augment: False
+  rollouts: 64
+  learning_epochs: 8
+  mini_batches: 16
+
   discount_factor: 0.99
   lambda: 0.95
-  learning_rate: 0.00015001490150029674
+  learning_rate: 1.3601715732483034e-05
+  # value_preprocessor: RunningStandardScaler
+  # value_preprocessor_kwargs: null
+
+  random_timesteps: 0
+  learning_starts: 0
   grad_norm_clip: 1.0
   ratio_clip: 0.2
   value_clip: 0.2
-  entropy_loss_scale: 0.0
+  clip_predicted_values: True
+  entropy_loss_scale: 0.1
   value_loss_scale: 1.0
   kl_threshold: 0
-
+  rewards_shaper_scale: 1.0
+# logging and checkpoint
 
 experiment:
   directory: "rebuttal"
   debug: 0
   upload_videos: 0 
   save_checkpoints: 1
-  experiment_name: "rebuttal_bounce_dynamics"
+  experiment_name: "franka_find_tac_recon"
   tb_log: True
-  wandb: 0
+  wandb: 1
   wandb_kwargs: {
     "project": "isaac_lab",
-    "group": "rebuttal_bounce_dynamics",
+    "group": "franka_find_tac_recon",
     "entity": "my-phd",
-    "name": "null",
+    "name": "tac recon+null",
   }
 
 # Sequential trainer

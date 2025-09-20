@@ -34,16 +34,10 @@ auxiliary_task:
   type: null
   memory_type: "vanilla"
   loss_weight: 1
-  learning_rate: 1
-  last_n_obs: 1
-  n_f: 1
-  rl_per_aux: 4
-  learning_epochs: 1
-  mini_batches: 8
+  
   clip_grad: False
   augment: False
   memory_size: 0
-  pretrain: False 
 
 
 # PPO agent configuration (field names are from PPO_DEFAULT_CONFIG)
@@ -51,13 +45,13 @@ auxiliary_task:
 agent:
   optimise_encoder: True
   augment: False
-  rollouts: 32
+  rollouts: 64
   learning_epochs: 8
-  mini_batches: 16
+  mini_batches: 32
 
   discount_factor: 0.99
   lambda: 0.95
-  learning_rate: 1.0595873261695062e-05
+  learning_rate: 2.2023161423384864e-05
 
   random_timesteps: 0
   learning_starts: 0
@@ -65,7 +59,7 @@ agent:
   ratio_clip: 0.2
   value_clip: 0.2
   clip_predicted_values: True
-  entropy_loss_scale: 0.0
+  entropy_loss_scale: 0.05
   value_loss_scale: 1.0
   kl_threshold: 0
   rewards_shaper_scale: 1.0
@@ -73,18 +67,18 @@ agent:
 
 # logging and checkpoint
 experiment:
-  directory: "franka_find_sweep"
+  directory: "franka_find"
   debug: 0
   upload_videos: 0 
   save_checkpoints: 1
-  experiment_name: "franka_find"
+  experiment_name: "franka_find_explore"
   tb_log: True
   wandb: 1
   wandb_kwargs: {
     "project": "isaac_lab",
     "entity": "my-phd",
-    "group": "franka_find_sweep",
-    "name": "act 0.3 40cm plate 0.03 std",
+    "group": "franka_find_explore",
+    "name": "20 cm, tac reward"",
   }
 
 # Sequential trainer

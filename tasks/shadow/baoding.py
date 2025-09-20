@@ -48,6 +48,9 @@ every child env should implement own
 
 @configclass
 class BaodingCfg(ShadowEnvCfg):
+
+    act_moving_average  = 1
+
     # in-hand ball
     ball_mass_g = 55 #55
     ball_mass_kg = 0.001 * ball_mass_g
@@ -201,12 +204,12 @@ class BaodingEnv(ShadowEnv):
         colour_2 = (0.0, 1.0, 1.0)
         brat_pink = (0.9882352941176471, 0.011764705882352941, 0.7098039215686275)
 
-        light_cfg = sim_utils.DomeLightCfg(intensity=100.0, color=(0.75, 0.75, 0.75))
-        light_cfg.func("/World/Light", light_cfg)
-        light_cfg_1 = sim_utils.SphereLightCfg(intensity=10000.0, color=brat_pink)
-        light_cfg_1.func("/World/ds", light_cfg_1, translation=(1, 0, 1))
-        light_cfg_2 = sim_utils.SphereLightCfg(intensity=10000.0, color=colour_2)
-        light_cfg_2.func("/World/disk", light_cfg_2, translation=(-1, 0, 1))
+        # light_cfg = sim_utils.DomeLightCfg(intensity=100.0, color=(0.75, 0.75, 0.75))
+        # light_cfg.func("/World/Light", light_cfg)
+        # light_cfg_1 = sim_utils.SphereLightCfg(intensity=10000.0, color=brat_pink)
+        # light_cfg_1.func("/World/ds", light_cfg_1, translation=(1, 0, 1))
+        # light_cfg_2 = sim_utils.SphereLightCfg(intensity=10000.0, color=colour_2)
+        # light_cfg_2.func("/World/disk", light_cfg_2, translation=(-1, 0, 1))
 
         # viz
         self.target1 = VisualizationMarkers(self.cfg.target1_cfg)
@@ -266,16 +269,14 @@ class BaodingEnv(ShadowEnv):
             goal_reached,
             self.ball_1_goal_dist,
             self.ball_2_goal_dist,
-            self.cfg.reach_goal_bonus,
-
         )
 
         self.extras["log"] = {
             "success_reward": (reach_goal_reward),
             "sum_forces": (torch.sum(self.tactile, dim=1)),
-            "tactile_reward": (tactile_reward),
-            "transition_reward": (transition_reward),
-            "fall_penalty": (fall_penalty),
+            # "tactile_reward": (tactile_reward),
+            # "transition_reward": (transition_reward),
+            # "fall_penalty": (fall_penalty),
             "ball_1_vel": (self.ball_1_linvel),
             "ball_2_vel": (self.ball_2_linvel),
             "ball_dist": (self.ball_dist)
@@ -386,18 +387,13 @@ def compute_rewards(
     goal_reached: torch.Tensor,
     ball_1_goal_dist: torch.Tensor,
     ball_2_goal_dist: torch.Tensor,
-    reach_goal_bonus: float,
 ):
-    reach_goal_bonus = 10
+    
+    dense_dist_reward = (distance_reward(ball_1_goal_dist) + distance_reward(ball_2_goal_dist)) * 0
 
+    reach_goal_reward = torch.where(goal_reached == 1, 10, 0).float()
 
-    dense_dist_reward = (distance_reward(ball_1_goal_dist) + distance_reward(ball_2_goal_dist)) * 0.1
-
-    # Success bonus: orientation is within `success_tolerance` of goal orientation
-    # ONLY RESET GOALS IF BOTH ARE ACHIEVED!
-    reach_goal_reward = torch.where(goal_reached == 1, reach_goal_bonus, 0).float()
-
-    total_reward = reach_goal_reward + dense_dist_reward 
+    total_reward = reach_goal_reward 
 
     return total_reward,  reach_goal_reward
 

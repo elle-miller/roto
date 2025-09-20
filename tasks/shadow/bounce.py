@@ -216,7 +216,6 @@ class BounceEnv(ShadowEnv):
         (
             total_reward,
             bounce_reward,
-            air_reward,
             
         ) = compute_rewards(
             self.new_bounces,
@@ -250,8 +249,7 @@ def compute_rewards(
 ):
 
     bounce_reward = new_bounces * 10
-    air_reward = time_without_contact * 0
 
     total_reward = bounce_reward
 
-    return total_reward, bounce_reward, air_reward,
+    return total_reward, bounce_reward

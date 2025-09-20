@@ -2,6 +2,7 @@ logs/
 outputs/
 wandb/
 videos/
+results/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
