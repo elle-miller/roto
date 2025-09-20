@@ -18,6 +18,7 @@ import gc
 import sys
 import torch
 import traceback
+import numpy as np 
 
 import optuna
 from isaaclab.app import AppLauncher
@@ -52,6 +53,7 @@ from common_utils import (
     LOG_PATH,
     make_env,
     make_memory,
+    make_aux,
     make_models,
     make_trainer,
     set_seed,
@@ -63,12 +65,20 @@ class OptimisationRunner:
 
         self.sampler = optuna.samplers.TPESampler(n_startup_trials=n_startup_trials)
 
-        # self.pruner = optuna.pruners.MedianPruner(
-        #     n_startup_trials=n_startup_trials,
-        #     n_warmup_steps=n_warmup_steps,
-        #     interval_steps=interval_steps
-        # )
-        self.pruner = optuna.pruners.NopPruner()
+        self.pruner = optuna.pruners.MedianPruner(
+            n_startup_trials=n_startup_trials,
+            n_warmup_steps=n_warmup_steps,
+            interval_steps=interval_steps
+        )
+
+        # n_steps = 200_000_000 / (env_cfg.scene.num_envs - agent_cfg["trainer"]["num_eval_envs"])
+        # n_evals = int(n_steps / 300) 
+        # self.pruner=optuna.pruners.HyperbandPruner(
+        #     min_resource=1, 
+        #     max_resource=n_evals, 
+        #     reduction_factor=3
+        # ),
+        # self.pruner = optuna.pruners.NopPruner()
 
         self.study = optuna.create_study(
             storage=storage,
@@ -110,29 +120,57 @@ class OptimisationRunner:
     def objective(self, trial: optuna.Trial, env, env_cfg, agent_cfg) -> float:
         print(f"Starting trial: {trial.number}")
 
-        # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.trial.Trial.html
-        # CHOOSE YOUR OWN HPARAMS TO OPTIMISE
-        mini_batches = trial.suggest_categorical("mini_batches", [4, 8, 16, 32, 64])
-        learning_rate = trial.suggest_float("learning_rate", low=1e-5, high=1e-3, log=True)
-        learning_epochs = trial.suggest_categorical("learning_epochs", [4, 8, 16, 32])
-        rollouts = trial.suggest_categorical("rollouts", [16, 32, 64])
-        entropy_loss_scale = trial.suggest_categorical("entropy_loss_scale", [0.0, 0.05, 0.1])
+        TRAIN_SEEDS = [0, 1, 2, 3, 4]
+        agent_cfg["seed"] = np.random.choice(TRAIN_SEEDS)
+        set_seed(agent_cfg["seed"])
 
-        # setup models
-        policy, value, encoder, value_preprocessor = make_models(env, env_cfg, agent_cfg, dtype)
+        # PPO hparams
+        rollouts = trial.suggest_categorical("rollouts", [16, 32, 64, 96])
+        mini_batches = trial.suggest_categorical("mini_batches", [4, 8, 16, 32])
+        learning_epochs = trial.suggest_int("learning_epochs", low=5, high=20, step=1)
+        learning_rate = trial.suggest_float("learning_rate", low=1e-6, high=0.003, log=True)
+        entropy_loss_scale = trial.suggest_float("entropy_loss_scale", low=0, high=0.5)
+        value_loss_scale = trial.suggest_float("value_loss_scale", low=0, high=1.0)
+        value_clip = trial.suggest_float("value_clip", low=0, high=0.3)
+        ratio_clip = trial.suggest_float("ratio_clip", low=0, high=0.3)
+        gae_lambda = trial.suggest_float("gae_lambda", low=0.9, high=0.99)
 
-        # update default_agent_cfg with trial
+        # kl_threshold = trial.suggest_categorical("kl_threshold", [0.0, 0.003, 0.03])
+        # gamma = trial.suggest_float("gamma", low=0.8, high=0.9997)
+
         agent_cfg["agent"]["rollouts"] = rollouts
         agent_cfg["agent"]["mini_batches"] = mini_batches
         agent_cfg["agent"]["learning_epochs"] = learning_epochs
         agent_cfg["agent"]["learning_rate"] = learning_rate
         agent_cfg["agent"]["entropy_loss_scale"] = entropy_loss_scale
+        agent_cfg["agent"]["value_loss_scale"] = value_loss_scale
+        agent_cfg["agent"]["value_clip"] = value_clip
+        agent_cfg["agent"]["ratio_clip"] = ratio_clip
+        agent_cfg["agent"]["lambda"] = gae_lambda
+        # agent_cfg["agent"]["gamma"] = gamma
+        # agent_cfg["agent"]["kl_threshold"] = kl_threshold
 
-        # PPO
+        if agent_cfg["auxiliary_task"]["type"] != None:
+            learning_rate_aux = trial.suggest_float("learning_rate_aux", low=1e-5, high=1e-3, log=True)
+            loss_weight_aux = trial.suggest_float("loss_weight_aux", low=1e-3, high=10, log=True)
+            learning_epochs_ratio = trial.suggest_categorical("learning_epochs_ratio", [0.25, 0.5, 0.75, 1.0])
+
+            agent_cfg["auxiliary_task"]["learning_rate"] = learning_rate_aux
+            agent_cfg["auxiliary_task"]["loss_weight"] = loss_weight_aux
+            agent_cfg["auxiliary_task"]["learning_epochs_ratio"] = learning_epochs_ratio
+
+            if agent_cfg["auxiliary_task"]["type"] == "forward_dynamics":
+                # it can take quite long, cap at8
+                seq_length = trial.suggest_int("seq_length", low=2, high=10, step=1)
+                agent_cfg["auxiliary_task"]["seq_length"] = seq_length
+
+        # setup models
+        policy, value, encoder, value_preprocessor = make_models(env, env_cfg, agent_cfg, dtype)
+
         # create tensors in memory for RL stuff [only for the training envs]
         num_training_envs = env_cfg.scene.num_envs - agent_cfg["trainer"]["num_eval_envs"]
         rl_memory = make_memory(env, env_cfg, size=agent_cfg["agent"]["rollouts"], num_envs=num_training_envs)
-        auxiliary_task = None
+        auxiliary_task = make_aux(env, rl_memory, encoder, value, value_preprocessor, env_cfg, agent_cfg, writer)
 
         # restart wandb
         writer.close_wandb()
@@ -197,19 +235,30 @@ if __name__ == "__main__":
     env = make_env(env_cfg, writer, args_cli, agent_cfg["models"]["obs_stack"])
 
     # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.create_study.html
-    storage = "sqlite:///my_sweep.db"
+    storage = "sqlite:///baoding.db"
     study_name = args_cli.study
 
-    # Usage
+    # SSLn_startup_trials
     total_trials = 50
     n_startup_trials = 5
-    n_warmup_steps = 0
-    interval_steps = 10
+    # n_warmup_steps = 30_000_000
+
+    # baoding
+    n_warmup_steps = 70_000_000
+
+    interval_steps = 1
 
     runner = OptimisationRunner(study_name, n_startup_trials, n_warmup_steps, interval_steps)
 
     try:
         best_trial = runner.run(total_trials)
+
+        # now run 5 seeds with the best hyperparameters
+        print("Best trial:")
+
+
+
+    
 
     except Exception as err:
         carb.log_error(err)

@@ -164,17 +164,15 @@ def main(env_cfg, agent_cfg: dict):
             mask *= mask_update
 
             # the eval episodes get manually reset every ep_length
-            if timestep > 0 and (timestep % ep_length == 0):
+            if terminated | truncated:
                 mean_eval_return = returns.mean().item()
-                print("Mean eval return", mean_eval_return)
-                print("RESETING")
+                print("Reset - Mean eval return", mean_eval_return)
                 states, infos = env.reset(hard=True)
 
                 returns = torch.zeros(size=(env.num_envs, 1), device=env.device)
                 mask = torch.Tensor([[1] for _ in range(env.num_envs)]).to(env.device)
 
         if args_cli.video:
-            timestep += 1
             # exit the play loop after recording one video
             if timestep == args_cli.video_length:
                 break

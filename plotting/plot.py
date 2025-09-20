@@ -31,18 +31,18 @@ from matplotlib import rcParams
 # Set DPI
 dpi = 600
 
-plot_raw = True
+plot_raw = False
 
 # suprim
-log_dir = "/home/emil/code/external/IsaacLab/multimodal_gym/paper_results"
-output_dir = "/home/emil/code/external/IsaacLab/multimodal_gym/results/plots"
+log_dir = "/home/elle/code/external/roto/results/redo"
+output_dir = "/home/elle/code/external/roto/results/plots"
 
 # agenst5
 # log_dir = "/home/emil/code/external/multimodal_gym/paper_results"
 # output_dir = "/home/emil/code/external/multimodal_gym/results"
 
 import plot_dicts
-
+import plot_dicts_paper
 
 
 def get_readers_seeded(parent_experiment_dir, experiment_name):
@@ -95,6 +95,8 @@ def main():
     exp_dict = plot_dicts.baoding_ssl_rotations_barchart
 
     exp_dict = plot_dicts.tp_rate
+
+    exp_dict = plot_dicts_paper.franka_ssl_mean_return
 
     experiment_names = exp_dict["run_names"]
 
@@ -152,7 +154,6 @@ def main():
                     label = None if j > 0 else exp_dict["legend_names"][i]
                     plt.plot(step, run_rewards, alpha=1-j*0.1, color=exp_dict["color"][i], label=label, linestyle=exp_dict["linestyle"][i])
 
-        
         if "bar_chart" in exp_dict.keys():
             mean_rewards = np.array(mean_rewards)
             max_value = np.max(mean_rewards)
@@ -229,7 +230,7 @@ def main():
     plt.grid(True, alpha=0.3)  # Reduced grid opacity to 30%
     ax.set_facecolor('white')
 
-    plt.ylim(y_min, y_max)
+    # plt.ylim(y_min, y_max)
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, exp_dict["output_file"]), dpi=dpi, bbox_inches='tight', pad_inches=0.05)
     plt.show()
@@ -265,6 +266,8 @@ def get_metrics(exp_dict):
                 
                 step = metric["step"].to_numpy() / 1e6
                 metric = metric["value"].to_numpy()
+
+                print(step)
                 
                 if tag == "num_rotations":
                     run_rewards = metric /2
