@@ -36,16 +36,17 @@ auxiliary_task:
 # PPO agent configuration (field names are from PPO_DEFAULT_CONFIG)
 # https://skrl.readthedocs.io/en/latest/api/agents/ppo.html
 agent:
-  rollouts: 32
-  learning_epochs: 8
-  mini_batches: 4
+  rollouts: 16
+  learning_epochs: 14
+  mini_batches: 16
   discount_factor: 0.99
-  lambda: 0.95
-  learning_rate: 0.00020162791094547336
+  lambda: 0.907232209016445
+  learning_rate: 8.571638417056478e-05
   grad_norm_clip: 1.0
-  ratio_clip: 0.2
-  value_clip: 0.2
-  entropy_loss_scale: 0.05
+  ratio_clip: 0.15780009343526674
+  value_clip: 0.2018937033984739
+  value_loss_scale: 0.8381938759726169
+  entropy_loss_scale: 0.2551308863496997
   kl_threshold: 0
 
 experiment:
@@ -53,12 +54,12 @@ experiment:
   debug: 0
   upload_videos: 0 
   save_checkpoints: 1
-  experiment_name: "baoding_sweep_new"
+  experiment_name: "baoding_sweep_seeded"
   tb_log: True
   wandb: 1
   wandb_kwargs: {
     "project": "isaac_lab",
-    "group": "baoding_sweep_new",
+    "group": "baoding_sweep_seeded",
     "entity": "my-phd",
     "name": "1",
   }
@@ -67,4 +68,4 @@ experiment:
 # https://skrl.readthedocs.io/en/latest/api/trainers/sequential.html
 trainer:
   num_eval_envs: 100
-  max_global_timesteps_M: 100
+  max_global_timesteps_M: 200

@@ -39,21 +39,21 @@ auxiliary_task:
 agent:
 
   rollouts: 16
-  learning_epochs: 4
-  mini_batches: 8
+  learning_epochs: 15
+  mini_batches: 32
   discount_factor: 0.99
-  lambda: 0.95
-  learning_rate: 0.0003212610229453532
+  lambda: 0.9712482119259922
+  learning_rate: 6.473856314110186e-06
   grad_norm_clip: 1.0
-  ratio_clip: 0.2
-  value_clip: 0.2
-  entropy_loss_scale: 0.0
-  value_loss_scale: 1.0
+  ratio_clip: 0.1929978083623095
+  value_clip: 0.03269882986928582
+  entropy_loss_scale: 0.1475413023240535
+  value_loss_scale: 0.9678991456075728
   kl_threshold: 0
 
 experiment:
-  directory: "shadow_bounce_sweep"
-  experiment_name: "shadow_bounce_sweep"
+  directory: "shadow_bounce"
+  experiment_name: "shadow_bounce_seeds"
   upload_videos: False
   save_checkpoints: True
   debug: False
@@ -61,12 +61,12 @@ experiment:
   wandb: 1
   wandb_kwargs: {
     "project": "isaac_lab",
-    "group": "shadow_bounce_sweep",
+    "group": "shadow_bounce_seeds",
     "name": "1",
     "entity": "my-phd",
   }
 
 trainer:
   num_eval_envs: 100
-  max_global_timesteps_M: 50
+  max_global_timesteps_M: 200
   environment_info: "log"

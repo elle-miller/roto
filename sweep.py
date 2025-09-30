@@ -235,17 +235,25 @@ if __name__ == "__main__":
     env = make_env(env_cfg, writer, args_cli, agent_cfg["models"]["obs_stack"])
 
     # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.create_study.html
-    storage = "sqlite:///baoding.db"
-    study_name = args_cli.study
 
-    # SSLn_startup_trials
+    task = "Bounce"
+
+    if task == "Find":
+        storage = "sqlite:///frankafind.db"
+        n_warmup_steps = 30_000_000
+        agent_cfg["trainer"]["max_global_timesteps_M"] = 50
+    elif task == "Bounce":
+        storage = "sqlite:///bounce.db"
+        n_warmup_steps = 30_000_000
+        agent_cfg["trainer"]["max_global_timesteps_M"] = 50
+    elif task == "Baoding": 
+        storage = "sqlite:///baoding.db"
+        n_warmup_steps = 70_000_000
+        agent_cfg["trainer"]["max_global_timesteps_M"] = 100 
+    
+    study_name = args_cli.study
     total_trials = 50
     n_startup_trials = 5
-    # n_warmup_steps = 30_000_000
-
-    # baoding
-    n_warmup_steps = 70_000_000
-
     interval_steps = 1
 
     runner = OptimisationRunner(study_name, n_startup_trials, n_warmup_steps, interval_steps)
@@ -253,8 +261,71 @@ if __name__ == "__main__":
     try:
         best_trial = runner.run(total_trials)
 
-        # now run 5 seeds with the best hyperparameters
-        print("Best trial:")
+        print("Best trial:", best_trial)
+
+        agent_cfg["trainer"]["max_global_timesteps_M"] = 200
+        agent_cfg["agent"]["rollouts"] = best_trial.params["rollouts"]
+        agent_cfg["agent"]["mini_batches"] = best_trial.params["best_trial.mini_batches"]
+        agent_cfg["agent"]["learning_epochs"] = best_trial.params["learning_epochs"]
+        agent_cfg["agent"]["learning_rate"] = best_trial.params["learning_rate"]
+        agent_cfg["agent"]["entropy_loss_scale"] = best_trial.params["entropy_loss_scale"]
+        agent_cfg["agent"]["value_loss_scale"] = best_trial.params["value_loss_scale"]
+        agent_cfg["agent"]["value_clip"] = best_trial.params["value_clip"]
+        agent_cfg["agent"]["ratio_clip"] = best_trial.params["ratio_clip"]
+        agent_cfg["agent"]["lambda"] = best_trial.params["gae_lambda"]
+
+        test_seeds = [5,6,7,8,9]
+
+        for seed in test_seeds:
+
+            agent_cfg["seed"] = seed
+            set_seed(agent_cfg["seed"])
+
+            if agent_cfg["auxiliary_task"]["type"] != None:
+
+                agent_cfg["auxiliary_task"]["learning_rate"] = best_trial.params["learning_rate_aux"]
+                agent_cfg["auxiliary_task"]["loss_weight"] = best_trial.params["loss_weight_aux"]
+                agent_cfg["auxiliary_task"]["learning_epochs_ratio"] = best_trial.params["learning_epochs_ratio"]
+
+            if agent_cfg["auxiliary_task"]["type"] == "forward_dynamics":
+                # it can take quite long, cap at8
+                agent_cfg["auxiliary_task"]["seq_length"] = best_trial.params["seq_length"]
+
+            # setup models
+            policy, value, encoder, value_preprocessor = make_models(env, env_cfg, agent_cfg, dtype)
+
+            # create tensors in memory for RL stuff [only for the training envs]
+            num_training_envs = env_cfg.scene.num_envs - agent_cfg["trainer"]["num_eval_envs"]
+            rl_memory = make_memory(env, env_cfg, size=agent_cfg["agent"]["rollouts"], num_envs=num_training_envs)
+            auxiliary_task = make_aux(env, rl_memory, encoder, value, value_preprocessor, env_cfg, agent_cfg, writer)
+
+            # restart wandb
+            writer.close_wandb()
+            writer.setup_wandb(name="seed_" + str(seed))
+
+            # configure and instantiate PPO agent
+            ppo_agent_cfg = PPO_DEFAULT_CONFIG.copy()
+            ppo_agent_cfg.update(agent_cfg["agent"])
+            agent = PPO(
+                encoder,
+                policy,
+                value,
+                value_preprocessor,
+                memory=rl_memory,
+                cfg=ppo_agent_cfg,
+                observation_space=env.observation_space,
+                action_space=env.action_space,
+                device=env.device,
+                writer=writer,
+                auxiliary_task=auxiliary_task,
+                dtype=dtype,
+                debug=agent_cfg["experiment"]["debug"]
+            )
+
+            # Let's go!
+            trainer = make_trainer(env, agent, agent_cfg, auxiliary_task, writer)
+            trainer.train()
+
 
 
 

@@ -51,12 +51,12 @@ agent:
   learning_rate: 2.2023161423384864e-05
 
 
-  grad_norm_clip: 1.0
   ratio_clip: 0.2
   value_clip: 0.2
   entropy_loss_scale: 0.05
   value_loss_scale: 1.0
   kl_threshold: 0
+  grad_norm_clip: 1.0
 
   # logging and checkpoint
 experiment:
@@ -64,14 +64,14 @@ experiment:
   debug: 0
   upload_videos: 0 
   save_checkpoints: 1
-  experiment_name: "franka_find_dynamics_sweep_all"
+  experiment_name: "franka_find_dynamics_sweep"
   tb_log: True
-  wandb: 0
+  wandb: 1
   wandb_kwargs: {
     "project": "isaac_lab",
-    "group": "franka_find_dynamics_sweep_all",
+    "group": "franka_find_dynamics_sweep",
     "entity": "my-phd",
-    "name": "nf=4",
+    "name": "test",
   }
 
 # Sequential trainer

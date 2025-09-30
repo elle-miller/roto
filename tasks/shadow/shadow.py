@@ -54,11 +54,17 @@ from isaaclab.sensors import (
     ContactSensorCfg
 )
 from isaaclab.markers.config import FRAME_MARKER_CFG  # isort: skip
+from isaaclab.envs import ViewerCfg
 
 from tasks.roto_env import RotoEnv, RotoEnvCfg
 
 @configclass
 class ShadowEnvCfg(RotoEnvCfg):
+
+    eye = (0.0, -0.75, 0.6)
+    lookat = (0.0, -0.39, 0.5)
+    viewer: ViewerCfg = ViewerCfg(eye=eye, lookat=lookat, resolution=(1920,1080))
+
 
     episode_length_s = 10.0  # Episode length in seconds
 

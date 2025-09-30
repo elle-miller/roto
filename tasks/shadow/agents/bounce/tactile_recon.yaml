@@ -31,49 +31,34 @@ models:
     activations: ["elu", "elu", "identity"]
 
 auxiliary_task:
-  type: null #"reconstruction"
-  memory_type: "vanilla" # "vanilla", "reduced_vanilla"
+  type: "reconstruction"
+  n_rollouts: 1
   tactile_only: True
+  loss_weight: 0.4744668526525511
+  learning_rate: 0.0005343910761338679
+  learning_epochs_ratio: 1
 
-  loss_weight: 0.003848660443975624
-  learning_rate: 5.1284417117834764e-05
-  last_n_obs: 4
-  n_f: 0
-  rl_per_aux: 4
-  learning_epochs: 1
-  mini_batches: 8
-  clip_grad: False
-  augment: False
-  memory_size: 0
-  pretrain: False 
 
 # PPO agent configuration (field names are from PPO_DEFAULT_CONFIG)
 # https://skrl.readthedocs.io/en/latest/api/agents/ppo.html
 agent:
-  optimise_encoder: True
-  augment: False
   rollouts: 64
   learning_epochs: 16
   mini_batches: 32
   discount_factor: 0.99
   lambda: 0.95
   learning_rate: 4.647497787213112e-05
-  # value_preprocessor: RunningStandardScaler
-  # value_preprocessor_kwargs: null
 
-  random_timesteps: 0
-  learning_starts: 0
   grad_norm_clip: 1.0
   ratio_clip: 0.2
   value_clip: 0.2
-  clip_predicted_values: True
   entropy_loss_scale: 0.0
   value_loss_scale: 1.0
   kl_threshold: 0
-  rewards_shaper_scale: 0.01
+
   # logging and checkpoint
 experiment:
-  directory: "rebuttal"
+  directory: "bounce"
   debug: 0
   upload_videos: 0 
   save_checkpoints: 1
@@ -84,7 +69,7 @@ experiment:
     "project": "isaac_lab",
     "group": "bounce_tac_recon_seeded",
     "entity": "my-phd",
-    "name": "NULL",
+    "name": "1",
   }
 
 # Sequential trainer
@@ -92,4 +77,3 @@ experiment:
 trainer:
   num_eval_envs: 100
   max_global_timesteps_M: 200
-  environment_info: "log"

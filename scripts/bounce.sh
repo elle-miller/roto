@@ -2,7 +2,8 @@
 eval "$(conda shell.bash hook)"
 conda activate env_isaaclab
 
-python sweep.py --task FrankaFind_TactileRecon --num_envs 4196 --headless --seed 1234 --study tacrecon2
+
+python sweep.py --task Shadow_Bounce_TactileRecon --num_envs 4196 --headless --seed 1234 --study tacrecon
 
 
 # TEST_SEEDS=(5 6 7 8 9)
@@ -14,5 +15,5 @@ python sweep.py --task FrankaFind_TactileRecon --num_envs 4196 --headless --seed
 
 # for SEED in "${TEST_SEEDS[@]}"; do
 #     echo "Running with seed $SEED"
-#     python train.py --task FrankaFind_TactileRecon --num_envs 4196 --headless --seed "$SEED"
+#     python train.py --task Shadow_Bounce --num_envs 4196 --headless --seed "$SEED"
 # done

@@ -62,12 +62,12 @@ experiment:
   debug: 0
   upload_videos: 0 
   save_checkpoints: 1
-  experiment_name: "tac_recon_50M_seeded"
+  experiment_name: "tac_recon_sweep2"
   tb_log: True
   wandb: 1
   wandb_kwargs: {
     "project": "isaac_lab",
-    "group": "tac_recon_50M_seeded",
+    "group": "tac_recon_sweep2",
     "entity": "my-phd",
     "name": "1",
   }
