@@ -2,7 +2,7 @@
 eval "$(conda shell.bash hook)"
 conda activate env_isaaclab
 
-python sweep.py --task FrankaFind_TactileRecon --num_envs 4196 --headless --seed 1234 --study tacrecon2
+python sweep.py --task FrankaFind_TactileRecon --num_envs 4196 --headless --seed 1234 --env find --ssl tac_recon --study FrankaFind_TactileRecon_ireland
 
 
 # TEST_SEEDS=(5 6 7 8 9)
