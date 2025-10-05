@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2025, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2025, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -12,8 +12,6 @@ The following configurations are available:
 Reference:
 
 * https://www.shadowrobot.com/dexterous-hand-series/
-
-['robot0_hand_mount', 'robot0_forearm', 'robot0_wrist', 'robot0_palm', 'robot0_ffknuckle', 'robot0_mfknuckle', 'robot0_rfknuckle', 'robot0_lfmetacarpal', 'robot0_thbase', 'robot0_ffproximal', 'robot0_mfproximal', 'robot0_rfproximal', 'robot0_lfknuckle', 'robot0_thproximal', 'robot0_ffmiddle', 'robot0_mfmiddle', 'robot0_rfmiddle', 'robot0_lfproximal', 'robot0_thhub', 'robot0_ffdistal', 'robot0_mfdistal', 'robot0_rfdistal', 'robot0_lfmiddle', 'robot0_thmiddle', 'robot0_lfdistal', 'robot0_thdistal']
 
 """
 
@@ -29,7 +27,7 @@ from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
 
 SHADOW_HAND_CFG = ArticulationCfg(
     spawn=sim_utils.UsdFileCfg(
-        usd_path=f"{ISAAC_NUCLEUS_DIR}/Robots/ShadowHand/shadow_hand_instanceable.usd",
+        usd_path=f"{ISAAC_NUCLEUS_DIR}/Robots/ShadowRobot/ShadowHand/shadow_hand_instanceable.usd",
         activate_contact_sensors=True,
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             disable_gravity=True,
@@ -55,7 +53,7 @@ SHADOW_HAND_CFG = ArticulationCfg(
     actuators={
         "fingers": ImplicitActuatorCfg(
             joint_names_expr=["robot0_WR.*", "robot0_(FF|MF|RF|LF|TH)J(3|2|1)", "robot0_(LF|TH)J4", "robot0_THJ0"],
-            effort_limit={
+            effort_limit_sim={
                 "robot0_WRJ1": 4.785,
                 "robot0_WRJ0": 2.175,
                 "robot0_(FF|MF|RF|LF)J1": 0.7245,

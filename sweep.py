@@ -16,7 +16,6 @@ a more user-friendly way.
 import argparse
 import gc
 import sys
-import torch
 import traceback
 import numpy as np 
 
@@ -48,6 +47,7 @@ from isaaclab_tasks.utils.hydra import hydra_task_config, register_task_to_hydra
 import isaaclab_tasks  # noqa: F401
 from isaaclab_rl.algorithms.ppo import PPO, PPO_DEFAULT_CONFIG
 from isaaclab_rl.tools.writer import Writer
+import torch
 
 from common_utils import (
     LOG_PATH,
@@ -121,7 +121,7 @@ class OptimisationRunner:
         print(f"Starting trial: {trial.number}")
 
         TRAIN_SEEDS = [0, 1, 2, 3, 4]
-        agent_cfg["seed"] = np.random.choice(TRAIN_SEEDS)
+        agent_cfg["seed"] = int(np.random.choice(TRAIN_SEEDS))
         set_seed(agent_cfg["seed"])
 
         # PPO hparams
@@ -236,7 +236,7 @@ if __name__ == "__main__":
 
     # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.create_study.html
 
-    task = "Bounce"
+    task = "Baoding"
 
     if task == "Find":
         storage = "sqlite:///frankafind.db"
@@ -258,78 +258,80 @@ if __name__ == "__main__":
 
     runner = OptimisationRunner(study_name, n_startup_trials, n_warmup_steps, interval_steps)
 
-    try:
-        best_trial = runner.run(total_trials)
+    best_trial = runner.run(total_trials)
 
-        print("Best trial:", best_trial)
+    print("Best trial:", best_trial)
 
-        agent_cfg["trainer"]["max_global_timesteps_M"] = 200
-        agent_cfg["agent"]["rollouts"] = best_trial.params["rollouts"]
-        agent_cfg["agent"]["mini_batches"] = best_trial.params["best_trial.mini_batches"]
-        agent_cfg["agent"]["learning_epochs"] = best_trial.params["learning_epochs"]
-        agent_cfg["agent"]["learning_rate"] = best_trial.params["learning_rate"]
-        agent_cfg["agent"]["entropy_loss_scale"] = best_trial.params["entropy_loss_scale"]
-        agent_cfg["agent"]["value_loss_scale"] = best_trial.params["value_loss_scale"]
-        agent_cfg["agent"]["value_clip"] = best_trial.params["value_clip"]
-        agent_cfg["agent"]["ratio_clip"] = best_trial.params["ratio_clip"]
-        agent_cfg["agent"]["lambda"] = best_trial.params["gae_lambda"]
+    # now we run 5 seeds of the best trial :)
 
-        test_seeds = [5,6,7,8,9]
+    agent_cfg["agent"]["rollouts"] = best_trial.params["rollouts"]
+    agent_cfg["agent"]["mini_batches"] = best_trial.params["best_trial.mini_batches"]
+    agent_cfg["agent"]["learning_epochs"] = best_trial.params["learning_epochs"]
+    agent_cfg["agent"]["learning_rate"] = best_trial.params["learning_rate"]
+    agent_cfg["agent"]["entropy_loss_scale"] = best_trial.params["entropy_loss_scale"]
+    agent_cfg["agent"]["value_loss_scale"] = best_trial.params["value_loss_scale"]
+    agent_cfg["agent"]["value_clip"] = best_trial.params["value_clip"]
+    agent_cfg["agent"]["ratio_clip"] = best_trial.params["ratio_clip"]
+    agent_cfg["agent"]["lambda"] = best_trial.params["gae_lambda"]
 
-        for seed in test_seeds:
+    agent_cfg["trainer"]["max_global_timesteps_M"] = 200
+    agent_cfg["experiment"]["experiment_name"] = 200
 
-            agent_cfg["seed"] = seed
-            set_seed(agent_cfg["seed"])
-
-            if agent_cfg["auxiliary_task"]["type"] != None:
-
-                agent_cfg["auxiliary_task"]["learning_rate"] = best_trial.params["learning_rate_aux"]
-                agent_cfg["auxiliary_task"]["loss_weight"] = best_trial.params["loss_weight_aux"]
-                agent_cfg["auxiliary_task"]["learning_epochs_ratio"] = best_trial.params["learning_epochs_ratio"]
-
-            if agent_cfg["auxiliary_task"]["type"] == "forward_dynamics":
-                # it can take quite long, cap at8
-                agent_cfg["auxiliary_task"]["seq_length"] = best_trial.params["seq_length"]
-
-            # setup models
-            policy, value, encoder, value_preprocessor = make_models(env, env_cfg, agent_cfg, dtype)
-
-            # create tensors in memory for RL stuff [only for the training envs]
-            num_training_envs = env_cfg.scene.num_envs - agent_cfg["trainer"]["num_eval_envs"]
-            rl_memory = make_memory(env, env_cfg, size=agent_cfg["agent"]["rollouts"], num_envs=num_training_envs)
-            auxiliary_task = make_aux(env, rl_memory, encoder, value, value_preprocessor, env_cfg, agent_cfg, writer)
-
-            # restart wandb
-            writer.close_wandb()
-            writer.setup_wandb(name="seed_" + str(seed))
-
-            # configure and instantiate PPO agent
-            ppo_agent_cfg = PPO_DEFAULT_CONFIG.copy()
-            ppo_agent_cfg.update(agent_cfg["agent"])
-            agent = PPO(
-                encoder,
-                policy,
-                value,
-                value_preprocessor,
-                memory=rl_memory,
-                cfg=ppo_agent_cfg,
-                observation_space=env.observation_space,
-                action_space=env.action_space,
-                device=env.device,
-                writer=writer,
-                auxiliary_task=auxiliary_task,
-                dtype=dtype,
-                debug=agent_cfg["experiment"]["debug"]
-            )
-
-            # Let's go!
-            trainer = make_trainer(env, agent, agent_cfg, auxiliary_task, writer)
-            trainer.train()
+    agent_cfg["experiment"]["wandb_kwargs"]["group"] = "baoding_tac_recon_sweep"
 
 
+    test_seeds = [5,6,7,8,9]
 
+    for seed in test_seeds:
 
-    
+        agent_cfg["seed"] = seed
+        set_seed(agent_cfg["seed"])
+
+        if agent_cfg["auxiliary_task"]["type"] != None:
+
+            agent_cfg["auxiliary_task"]["learning_rate"] = best_trial.params["learning_rate_aux"]
+            agent_cfg["auxiliary_task"]["loss_weight"] = best_trial.params["loss_weight_aux"]
+            agent_cfg["auxiliary_task"]["learning_epochs_ratio"] = best_trial.params["learning_epochs_ratio"]
+
+        if agent_cfg["auxiliary_task"]["type"] == "forward_dynamics":
+            # it can take quite long, cap at8
+            agent_cfg["auxiliary_task"]["seq_length"] = best_trial.params["seq_length"]
+
+        # setup models
+        policy, value, encoder, value_preprocessor = make_models(env, env_cfg, agent_cfg, dtype)
+
+        # create tensors in memory for RL stuff [only for the training envs]
+        num_training_envs = env_cfg.scene.num_envs - agent_cfg["trainer"]["num_eval_envs"]
+        rl_memory = make_memory(env, env_cfg, size=agent_cfg["agent"]["rollouts"], num_envs=num_training_envs)
+        auxiliary_task = make_aux(env, rl_memory, encoder, value, value_preprocessor, env_cfg, agent_cfg, writer)
+
+        # restart wandb
+        writer.close_wandb()
+        writer.setup_wandb(name="seed_" + str(seed))
+
+        # configure and instantiate PPO agent
+        ppo_agent_cfg = PPO_DEFAULT_CONFIG.copy()
+        ppo_agent_cfg.update(agent_cfg["agent"])
+        agent = PPO(
+            encoder,
+            policy,
+            value,
+            value_preprocessor,
+            memory=rl_memory,
+            cfg=ppo_agent_cfg,
+            observation_space=env.observation_space,
+            action_space=env.action_space,
+            device=env.device,
+            writer=writer,
+            auxiliary_task=auxiliary_task,
+            dtype=dtype,
+            debug=agent_cfg["experiment"]["debug"]
+        )
+
+        # Let's go!
+        trainer = make_trainer(env, agent, agent_cfg, auxiliary_task, writer)
+        trainer.train()
+
 
     except Exception as err:
         carb.log_error(err)
