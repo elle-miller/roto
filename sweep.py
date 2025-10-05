@@ -31,6 +31,8 @@ parser.add_argument("--num_envs", type=int, default=None, help="Number of enviro
 parser.add_argument("--task", type=str, default=None, help="Name of the task.")
 parser.add_argument("--seed", type=int, default=None, help="Seed used for the environment")
 parser.add_argument("--study", type=str, default="default", help="study name")
+parser.add_argument("--env", type=str, default="default", help="study name")
+parser.add_argument("--ssl", type=str, default="default", help="study name")
 
 
 # append AppLauncher cli args
@@ -209,93 +211,12 @@ class OptimisationRunner:
             raise optuna.TrialPruned()
         return best_return
 
+def train_one_seed(seed, agent_cfg):
 
-if __name__ == "__main__":
-
-    # parse configuration
-    cfg = hydra_task_config(args_cli.task, "skrl_cfg_entry_point")
-    env_cfg, agent_cfg = register_task_to_hydra(args_cli.task, "skrl_cfg_entry_point")
-
-    # Choose the precision you want. Lower precision means you can fit more environments.
-    dtype = torch.float32
-
-    # SEED (environment AND agent, important for seed-deterministic runs)
-    agent_cfg["seed"] = args_cli.seed if args_cli.seed is not None else agent_cfg["seed"]
-    set_seed(agent_cfg["seed"])
-    agent_cfg["log_path"] = LOG_PATH
-    args_cli.video = agent_cfg["experiment"]["upload_videos"]
-
-    # Update the environment config
-    env_cfg = update_env_cfg(args_cli, env_cfg, agent_cfg)
-
-    # LOGGING SETUP
-    writer = Writer(agent_cfg, delay_wandb_startup=True)
-
-    # Make environment. Order must be gymnasium Env -> FrameStack -> IsaacLab
-    env = make_env(env_cfg, writer, args_cli, agent_cfg["models"]["obs_stack"])
-
-    # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.create_study.html
-
-    task = "Baoding"
-
-    if task == "Find":
-        storage = "sqlite:///frankafind.db"
-        n_warmup_steps = 30_000_000
-        agent_cfg["trainer"]["max_global_timesteps_M"] = 50
-    elif task == "Bounce":
-        storage = "sqlite:///bounce.db"
-        n_warmup_steps = 30_000_000
-        agent_cfg["trainer"]["max_global_timesteps_M"] = 50
-    elif task == "Baoding": 
-        storage = "sqlite:///baoding.db"
-        n_warmup_steps = 70_000_000
-        agent_cfg["trainer"]["max_global_timesteps_M"] = 100 
-    
-    study_name = args_cli.study
-    total_trials = 50
-    n_startup_trials = 5
-    interval_steps = 1
-
-    runner = OptimisationRunner(study_name, n_startup_trials, n_warmup_steps, interval_steps)
-
-    best_trial = runner.run(total_trials)
-
-    print("Best trial:", best_trial)
-
-    # now we run 5 seeds of the best trial :)
-
-    agent_cfg["agent"]["rollouts"] = best_trial.params["rollouts"]
-    agent_cfg["agent"]["mini_batches"] = best_trial.params["best_trial.mini_batches"]
-    agent_cfg["agent"]["learning_epochs"] = best_trial.params["learning_epochs"]
-    agent_cfg["agent"]["learning_rate"] = best_trial.params["learning_rate"]
-    agent_cfg["agent"]["entropy_loss_scale"] = best_trial.params["entropy_loss_scale"]
-    agent_cfg["agent"]["value_loss_scale"] = best_trial.params["value_loss_scale"]
-    agent_cfg["agent"]["value_clip"] = best_trial.params["value_clip"]
-    agent_cfg["agent"]["ratio_clip"] = best_trial.params["ratio_clip"]
-    agent_cfg["agent"]["lambda"] = best_trial.params["gae_lambda"]
-
-    agent_cfg["trainer"]["max_global_timesteps_M"] = 200
-    agent_cfg["experiment"]["experiment_name"] = 200
-
-    agent_cfg["experiment"]["wandb_kwargs"]["group"] = "baoding_tac_recon_sweep"
-
-
-    test_seeds = [5,6,7,8,9]
-
-    for seed in test_seeds:
+        agent_cfg["experiment"]["wandb_kwargs"]["name"] = str(seed)
 
         agent_cfg["seed"] = seed
         set_seed(agent_cfg["seed"])
-
-        if agent_cfg["auxiliary_task"]["type"] != None:
-
-            agent_cfg["auxiliary_task"]["learning_rate"] = best_trial.params["learning_rate_aux"]
-            agent_cfg["auxiliary_task"]["loss_weight"] = best_trial.params["loss_weight_aux"]
-            agent_cfg["auxiliary_task"]["learning_epochs_ratio"] = best_trial.params["learning_epochs_ratio"]
-
-        if agent_cfg["auxiliary_task"]["type"] == "forward_dynamics":
-            # it can take quite long, cap at8
-            agent_cfg["auxiliary_task"]["seq_length"] = best_trial.params["seq_length"]
 
         # setup models
         policy, value, encoder, value_preprocessor = make_models(env, env_cfg, agent_cfg, dtype)
@@ -306,8 +227,7 @@ if __name__ == "__main__":
         auxiliary_task = make_aux(env, rl_memory, encoder, value, value_preprocessor, env_cfg, agent_cfg, writer)
 
         # restart wandb
-        writer.close_wandb()
-        writer.setup_wandb(name="seed_" + str(seed))
+        writer = Writer(agent_cfg, delay_wandb_startup=True)
 
         # configure and instantiate PPO agent
         ppo_agent_cfg = PPO_DEFAULT_CONFIG.copy()
@@ -331,7 +251,94 @@ if __name__ == "__main__":
         # Let's go!
         trainer = make_trainer(env, agent, agent_cfg, auxiliary_task, writer)
         trainer.train()
+        writer.close_wandb()
 
+
+if __name__ == "__main__":
+
+    # parse configuration
+    cfg = hydra_task_config(args_cli.task, "skrl_cfg_entry_point")
+    env_cfg, agent_cfg = register_task_to_hydra(args_cli.task, "skrl_cfg_entry_point")
+
+    # Choose the precision you want. Lower precision means you can fit more environments.
+    dtype = torch.float32
+
+    # SEED (environment AND agent, important for seed-deterministic runs)
+    agent_cfg["seed"] = args_cli.seed if args_cli.seed is not None else agent_cfg["seed"]
+    set_seed(agent_cfg["seed"])
+    agent_cfg["log_path"] = LOG_PATH
+    args_cli.video = agent_cfg["experiment"]["upload_videos"]
+
+    # Update the environment config
+    env_cfg = update_env_cfg(args_cli, env_cfg, agent_cfg)
+
+    # LOGGING SETUP
+    agent_cfg["experiment"]["experiment_name"] = args_cli.env + "_" + args_cli.ssl + "_" + "sweep"
+    agent_cfg["experiment"]["wandb_kwargs"]["group"] = args_cli.env + "_" + args_cli.ssl + "_" + "sweep"
+
+    writer = Writer(agent_cfg, delay_wandb_startup=True)
+
+    if args_cli.env == "find":
+        storage = "sqlite:///franka_find.db"
+        n_warmup_steps = 30_000_000
+        agent_cfg["trainer"]["max_global_timesteps_M"] = 50
+    elif args_cli.env == "bounce":
+        storage = "sqlite:///shadow_bounce.db"
+        n_warmup_steps = 30_000_000
+        agent_cfg["trainer"]["max_global_timesteps_M"] = 50
+    elif args_cli.env == "baoding": 
+        storage = "sqlite:///shadow_baoding.db"
+        n_warmup_steps = 70_000_000
+        agent_cfg["trainer"]["max_global_timesteps_M"] = 100 
+    else:
+        raise ValueError
+    
+    study_name = args_cli.study
+    total_trials = 50
+    n_startup_trials = 5
+    interval_steps = 1
+
+    # Make environment. Order must be gymnasium Env -> FrameStack -> IsaacLab
+    env = make_env(env_cfg, writer, args_cli, agent_cfg["models"]["obs_stack"])
+
+    runner = OptimisationRunner(study_name, n_startup_trials, n_warmup_steps, interval_steps)
+
+    best_trial = runner.run(total_trials)
+
+    print("Best trial:", best_trial)
+
+    writer.close_wandb()
+
+    # now we run 5 seeds of the best trial :)
+    agent_cfg["agent"]["rollouts"] = best_trial.params["rollouts"]
+    agent_cfg["agent"]["mini_batches"] = best_trial.params["best_trial.mini_batches"]
+    agent_cfg["agent"]["learning_epochs"] = best_trial.params["learning_epochs"]
+    agent_cfg["agent"]["learning_rate"] = best_trial.params["learning_rate"]
+    agent_cfg["agent"]["entropy_loss_scale"] = best_trial.params["entropy_loss_scale"]
+    agent_cfg["agent"]["value_loss_scale"] = best_trial.params["value_loss_scale"]
+    agent_cfg["agent"]["value_clip"] = best_trial.params["value_clip"]
+    agent_cfg["agent"]["ratio_clip"] = best_trial.params["ratio_clip"]
+    agent_cfg["agent"]["lambda"] = best_trial.params["gae_lambda"]
+
+    if agent_cfg["auxiliary_task"]["type"] != None:
+        agent_cfg["auxiliary_task"]["learning_rate"] = best_trial.params["learning_rate_aux"]
+        agent_cfg["auxiliary_task"]["loss_weight"] = best_trial.params["loss_weight_aux"]
+        agent_cfg["auxiliary_task"]["learning_epochs_ratio"] = best_trial.params["learning_epochs_ratio"]
+
+    if agent_cfg["auxiliary_task"]["type"] == "forward_dynamics":
+        agent_cfg["auxiliary_task"]["seq_length"] = best_trial.params["seq_length"]
+
+
+    # seeds
+    agent_cfg["experiment"]["experiment_name"] = args_cli.env + "_" + args_cli.ssl + "_" + "seeded"
+    agent_cfg["trainer"]["max_global_timesteps_M"] = 200
+    agent_cfg["experiment"]["wandb_kwargs"]["group"] = args_cli.env + "_" + args_cli.ssl + "_" + "seeded"
+
+    test_seeds = [5,6,7,8,9]
+
+    try:
+        for seed in test_seeds:
+            train_one_seed(seed, agent_cfg)
 
     except Exception as err:
         carb.log_error(err)
@@ -342,21 +349,3 @@ if __name__ == "__main__":
     finally:
         # close sim app
         simulation_app.close()
-
-    # rewards_shaper_scale = trial.suggest_categorical("rewards_shaper_scale", [1, 0.1, 0.01])
-    # value_loss_scale = trial.suggest_categorical("value_loss_scale", [1.0, 2.0])
-    # obs_stack = trial.suggest_categorical("obs_stack", [1,2,4,8,16])
-
-    # policy_hiddens = trial.suggest_categorical("policy_hiddens", [[32, 32], [64, 32], [128, 64, 32]])
-    # encoder_hiddens = trial.suggest_categorical("encoder_hiddens", [[2048, 1024, 512, 256], [1024, 512, 256]])
-
-    # # arches
-    # skrl_config_dict["encoder"]["hiddens"] = encoder_hiddens
-    # skrl_config_dict["encoder"]["activations"] = ["elu"] * len(encoder_hiddens)
-
-    # skrl_config_dict["policy"]["hiddens"] = policy_hiddens
-    # skrl_config_dict["value"]["hiddens"] = policy_hiddens
-    # spec_activations= ["elu"] * len(policy_hiddens)
-    # skrl_config_dict["policy"]["activations"] = spec_activations + ["identity"]
-    # skrl_config_dict["value"]["activations"] = spec_activations + ["identity"]
-    # print("ACVITATIONS", spec_activations)
