@@ -30,61 +30,51 @@ models:
     hiddens: [128, 64]
     activations: ["elu", "elu", "identity"]
 
-  auxiliary_task:
-    type: "reconstruction"
-    memory_type: "vanilla" # "vanilla", "reduced_vanilla"
-    tactile_only: False
-    loss_weight: 0.056689851323945585
-    learning_rate: 2.7744237751635027e-05
-    last_n_obs: 4
-    n_f: 0
-    rl_per_aux: 4
-    learning_epochs: 1
-    mini_batches: 8
-    clip_grad: False
-    augment: False
-    memory_size: 150000
-    pretrain: False 
+auxiliary_task:
+  type: "reconstruction"
+  n_rollouts: 1
+  tactile_only: False
+  loss_weight: 0.0637643368107641
+  learning_rate: 0.00008379929553630154
+  learning_epochs_ratio: 0.25
 
 # PPO agent configuration (field names are from PPO_DEFAULT_CONFIG)
 # https://skrl.readthedocs.io/en/latest/api/agents/ppo.html
 agent:
-  optimise_encoder: True
-  augment: False
-  rollouts: 64
-  learning_epochs: 16
-  mini_batches: 16
+  rollouts: 16
+  learning_epochs: 17
+  mini_batches: 32
   discount_factor: 0.99
-  lambda: 0.95
-  learning_rate: 0.00018765696824396845
-  # value_preprocessor: RunningStandardScaler
-  # value_preprocessor_kwargs: null
+  lambda: 0.9444170963776642
+  learning_rate: 0.0000021253083066831893
 
-  random_timesteps: 0
-  learning_starts: 0
   grad_norm_clip: 1.0
-  ratio_clip: 0.2
-  value_clip: 0.2
-  clip_predicted_values: True
-  entropy_loss_scale: 0.0
-  value_loss_scale: 1.0
+  ratio_clip:  0.18679645804380027
+
+  value_clip: 0.24110103352262544
+
+  entropy_loss_scale: 0.09966116999499125
+  value_loss_scale: 0.4251937999099069
+
   kl_threshold: 0
-  rewards_shaper_scale: 0.01
   # logging and checkpoint
-  experiment:
-    directory: "shadow"
-    experiment_name: "shadow_bounce_recon_full_london_seeded"
-    tb_log: True
-    wandb: 1
-    wandb_kwargs: {
-      "project": "isaac_lab",
-      "group": "shadow_bounce_recon_full_london_seeded",
-      "name": "1",
-    }
+experiment:
+  directory: "bounce"
+  debug: 0
+  upload_videos: 0 
+  save_checkpoints: 1
+  experiment_name: "full_recon_sweep"
+  tb_log: True
+  wandb: 1
+  wandb_kwargs: {
+    "project": "isaac_lab",
+    "group": "full_recon_sweep",
+    "entity": "my-phd",
+    "name": "1",
+  }
 
 # Sequential trainer
 # https://skrl.readthedocs.io/en/latest/api/trainers/sequential.html
 trainer:
   num_eval_envs: 100
   max_global_timesteps_M: 200
-  environment_info: "log"

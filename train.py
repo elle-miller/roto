@@ -15,7 +15,6 @@ a more user-friendly way.
 
 import argparse
 import sys
-import torch
 import traceback
 
 from isaaclab.app import AppLauncher
@@ -67,6 +66,9 @@ from common_utils import (
     set_seed,
     update_env_cfg,
 )
+
+import torch
+
 
 
 @hydra_task_config(args_cli.task, "skrl_cfg_entry_point")

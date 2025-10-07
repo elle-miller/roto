@@ -298,6 +298,11 @@ if __name__ == "__main__":
     n_startup_trials = 5
     interval_steps = 1
 
+    # total_trials = 3
+    # n_startup_trials = 1
+    # interval_steps = 1
+    # agent_cfg["trainer"]["max_global_timesteps_M"] = 7
+
     # Make environment. Order must be gymnasium Env -> FrameStack -> IsaacLab
     env = make_env(env_cfg, writer, args_cli, agent_cfg["models"]["obs_stack"])
 
@@ -311,7 +316,7 @@ if __name__ == "__main__":
 
     # now we run 5 seeds of the best trial :)
     agent_cfg["agent"]["rollouts"] = best_trial.params["rollouts"]
-    agent_cfg["agent"]["mini_batches"] = best_trial.params["best_trial.mini_batches"]
+    agent_cfg["agent"]["mini_batches"] = best_trial.params["mini_batches"]
     agent_cfg["agent"]["learning_epochs"] = best_trial.params["learning_epochs"]
     agent_cfg["agent"]["learning_rate"] = best_trial.params["learning_rate"]
     agent_cfg["agent"]["entropy_loss_scale"] = best_trial.params["entropy_loss_scale"]
@@ -327,7 +332,6 @@ if __name__ == "__main__":
 
     if agent_cfg["auxiliary_task"]["type"] == "forward_dynamics":
         agent_cfg["auxiliary_task"]["seq_length"] = best_trial.params["seq_length"]
-
 
     # seeds
     agent_cfg["experiment"]["experiment_name"] = args_cli.env + "_" + args_cli.ssl + "_" + "seeded"

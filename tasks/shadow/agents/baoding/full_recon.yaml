@@ -30,57 +30,48 @@ models:
     hiddens: [128, 64]
     activations: ["elu", "elu", "identity"]
 
-  auxiliary_task:
-    type: "reconstruction"
-    memory_type: "vanilla"
-    tactile_only: False
-    loss_weight: 0.005886688483834688
-    learning_rate: 5.184066888874611e-05
-    last_n_obs: 4
-    n_f: 0
-    rl_per_aux: 1
-    learning_epochs: 0
-    mini_batches: 0
-    clip_grad: False
-    augment: False
-    memory_size: 0
-    pretrain: False 
+auxiliary_task:
+  type: "reconstruction"
+  n_rollouts: 1
+  tactile_only: False
+  loss_weight: 0.0030738254954323836
+  learning_rate: 7.512897712426864e-05
+  learning_epochs_ratio: 0.75
 
 # PPO agent configuration (field names are from PPO_DEFAULT_CONFIG)
 # https://skrl.readthedocs.io/en/latest/api/agents/ppo.html
 agent:
-  optimise_encoder: True
-  augment: False
-  rollouts: 16
-  learning_epochs: 4
-  mini_batches: 32
+  rollouts: 64
+  learning_epochs: 7
+  mini_batches: 8
   discount_factor: 0.99
-  lambda: 0.95
-  learning_rate: 0.0003678891462357557
-  # value_preprocessor: RunningStandardScaler
-  # value_preprocessor_kwargs: null
+  lambda: 0.9173440460871656
+  learning_rate: 2.2601173116079146e-05
 
-  random_timesteps: 0
-  learning_starts: 0
   grad_norm_clip: 1.0
-  ratio_clip: 0.2
-  value_clip: 0.2
-  clip_predicted_values: True
-  entropy_loss_scale: 0.0
-  value_loss_scale: 1.0
+  ratio_clip: 0.2996848441349965
+
+  value_clip: 0.18805196374790925
+  entropy_loss_scale: 0.4556253519762046
+  value_loss_scale: 0.693643066374923
+
   kl_threshold: 0
-  rewards_shaper_scale: 0.01
   # logging and checkpoint
-  experiment:
-    directory: "shadow"
-    experiment_name: "shadow_baoding_recon_full_london_seeded"
-    tb_log: True
-    wandb: 1
-    wandb_kwargs: {
-      "project": "isaac_lab",
-      "group": "shadow_baoding_recon_full_london_seeded",
-      "name": "1",
-    }
+
+experiment:
+  directory: "baoding"
+  debug: 0
+  upload_videos: 0 
+  save_checkpoints: 1
+  experiment_name: "baoding_full_recon_seeded"
+  tb_log: True
+  wandb: 1
+  wandb_kwargs: {
+    "project": "isaac_lab",
+    "group": "baoding_full_recon_seeded",
+    "entity": "my-phd",
+    "name": "1",
+  }
 
 # Sequential trainer
 # https://skrl.readthedocs.io/en/latest/api/trainers/sequential.html

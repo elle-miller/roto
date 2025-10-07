@@ -34,26 +34,28 @@ auxiliary_task:
   type: "reconstruction"
   n_rollouts: 1
   tactile_only: True
-  loss_weight: 0.4744668526525511
-  learning_rate: 0.0005343910761338679
-  learning_epochs_ratio: 1
+  loss_weight: 0.0030738254954323836
+  learning_rate: 7.512897712426864e-05
+  learning_epochs_ratio: 0.75
 
 # PPO agent configuration (field names are from PPO_DEFAULT_CONFIG)
 # https://skrl.readthedocs.io/en/latest/api/agents/ppo.html
 agent:
 
   rollouts: 64
-  learning_epochs: 8
-  mini_batches: 32
+  learning_epochs: 7
+  mini_batches: 8
   discount_factor: 0.99
-  lambda: 0.95
-  learning_rate: 0.00036117811932874207
+  lambda: 0.9173440460871656
+  learning_rate: 2.2601173116079146e-05
 
   grad_norm_clip: 1.0
-  ratio_clip: 0.2
-  value_clip: 0.2
-  entropy_loss_scale: 0.0
-  value_loss_scale: 1.0
+  ratio_clip: 0.2996848441349965
+
+  value_clip: 0.18805196374790925
+  entropy_loss_scale: 0.4556253519762046
+  value_loss_scale: 0.693643066374923
+
   kl_threshold: 0
   # logging and checkpoint
 experiment:
@@ -61,12 +63,12 @@ experiment:
   debug: 0
   upload_videos: 0 
   save_checkpoints: 1
-  experiment_name: "baoding_tac_recon_sweep"
+  experiment_name: "baoding_tac_recon_seeded"
   tb_log: True
   wandb: 1
   wandb_kwargs: {
     "project": "isaac_lab",
-    "group": "baoding_tac_recon_sweep",
+    "group": "baoding_tac_recon_seeded",
     "entity": "my-phd",
     "name": "1",
   }
