@@ -15,17 +15,17 @@ agent:
 auxiliary_task:
   type: "reconstruction"
   n_rollouts: 1
-  tactile_only: False
+  tactile_only: True
   loss_weight: 0.4744668526525511
   learning_rate: 0.0005343910761338679
   learning_epochs_ratio: 1
 
 experiment:
-  experiment_name: "full_recon"
-  save_checkpoints: 1
+  experiment_name: "tac_recon"
   tb_log: 1
+  save_checkpoints: 1
   wandb: 1
   wandb_kwargs: {
-    "group": "full_recon",
+    "group": "tac_recon",
     "name": "1",
   }

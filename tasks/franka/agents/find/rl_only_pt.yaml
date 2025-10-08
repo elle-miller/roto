@@ -1,82 +1,23 @@
-seed: 42
-
-# Models are instantiated using skrl's model instantiator utility
-# https://skrl.readthedocs.io/en/latest/api/utils/model_instantiators.html
-models:
-  separate: True
-  obs_list: ["prop", "tactile"]
-  obs_stack: 16
-  aux_list: []
-  preprocess:
-    normalise_prop: True
-    binary_tactile: True
-
-  encoder:
-    method: "early"
-    hiddens: [1024, 512, 256]
-    activations: ["elu", "elu", "elu"]
-    layernorm: True
-    state_preprocessor: null # RunningStandardScalerDict
-
-  policy:
-    clip_log_std: True
-    initial_log_std: 0
-    min_log_std: -20.0
-    max_log_std: 2.0
-    hiddens: [128, 64]
-    activations: ["elu", "elu", "tanh"]
-    
-  value:
-    hiddens: [128, 64]
-    activations: ["elu", "elu", "identity"]
-
-auxiliary_task:
-  type: null
-
-
-# PPO agent configuration (field names are from PPO_DEFAULT_CONFIG)
-# https://skrl.readthedocs.io/en/latest/api/agents/ppo.html
 agent:
-  # rollout collection
   rollouts: 32
   learning_epochs: 20
   mini_batches: 16
-
-  # values
   discount_factor: 0.99
   lambda: 0.9066813033152197
   value_clip: 0.203740908288308
-
-  # policy optimisation
   ratio_clip: 0.13500339418789895
   kl_threshold: 0
-
-  # gradients
   learning_rate: 9.238029902773938e-05
   entropy_loss_scale: 0.0010332144235249002
   value_loss_scale: 0.6264567935379245
   grad_norm_clip: 1.0
 
-
-# logging and checkpoint
 experiment:
-  directory: "franka_find"
-  debug: 0
-  upload_videos: 0 
+  experiment_name: "rl_only_pt"
   save_checkpoints: 1
-  experiment_name: "e2e_detailed_sweep_50M_seeded"
-  tb_log: True
+  tb_log: 1
   wandb: 1
   wandb_kwargs: {
-    "project": "isaac_lab",
-    "entity": "my-phd",
-    "group": "e2e_detailed_sweep_50M_seeded",
+    "group": "rl_only_pt",
     "name": "1",
   }
-
-# Sequential trainer
-# https://skrl.readthedocs.io/en/latest/api/trainers/sequential.html
-trainer:
-  num_eval_envs: 100
-  max_global_timesteps_M: 200
-  environment_info: "log"

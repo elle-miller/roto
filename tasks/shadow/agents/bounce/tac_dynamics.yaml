@@ -14,17 +14,16 @@ agent:
 
 auxiliary_task:
   type: "forward_dynamics"
-  tactile_only: False
+  tactile_only: True
   loss_weight: 0.701442305058738
   learning_rate: 0.0007355855634320232
   n_rollouts: 1
   seq_length: 3
 
 experiment:
-  experiment_name: "full_dynamics"
-  wandb: 1
-  tb_log: 0
+  experiment_name: "tactile_dynamics"
+  wandb: 0
   wandb_kwargs: {
-    "group": "full_dynamics",
+    "group": "tactile_dynamics",
     "name": "null",
   }

@@ -20,3 +20,18 @@
 
 `${Task}$Env` inherets from `${Robot}$Env`
 - _get_gt
+
+### training
+
+```
+
+python train.py --task Bounce --num_envs 4196 --headless --seed 1234 --agent_cfg full_dynamics
+
+
+```
+
+### sweeping
+
+```
+python sweep.py --task Bounce --num_envs 4196 --headless --seed 1234 --agent_cfg full_dynamics --study bounce_full_dynamics
+```

@@ -43,8 +43,8 @@ log_dir = "/home/emil/code/external/multimodal_gym/paper_results"
 output_dir = "/home/emil/code/external/multimodal_gym/results"
 
 # local
-log_dir = "/home/elle/code/external/roto/results/redo"
-output_dir = "/home/elle/code/external/roto/results"
+log_dir = "/home/elle/code/external/roto/results/cam_ready"
+output_dir = "/home/elle/code/external/roto/results/cam_ready/plots"
 
 import plot_dicts,plot_dicts_paper
 from plot import get_readers_seeded, get_min_length
@@ -55,7 +55,7 @@ group_dict = plot_dicts.tactile_weight
 # group_dict = plot_dicts.franka_extra_plot
 # group_dict = plot_dicts.memory_plot
 
-group_dict = plot_dicts_paper.ssl_plot
+group_dict = plot_dicts.ssl_plot_cameraready
 
 
 exp_list = group_dict["exp_list"]

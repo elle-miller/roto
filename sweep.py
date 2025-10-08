@@ -33,6 +33,7 @@ parser.add_argument("--seed", type=int, default=None, help="Seed used for the en
 parser.add_argument("--study", type=str, default="default", help="study name")
 parser.add_argument("--env", type=str, default="default", help="study name")
 parser.add_argument("--ssl", type=str, default="default", help="study name")
+parser.add_argument("--agent_cfg", type=str, required=True, help="Name of the config.")
 
 
 # append AppLauncher cli args
@@ -50,6 +51,9 @@ import isaaclab_tasks  # noqa: F401
 from isaaclab_rl.algorithms.ppo import PPO, PPO_DEFAULT_CONFIG
 from isaaclab_rl.tools.writer import Writer
 import torch
+
+from isaaclab.utils import update_dict
+from isaaclab_tasks.utils.parse_cfg import load_cfg_from_registry
 
 from common_utils import (
     LOG_PATH,
@@ -213,52 +217,54 @@ class OptimisationRunner:
 
 def train_one_seed(seed, agent_cfg):
 
-        agent_cfg["experiment"]["wandb_kwargs"]["name"] = str(seed)
+    agent_cfg["experiment"]["wandb_kwargs"]["name"] = str(seed)
 
-        agent_cfg["seed"] = seed
-        set_seed(agent_cfg["seed"])
+    agent_cfg["seed"] = seed
+    set_seed(agent_cfg["seed"])
 
-        # setup models
-        policy, value, encoder, value_preprocessor = make_models(env, env_cfg, agent_cfg, dtype)
+    # setup models
+    policy, value, encoder, value_preprocessor = make_models(env, env_cfg, agent_cfg, dtype)
 
-        # create tensors in memory for RL stuff [only for the training envs]
-        num_training_envs = env_cfg.scene.num_envs - agent_cfg["trainer"]["num_eval_envs"]
-        rl_memory = make_memory(env, env_cfg, size=agent_cfg["agent"]["rollouts"], num_envs=num_training_envs)
-        auxiliary_task = make_aux(env, rl_memory, encoder, value, value_preprocessor, env_cfg, agent_cfg, writer)
+    # create tensors in memory for RL stuff [only for the training envs]
+    num_training_envs = env_cfg.scene.num_envs - agent_cfg["trainer"]["num_eval_envs"]
+    rl_memory = make_memory(env, env_cfg, size=agent_cfg["agent"]["rollouts"], num_envs=num_training_envs)
+    auxiliary_task = make_aux(env, rl_memory, encoder, value, value_preprocessor, env_cfg, agent_cfg, writer)
 
-        # restart wandb
-        writer = Writer(agent_cfg, delay_wandb_startup=True)
+    # restart wandb
+    writer = Writer(agent_cfg, delay_wandb_startup=True)
 
-        # configure and instantiate PPO agent
-        ppo_agent_cfg = PPO_DEFAULT_CONFIG.copy()
-        ppo_agent_cfg.update(agent_cfg["agent"])
-        agent = PPO(
-            encoder,
-            policy,
-            value,
-            value_preprocessor,
-            memory=rl_memory,
-            cfg=ppo_agent_cfg,
-            observation_space=env.observation_space,
-            action_space=env.action_space,
-            device=env.device,
-            writer=writer,
-            auxiliary_task=auxiliary_task,
-            dtype=dtype,
-            debug=agent_cfg["experiment"]["debug"]
-        )
+    # configure and instantiate PPO agent
+    ppo_agent_cfg = PPO_DEFAULT_CONFIG.copy()
+    ppo_agent_cfg.update(agent_cfg["agent"])
+    agent = PPO(
+        encoder,
+        policy,
+        value,
+        value_preprocessor,
+        memory=rl_memory,
+        cfg=ppo_agent_cfg,
+        observation_space=env.observation_space,
+        action_space=env.action_space,
+        device=env.device,
+        writer=writer,
+        auxiliary_task=auxiliary_task,
+        dtype=dtype,
+        debug=agent_cfg["experiment"]["debug"]
+    )
 
-        # Let's go!
-        trainer = make_trainer(env, agent, agent_cfg, auxiliary_task, writer)
-        trainer.train()
-        writer.close_wandb()
+    # Let's go!
+    trainer = make_trainer(env, agent, agent_cfg, auxiliary_task, writer)
+    trainer.train()
+    writer.close_wandb()
 
 
 if __name__ == "__main__":
 
     # parse configuration
-    cfg = hydra_task_config(args_cli.task, "skrl_cfg_entry_point")
-    env_cfg, agent_cfg = register_task_to_hydra(args_cli.task, "skrl_cfg_entry_point")
+    env_cfg, agent_cfg = register_task_to_hydra(args_cli.task, "default_cfg")
+
+    specialised_cfg = load_cfg_from_registry(args_cli.task, args_cli.agent_cfg)
+    agent_cfg = update_dict(agent_cfg, specialised_cfg)
 
     # Choose the precision you want. Lower precision means you can fit more environments.
     dtype = torch.float32
@@ -273,38 +279,22 @@ if __name__ == "__main__":
     env_cfg = update_env_cfg(args_cli, env_cfg, agent_cfg)
 
     # LOGGING SETUP
-    agent_cfg["experiment"]["experiment_name"] = args_cli.env + "_" + args_cli.ssl + "_" + "sweep"
-    agent_cfg["experiment"]["wandb_kwargs"]["group"] = args_cli.env + "_" + args_cli.ssl + "_" + "sweep"
+    agent_cfg["experiment"]["experiment_name"] = args_cli.task + "_" + args_cli.agent_cfg + "_" + "sweep"
+    agent_cfg["experiment"]["wandb_kwargs"]["group"] = args_cli.task + "_" + args_cli.agent_cfg + "_" + "sweep"
 
     writer = Writer(agent_cfg, delay_wandb_startup=True)
 
-    if args_cli.env == "find":
-        storage = "sqlite:///franka_find.db"
-        n_warmup_steps = 30_000_000
-        agent_cfg["trainer"]["max_global_timesteps_M"] = 50
-    elif args_cli.env == "bounce":
-        storage = "sqlite:///shadow_bounce.db"
-        n_warmup_steps = 30_000_000
-        agent_cfg["trainer"]["max_global_timesteps_M"] = 50
-    elif args_cli.env == "baoding": 
-        storage = "sqlite:///shadow_baoding.db"
-        n_warmup_steps = 70_000_000
-        agent_cfg["trainer"]["max_global_timesteps_M"] = 100 
-    else:
-        raise ValueError
-    
+    storage = agent_cfg["sweeper"]["storage"]
+    n_warmup_steps = agent_cfg["sweeper"]["warmup_timesteps_M"] * 1e6
+    agent_cfg["trainer"]["max_global_timesteps_M"] = agent_cfg["sweeper"]["max_sweep_timesteps_M"]
+
     study_name = args_cli.study
     total_trials = 50
     n_startup_trials = 5
     interval_steps = 1
-
-    # total_trials = 3
-    # n_startup_trials = 1
-    # interval_steps = 1
-    # agent_cfg["trainer"]["max_global_timesteps_M"] = 7
-
+    
     # Make environment. Order must be gymnasium Env -> FrameStack -> IsaacLab
-    env = make_env(env_cfg, writer, args_cli, agent_cfg["models"]["obs_stack"])
+    env = make_env(env_cfg, writer, args_cli, agent_cfg["observations"]["obs_stack"])
 
     runner = OptimisationRunner(study_name, n_startup_trials, n_warmup_steps, interval_steps)
 
@@ -334,14 +324,16 @@ if __name__ == "__main__":
         agent_cfg["auxiliary_task"]["seq_length"] = best_trial.params["seq_length"]
 
     # seeds
-    agent_cfg["experiment"]["experiment_name"] = args_cli.env + "_" + args_cli.ssl + "_" + "seeded"
+    agent_cfg["experiment"]["experiment_name"] = args_cli.task + "_" + args_cli.agent_cfg + "_" + "seeded"
     agent_cfg["trainer"]["max_global_timesteps_M"] = 200
-    agent_cfg["experiment"]["wandb_kwargs"]["group"] = args_cli.env + "_" + args_cli.ssl + "_" + "seeded"
+    agent_cfg["experiment"]["wandb_kwargs"]["group"] = args_cli.task + "_" + args_cli.agent_cfg + "_" + "seeded"
 
     test_seeds = [5,6,7,8,9]
 
     try:
+        print("Running best trial on multiple seeds:", test_seeds)
         for seed in test_seeds:
+            print("Running seed:", seed)
             train_one_seed(seed, agent_cfg)
 
     except Exception as err:

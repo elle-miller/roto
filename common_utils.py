@@ -26,7 +26,7 @@ def make_aux(env, rl_memory, encoder, value, value_preprocessor, env_cfg, agent_
 
     # configure auxiliary task
     rl_rollout = agent_cfg["agent"]["rollouts"]
-    if agent_cfg["auxiliary_task"]["type"] != None:
+    if "auxiliary_task" in agent_cfg.keys():
 
         match agent_cfg["auxiliary_task"]["type"]:
             case "reconstruction":
@@ -85,7 +85,7 @@ def make_models(env, env_cfg, agent_cfg, dtype):
     observation_space = env.observation_space["policy"]
     action_space = env.action_space
 
-    encoder = Encoder(observation_space, action_space, env_cfg, agent_cfg["models"], device=env.device)
+    encoder = Encoder(observation_space, action_space, env_cfg, agent_cfg["encoder"], device=env.device)
     z_dim = encoder.num_outputs
 
     policy = GaussianPolicy(
@@ -93,7 +93,7 @@ def make_models(env, env_cfg, agent_cfg, dtype):
         observation_space=observation_space,
         action_space=env.action_space,
         device=env.device,
-        **agent_cfg["models"]["policy"],
+        **agent_cfg["policy"],
     )
 
     value = DeterministicValue(
@@ -101,7 +101,7 @@ def make_models(env, env_cfg, agent_cfg, dtype):
         observation_space=observation_space,
         action_space=env.action_space,
         device=env.device,
-        **agent_cfg["models"]["value"],
+        **agent_cfg["value"],
     )
 
     value_preprocessor = RunningStandardScaler(size=1, device=env.device, dtype=dtype, debug=env_cfg.debug)
@@ -149,13 +149,13 @@ def update_env_cfg(args_cli, env_cfg, agent_cfg):
     # override configurations with either config file or args
     env_cfg.scene.num_envs = args_cli.num_envs if args_cli.num_envs is not None else env_cfg.scene.num_envs
     env_cfg.sim.device = args_cli.device if args_cli.device is not None else env_cfg.sim.device
-    env_cfg.obs_list = agent_cfg["models"]["obs_list"]
+    env_cfg.obs_list = agent_cfg["observations"]["obs_list"]
     env_cfg.num_eval_envs = agent_cfg["trainer"]["num_eval_envs"]
-    env_cfg.obs_stack = agent_cfg["models"]["obs_stack"]
+    env_cfg.obs_stack = agent_cfg["observations"]["obs_stack"]
 
     # variables that impact how env obs are processed
-    env_cfg.normalise_prop = agent_cfg["models"]["preprocess"]["normalise_prop"]
-    env_cfg.binary_tactile = agent_cfg["models"]["preprocess"]["binary_tactile"]
+    env_cfg.normalise_prop = agent_cfg["observations"]["preprocess"]["normalise_prop"]
+    env_cfg.binary_tactile = agent_cfg["observations"]["preprocess"]["binary_tactile"]
 
     return env_cfg
 
