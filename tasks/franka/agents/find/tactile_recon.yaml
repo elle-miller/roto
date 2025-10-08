@@ -34,8 +34,8 @@ auxiliary_task:
   type: "reconstruction"
   n_rollouts: 1
   tactile_only: True
-  loss_weight: 0.4744668526525511
-  learning_rate: 0.0005343910761338679
+  loss_weight: 0.05948802386672808
+  learning_rate: 0.00024252712217225571
   learning_epochs_ratio: 1
 
 
@@ -43,17 +43,22 @@ auxiliary_task:
 # https://skrl.readthedocs.io/en/latest/api/agents/ppo.html
 agent:
   # hparams
-  learning_rate: 1.5176600549117507e-06
-  rollouts: 16
-  learning_epochs: 5
-  mini_batches: 32
-  ratio_clip: 0.030186063243092892
-  value_clip: 0.22080281090748716
-  entropy_loss_scale: 0.46262413630138044
-  value_loss_scale: 0.8301260120652513
+  learning_rate: 1.6200592666951774e-05
+
+  rollouts: 64
+  learning_epochs: 18
+  mini_batches: 8
+  ratio_clip: 0.24405159171953172
+
+  value_clip: 0.07508664183439678
+  entropy_loss_scale: 0.1634476227521233
+
+  value_loss_scale: 0.4952483306964335
+
 
   discount_factor: 0.99
-  lambda: 0.9371248667795103
+  lambda: 0.9317458199993645
+
   grad_norm_clip: 1.0
   kl_threshold: 0
 
@@ -62,12 +67,12 @@ experiment:
   debug: 0
   upload_videos: 0 
   save_checkpoints: 1
-  experiment_name: "tac_recon_sweep2"
+  experiment_name: "tac_recon_seeded"
   tb_log: True
   wandb: 1
   wandb_kwargs: {
-    "project": "isaac_lab",
-    "group": "tac_recon_sweep2",
+    "project": "neurips_find",
+    "group": "tac_recon_seeded",
     "entity": "my-phd",
     "name": "1",
   }

@@ -34,8 +34,8 @@ auxiliary_task:
   type: "reconstruction"
   n_rollouts: 1
   tactile_only: True
-  loss_weight: 0.0637643368107641
-  learning_rate: 0.00008379929553630154
+  loss_weight: 0.19147324022265721
+  learning_rate: 8.053349690626449e-05
   learning_epochs_ratio: 0.25
 
 
@@ -46,16 +46,17 @@ agent:
   learning_epochs: 17
   mini_batches: 32
   discount_factor: 0.99
-  lambda: 0.9444170963776642
-  learning_rate: 0.0000021253083066831893
+  lambda: 0.9336791198352142
+  learning_rate: 1.6647282958701984e-06
 
   grad_norm_clip: 1.0
-  ratio_clip:  0.18679645804380027
+  ratio_clip:  0.2331762053464047
 
-  value_clip: 0.24110103352262544
+  value_clip: 0.24488713169863172
 
-  entropy_loss_scale: 0.09966116999499125
-  value_loss_scale: 0.4251937999099069
+  entropy_loss_scale: 0.10545872063148352
+  value_loss_scale: 0.5501259199092405
+
 
   kl_threshold: 0
 
@@ -65,12 +66,12 @@ experiment:
   debug: 0
   upload_videos: 0 
   save_checkpoints: 1
-  experiment_name: "bounce_tac_recon_seeded_eire"
+  experiment_name: "tac_recon_seeded_eire_second_best"
   tb_log: True
   wandb: 1
   wandb_kwargs: {
-    "project": "isaac_lab",
-    "group": "bounce_tac_recon_seeded_eire",
+    "project": "neurips_bounce",
+    "group": "tac_recon_seeded_eire_second_best",
     "entity": "my-phd",
     "name": "1",
   }
