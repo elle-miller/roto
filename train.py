@@ -26,6 +26,7 @@ parser.add_argument("--video_length", type=int, default=600, help="Length of the
 parser.add_argument("--video_interval", type=int, default=500, help="Interval between video recordings (in steps).")
 parser.add_argument("--num_envs", type=int, default=None, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default=None, help="Name of the task.")
+parser.add_argument("--agent_cfg", type=str, required=True, help="Name of the config.")
 parser.add_argument("--seed", type=int, default=None, help="Seed used for the environment")
 # if you have RTX5090, use these args for better rendering
 parser.add_argument(
@@ -69,11 +70,18 @@ from common_utils import (
 
 import torch
 
+from isaaclab.utils import update_dict
+from isaaclab_tasks.utils.parse_cfg import load_cfg_from_registry
+    
 
 
-@hydra_task_config(args_cli.task, "skrl_cfg_entry_point")
+@hydra_task_config(args_cli.task, "default_cfg")
 def main(env_cfg, agent_cfg: dict):
     """Train with skrl agent."""
+
+    # load the specified agent configuration
+    specialised_cfg = load_cfg_from_registry(args_cli.task, args_cli.agent_cfg)
+    agent_cfg = update_dict(agent_cfg, specialised_cfg)
 
     # Choose the precision you want. Lower precision means you can fit more environments.
     dtype = torch.float32
@@ -91,7 +99,7 @@ def main(env_cfg, agent_cfg: dict):
     writer = Writer(agent_cfg)
 
     # Make environment. Order must be gymnasium Env -> FrameStack -> IsaacLab
-    env = make_env(env_cfg, writer, args_cli, agent_cfg["models"]["obs_stack"])
+    env = make_env(env_cfg, writer, args_cli, agent_cfg["observations"]["obs_stack"])
 
     # setup models
     policy, value, encoder, value_preprocessor = make_models(env, env_cfg, agent_cfg, dtype)

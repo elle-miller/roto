@@ -335,6 +335,60 @@ franka_ssl_mean_return = {
     "y_label": "Mean evaluation return",
 }
 
+franka_ssl_mean_return_camready = {
+    "title": "Find",
+    "log_dir": "ssl",
+    "experiment_name": "find",
+    "legend_names": ["PPO(prop-tactile)", "+tactile recon",  "+full dynamics", "+tactile dynamics"],
+    "run_names": ["pt"],
+    "tag": "mean_eval_return",
+    "color": [ppo_colour, recon_colour],
+    "linestyle": ['-', '--'],
+    "max_reward": 0,
+    "x_min": 3,
+    "x_max": 199,
+    "y_max": 600,  
+    "y_min": 0,
+    "legend_loc": "upper left",
+    "y_label": "Mean evaluation return",
+}
+
+bounce_ssl_mean_return_camready = {
+    "title": "Bounce",
+    "log_dir": "ssl",
+    "experiment_name": "bounce",
+    "legend_names": ["PPO(prop-tactile)", "+tactile recon",  "+full dynamics", "+tactile dynamics"],
+    "run_names": ["pt", "tac_recon"],
+    "tag": "mean_eval_return",
+    "color": [ppo_colour, recon_colour],
+    "linestyle": ['-', '--'],
+    "max_reward": 0,
+    "x_min": 3,
+    "x_max": 199,
+    "y_max": 800,  
+    "y_min": 0,
+    "legend_loc": "upper left",
+    "y_label": "Mean evaluation return",
+}
+
+baoding_ssl_mean_return_camready = {
+    "title": "Baoding",
+    "log_dir": "ssl",
+    "experiment_name": "baoding",
+    "legend_names": ["PPO(prop-tactile)", "+tactile recon",  "+full dynamics", "+tactile dynamics"],
+    "run_names": ["pt", "tac_recon"],
+    "tag": "mean_eval_return",
+    "color": [ppo_colour, recon_colour],
+    "linestyle": ['-', '--'],
+    "max_reward": 0,
+    "x_min": 3,
+    "x_max": 199,
+    "y_max": 400,  
+    "y_min": 0,
+    "legend_loc": "upper left",
+    "y_label": "Mean evaluation return",
+}
+
 franka_memory_mean_return = {
     "title": "Find",
     "log_dir": "part_2",
@@ -1031,6 +1085,16 @@ ssl_plot = {
     "opacity": 0.08,
     "legend_idx": 0
 }
+
+ssl_plot_cameraready = {
+    "exp_list": [franka_ssl_mean_return_camready, bounce_ssl_mean_return_camready, baoding_ssl_mean_return_camready],
+    "output_file": "ssl_mean_return_plot_camready.pdf",
+    "y_label": "Mean evaluation return",
+    "legend_loc": "lower right",
+    "opacity": 0.05,
+    "legend_idx": 0
+}
+
 
 memory_plot = {
     "exp_list": [franka_memory_mean_return, bounce_memory_mean_return, baoding_memory_mean_return],

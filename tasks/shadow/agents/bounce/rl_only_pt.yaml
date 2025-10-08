@@ -1,43 +1,4 @@
-seed: 42
-
-# Models are instantiated using skrl's model instantiator utility
-# https://skrl.readthedocs.io/en/latest/api/utils/model_instantiators.html
-models:
-  separate: True
-  obs_list: ["prop", "tactile"]
-  obs_stack: 4
-  aux_list: []
-  preprocess:
-    normalise_prop: True
-    binary_tactile: True
-
-  encoder:
-    method: "early"
-    hiddens: [1024, 512, 256]
-    activations: ["elu", "elu", "elu"]
-    layernorm: True
-    state_preprocessor: None # RunningStandardScalerDict
-
-  policy:
-    clip_log_std: True
-    initial_log_std: 0
-    min_log_std: -20.0
-    max_log_std: 2.0
-    hiddens: [128, 64]
-    activations: ["elu", "elu", "identity"]
-    
-  value:
-    hiddens: [128, 64]
-    activations: ["elu", "elu", "identity"]
-
-auxiliary_task:
-  type: null
-
-
-# PPO agent configuration (field names are from PPO_DEFAULT_CONFIG)
-# https://skrl.readthedocs.io/en/latest/api/agents/ppo.html
 agent:
-
   rollouts: 16
   learning_epochs: 15
   mini_batches: 32
@@ -52,21 +13,9 @@ agent:
   kl_threshold: 0
 
 experiment:
-  directory: "shadow_bounce"
   experiment_name: "shadow_bounce_seeds"
-  upload_videos: False
-  save_checkpoints: True
-  debug: False
-  tb_log: True
-  wandb: 1
+  wandb: 0
   wandb_kwargs: {
-    "project": "isaac_lab",
     "group": "shadow_bounce_seeds",
     "name": "1",
-    "entity": "my-phd",
   }
-
-trainer:
-  num_eval_envs: 100
-  max_global_timesteps_M: 200
-  environment_info: "log"
