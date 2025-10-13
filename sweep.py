@@ -14,12 +14,8 @@ a more user-friendly way.
 
 
 import argparse
-import gc
 import sys
-import traceback
-import numpy as np 
 
-import optuna
 from isaaclab.app import AppLauncher
 
 # add argparse arguments
@@ -29,12 +25,9 @@ parser.add_argument("--video_length", type=int, default=600, help="Length of the
 parser.add_argument("--video_interval", type=int, default=500, help="Interval between video recordings (in steps).")
 parser.add_argument("--num_envs", type=int, default=None, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default=None, help="Name of the task.")
+parser.add_argument("--agent_cfg", type=str, default=None, help="Name of the config.")
 parser.add_argument("--seed", type=int, default=None, help="Seed used for the environment")
 parser.add_argument("--study", type=str, default="default", help="study name")
-parser.add_argument("--env", type=str, default="default", help="study name")
-parser.add_argument("--ssl", type=str, default="default", help="study name")
-parser.add_argument("--agent_cfg", type=str, required=True, help="Name of the config.")
-
 
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
@@ -45,21 +38,25 @@ sys.argv = [sys.argv[0]] + hydra_args
 app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
-from isaaclab_tasks.utils.hydra import hydra_task_config, register_task_to_hydra
 
-import isaaclab_tasks  # noqa: F401
-from isaaclab_rl.algorithms.ppo import PPO, PPO_DEFAULT_CONFIG
-from isaaclab_rl.tools.writer import Writer
+
 import torch
+import numpy as np 
+import optuna
 
 from isaaclab.utils import update_dict
 from isaaclab_tasks.utils.parse_cfg import load_cfg_from_registry
+from isaaclab_tasks.utils.hydra import hydra_task_config, register_task_to_hydra
+import isaaclab_tasks  # noqa: F401
+
+from isaaclab_rl.algorithms.ppo import PPO, PPO_DEFAULT_CONFIG
+from isaaclab_rl.tools.writer import Writer
 
 from common_utils import (
     LOG_PATH,
     make_env,
-    make_memory,
     make_aux,
+    make_memory,
     make_models,
     make_trainer,
     set_seed,
@@ -131,7 +128,7 @@ class OptimisationRunner:
         set_seed(agent_cfg["seed"])
 
         # PPO hparams
-        rollouts = trial.suggest_categorical("rollouts", [16, 32, 64, 96])
+        rollouts = trial.suggest_categorical("rollouts", [16, 32])
         mini_batches = trial.suggest_categorical("mini_batches", [4, 8, 16, 32])
         learning_epochs = trial.suggest_int("learning_epochs", low=5, high=20, step=1)
         learning_rate = trial.suggest_float("learning_rate", low=1e-6, high=0.003, log=True)
@@ -215,50 +212,13 @@ class OptimisationRunner:
             raise optuna.TrialPruned()
         return best_return
 
-def train_one_seed(seed, agent_cfg):
-
-    agent_cfg["experiment"]["wandb_kwargs"]["name"] = str(seed)
-
-    agent_cfg["seed"] = seed
-    set_seed(agent_cfg["seed"])
-
-    # setup models
-    policy, value, encoder, value_preprocessor = make_models(env, env_cfg, agent_cfg, dtype)
-
-    # create tensors in memory for RL stuff [only for the training envs]
-    num_training_envs = env_cfg.scene.num_envs - agent_cfg["trainer"]["num_eval_envs"]
-    rl_memory = make_memory(env, env_cfg, size=agent_cfg["agent"]["rollouts"], num_envs=num_training_envs)
-    auxiliary_task = make_aux(env, rl_memory, encoder, value, value_preprocessor, env_cfg, agent_cfg, writer)
-
-    # restart wandb
-    writer = Writer(agent_cfg, delay_wandb_startup=True)
-
-    # configure and instantiate PPO agent
-    ppo_agent_cfg = PPO_DEFAULT_CONFIG.copy()
-    ppo_agent_cfg.update(agent_cfg["agent"])
-    agent = PPO(
-        encoder,
-        policy,
-        value,
-        value_preprocessor,
-        memory=rl_memory,
-        cfg=ppo_agent_cfg,
-        observation_space=env.observation_space,
-        action_space=env.action_space,
-        device=env.device,
-        writer=writer,
-        auxiliary_task=auxiliary_task,
-        dtype=dtype,
-        debug=agent_cfg["experiment"]["debug"]
-    )
-
-    # Let's go!
-    trainer = make_trainer(env, agent, agent_cfg, auxiliary_task, writer)
-    trainer.train()
-    writer.close_wandb()
 
 
 if __name__ == "__main__":
+
+    print("Running sweep with optuna")
+
+    sweep = False
 
     # parse configuration
     env_cfg, agent_cfg = register_task_to_hydra(args_cli.task, "default_cfg")
@@ -278,70 +238,73 @@ if __name__ == "__main__":
     # Update the environment config
     env_cfg = update_env_cfg(args_cli, env_cfg, agent_cfg)
 
-    # LOGGING SETUP
-    agent_cfg["experiment"]["experiment_name"] = args_cli.task + "_" + args_cli.agent_cfg + "_" + "sweep"
-    agent_cfg["experiment"]["wandb_kwargs"]["group"] = args_cli.task + "_" + args_cli.agent_cfg + "_" + "sweep"
+    if sweep:
+        # LOGGING SETUP
+        agent_cfg["experiment"]["experiment_name"] = args_cli.task + "_" + args_cli.agent_cfg + "_" + "sweep"
+        agent_cfg["experiment"]["wandb_kwargs"]["group"] = args_cli.task + "_" + args_cli.agent_cfg + "_" + "sweep"
+        storage = agent_cfg["sweeper"]["storage"]
+        n_warmup_steps = agent_cfg["sweeper"]["warmup_timesteps_M"] * 1e6
+        agent_cfg["trainer"]["max_global_timesteps_M"] = agent_cfg["sweeper"]["max_sweep_timesteps_M"]
 
-    writer = Writer(agent_cfg, delay_wandb_startup=True)
+        study_name = args_cli.study
+        total_trials = 50
+        n_startup_trials = 5
+        interval_steps = 1
 
-    storage = agent_cfg["sweeper"]["storage"]
-    n_warmup_steps = agent_cfg["sweeper"]["warmup_timesteps_M"] * 1e6
-    agent_cfg["trainer"]["max_global_timesteps_M"] = agent_cfg["sweeper"]["max_sweep_timesteps_M"]
+        writer = Writer(agent_cfg, delay_wandb_startup=True)
 
-    study_name = args_cli.study
-    total_trials = 50
-    n_startup_trials = 5
-    interval_steps = 1
-    
-    # Make environment. Order must be gymnasium Env -> FrameStack -> IsaacLab
-    env = make_env(env_cfg, writer, args_cli, agent_cfg["observations"]["obs_stack"])
+        # Make environment. Order must be gymnasium Env -> FrameStack -> IsaacLab
+        env = make_env(env_cfg, writer, args_cli, agent_cfg["observations"]["obs_stack"])
 
-    runner = OptimisationRunner(study_name, n_startup_trials, n_warmup_steps, interval_steps)
+        runner = OptimisationRunner(study_name, n_startup_trials, n_warmup_steps, interval_steps)
 
-    best_trial = runner.run(total_trials)
+        best_trial = runner.run(total_trials)
 
-    print("Best trial:", best_trial)
+        print("Best trial:", best_trial)
 
-    writer.close_wandb()
+        writer.close_wandb()
 
-    # now we run 5 seeds of the best trial :)
-    agent_cfg["agent"]["rollouts"] = best_trial.params["rollouts"]
-    agent_cfg["agent"]["mini_batches"] = best_trial.params["mini_batches"]
-    agent_cfg["agent"]["learning_epochs"] = best_trial.params["learning_epochs"]
-    agent_cfg["agent"]["learning_rate"] = best_trial.params["learning_rate"]
-    agent_cfg["agent"]["entropy_loss_scale"] = best_trial.params["entropy_loss_scale"]
-    agent_cfg["agent"]["value_loss_scale"] = best_trial.params["value_loss_scale"]
-    agent_cfg["agent"]["value_clip"] = best_trial.params["value_clip"]
-    agent_cfg["agent"]["ratio_clip"] = best_trial.params["ratio_clip"]
-    agent_cfg["agent"]["lambda"] = best_trial.params["gae_lambda"]
+        # now we run 5 seeds of the best trial :)
+        agent_cfg["agent"]["rollouts"] = best_trial.params["rollouts"]
+        agent_cfg["agent"]["mini_batches"] = best_trial.params["mini_batches"]
+        agent_cfg["agent"]["learning_epochs"] = best_trial.params["learning_epochs"]
+        agent_cfg["agent"]["learning_rate"] = best_trial.params["learning_rate"]
+        agent_cfg["agent"]["entropy_loss_scale"] = best_trial.params["entropy_loss_scale"]
+        agent_cfg["agent"]["value_loss_scale"] = best_trial.params["value_loss_scale"]
+        agent_cfg["agent"]["value_clip"] = best_trial.params["value_clip"]
+        agent_cfg["agent"]["ratio_clip"] = best_trial.params["ratio_clip"]
+        agent_cfg["agent"]["lambda"] = best_trial.params["gae_lambda"]
 
-    if agent_cfg["auxiliary_task"]["type"] != None:
-        agent_cfg["auxiliary_task"]["learning_rate"] = best_trial.params["learning_rate_aux"]
-        agent_cfg["auxiliary_task"]["loss_weight"] = best_trial.params["loss_weight_aux"]
-        agent_cfg["auxiliary_task"]["learning_epochs_ratio"] = best_trial.params["learning_epochs_ratio"]
+        if agent_cfg["auxiliary_task"]["type"] != None:
+            agent_cfg["auxiliary_task"]["learning_rate"] = best_trial.params["learning_rate_aux"]
+            agent_cfg["auxiliary_task"]["loss_weight"] = best_trial.params["loss_weight_aux"]
+            agent_cfg["auxiliary_task"]["learning_epochs_ratio"] = best_trial.params["learning_epochs_ratio"]
 
-    if agent_cfg["auxiliary_task"]["type"] == "forward_dynamics":
-        agent_cfg["auxiliary_task"]["seq_length"] = best_trial.params["seq_length"]
+        if agent_cfg["auxiliary_task"]["type"] == "forward_dynamics":
+            agent_cfg["auxiliary_task"]["seq_length"] = best_trial.params["seq_length"]
 
     # seeds
     agent_cfg["experiment"]["experiment_name"] = args_cli.task + "_" + args_cli.agent_cfg + "_" + "seeded"
     agent_cfg["trainer"]["max_global_timesteps_M"] = 200
     agent_cfg["experiment"]["wandb_kwargs"]["group"] = args_cli.task + "_" + args_cli.agent_cfg + "_" + "seeded"
 
-    test_seeds = [5,6,7,8,9]
+    test_seeds = [7,8,9]
 
-    try:
-        print("Running best trial on multiple seeds:", test_seeds)
-        for seed in test_seeds:
-            print("Running seed:", seed)
-            train_one_seed(seed, agent_cfg)
+    # try:
+    print("Running best trial on multiple seeds:", test_seeds)
+    from common_utils import train_one_seed
 
-    except Exception as err:
-        carb.log_error(err)
-        carb.log_error(traceback.format_exc())
-        raise
-    except KeyboardInterrupt:
-        pass
-    finally:
-        # close sim app
-        simulation_app.close()
+    writer = Writer(agent_cfg, delay_wandb_startup=True)
+
+
+    for seed in test_seeds:
+        print("Running seed:", seed)
+
+        agent_cfg["experiment"]["wandb_kwargs"]["name"] = str(seed)
+        agent_cfg["seed"] = seed
+        # restart wandb
+        # restart wandb
+        
+        train_one_seed(args_cli, agent_cfg=agent_cfg, env_cfg=env_cfg, writer=writer, seed=seed)
+
+    simulation_app.close()

@@ -69,7 +69,7 @@ gym.register(
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": baoding.BaodingCfg,
-        "default_cfg": bounce_default_cfg,
+        "default_cfg": baoding_default_cfg,
         "rl_only_p": baoding_rl_only_p,
         "rl_only_pt": baoding_rl_only_pt,
         "tac_recon": baoding_tactile_recon,

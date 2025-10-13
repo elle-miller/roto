@@ -14,7 +14,7 @@ agent:
 
 experiment:
   experiment_name: "shadow_bounce_seeds"
-  wandb: 0
+  wandb: 1
   wandb_kwargs: {
     "group": "shadow_bounce_seeds",
     "name": "1",
