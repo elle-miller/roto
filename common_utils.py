@@ -15,12 +15,23 @@ from isaaclab_rl.wrappers.frame_stack import FrameStack
 from isaaclab_rl.wrappers.isaaclab_wrapper import IsaacLabWrapper
 from isaaclab_rl.auxiliary.reconstruction import Reconstruction
 from isaaclab_rl.auxiliary.dynamics import ForwardDynamics
+from isaaclab_rl.algorithms.ppo import PPO, PPO_DEFAULT_CONFIG
+from isaaclab_rl.tools.writer import Writer
+from isaaclab_tasks.utils.hydra import hydra_task_config, register_task_to_hydra
+from isaaclab.utils import update_dict
 
+
+import torch
+
+from isaaclab.utils import update_dict
+from isaaclab_tasks.utils.parse_cfg import load_cfg_from_registry
 # ADD YOUR ENVS HERE
 from tasks import franka,shadow  # noqa: F401
 
 # change this to something else if you want
 LOG_PATH = os.getcwd()
+
+
 
 def make_aux(env, rl_memory, encoder, value, value_preprocessor, env_cfg, agent_cfg, writer):
 
@@ -169,3 +180,75 @@ def set_seed(seed: int = 42) -> None:
     random.seed(seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
+
+
+# @hydra_task_config(args_cli.task, "default_cfg")
+def train_one_seed(args_cli, agent_cfg=None, env_cfg=None, writer=None, seed=None):
+    """Train with skrl agent."""
+
+    # parse configuration
+    if agent_cfg is None and env_cfg is None:
+        env_cfg, agent_cfg = register_task_to_hydra(args_cli.task, "default_cfg")
+        specialised_cfg = load_cfg_from_registry(args_cli.task, args_cli.agent_cfg)
+        agent_cfg = update_dict(agent_cfg, specialised_cfg)
+
+    print("lets train!")
+    print("seed", seed)
+    print("agent_cfg", agent_cfg)
+
+    # Choose the precision you want. Lower precision means you can fit more environments.
+    dtype = torch.float32
+
+    # SEED (environment AND agent, important for seed-deterministic runs)
+    agent_cfg["seed"] = seed if seed is not None else agent_cfg["seed"]
+    set_seed(agent_cfg["seed"])
+    agent_cfg["log_path"] = LOG_PATH
+    args_cli.video = agent_cfg["experiment"]["upload_videos"]
+
+    # Update the environment config
+    env_cfg = update_env_cfg(args_cli, env_cfg, agent_cfg)
+
+    # LOGGING SETUP
+    if writer is not None:
+        writer.close_wandb()
+        writer.setup_wandb(name=str(seed))
+    else:
+        writer = Writer(agent_cfg)
+
+    # Make environment. Order must be gymnasium Env -> FrameStack -> IsaacLab
+    env = make_env(env_cfg, writer, args_cli, agent_cfg["observations"]["obs_stack"])
+
+    # setup models
+    policy, value, encoder, value_preprocessor = make_models(env, env_cfg, agent_cfg, dtype)
+
+    # create tensors in memory for RL stuff [only for the training envs]
+    num_training_envs = env_cfg.scene.num_envs - agent_cfg["trainer"]["num_eval_envs"]
+    rl_memory = make_memory(env, env_cfg, size=agent_cfg["agent"]["rollouts"], num_envs=num_training_envs)
+    auxiliary_task = make_aux(env, rl_memory, encoder, value, value_preprocessor, env_cfg, agent_cfg, writer)
+
+    # configure and instantiate PPO agent
+    ppo_agent_cfg = PPO_DEFAULT_CONFIG.copy()
+    ppo_agent_cfg.update(agent_cfg["agent"])
+    agent = PPO(
+        encoder,
+        policy,
+        value,
+        value_preprocessor,
+        memory=rl_memory,
+        cfg=ppo_agent_cfg,
+        observation_space=env.observation_space,
+        action_space=env.action_space,
+        device=env.device,
+        writer=writer,
+        auxiliary_task=auxiliary_task,
+        dtype=dtype,
+        debug=agent_cfg["experiment"]["debug"]
+    )
+
+    # Let's go!
+    trainer = make_trainer(env, agent, agent_cfg, auxiliary_task, writer)
+    trainer.train()
+
+    # close the simulator
+    env.close()
+    writer.close_wandb()

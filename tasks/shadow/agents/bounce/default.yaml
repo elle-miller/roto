@@ -12,7 +12,7 @@ encoder:
   hiddens: [1024, 512, 256]
   activations: ["elu", "elu", "elu"]
   layernorm: True
-  state_preprocessor: None
+  state_preprocessor: null
 
 policy:
   clip_log_std: True

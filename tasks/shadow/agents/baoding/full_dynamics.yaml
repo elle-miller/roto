@@ -22,8 +22,6 @@ auxiliary_task:
 
 experiment:
   experiment_name: "full_dynamics"
-  save_checkpoints: 1
-  tb_log: 1
   wandb: 1
   wandb_kwargs: {
     "group": "full_dynamics",

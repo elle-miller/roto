@@ -22,7 +22,7 @@ auxiliary_task:
 
 experiment:
   experiment_name: "tactile_dynamics"
-  wandb: 0
+  wandb: 1
   wandb_kwargs: {
     "group": "tactile_dynamics",
     "name": "null",

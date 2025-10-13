@@ -17,7 +17,6 @@ import argparse
 import os
 import sys
 import time
-import torch
 import traceback
 
 from isaaclab.app import AppLauncher
@@ -69,8 +68,11 @@ from common_utils import (
     update_env_cfg,
 )
 
+import torch
 
-@hydra_task_config(args_cli.task, "skrl_cfg_entry_point")
+
+
+@hydra_task_config(args_cli.task, "default_cfg")
 def main(env_cfg, agent_cfg: dict):
     """Play a skrl agent."""
 
@@ -89,7 +91,7 @@ def main(env_cfg, agent_cfg: dict):
     writer = Writer(agent_cfg, play=True)
 
     # Make environment. Order must be gymnasium Env -> FrameStack -> IsaacLab
-    env = make_env(env_cfg, writer, args_cli, agent_cfg["models"]["obs_stack"])
+    env = make_env(env_cfg, writer, args_cli, agent_cfg["observations"]["obs_stack"])
 
     # setup models
     policy, value, encoder, value_preprocessor = make_models(env, env_cfg, agent_cfg, dtype)

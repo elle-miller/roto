@@ -14,8 +14,6 @@ agent:
 
 experiment:
   experiment_name: "rl_only_pt"
-  save_checkpoints: 1
-  tb_log: 1
   wandb: 1
   wandb_kwargs: {
     "group": "rl_only_pt",
