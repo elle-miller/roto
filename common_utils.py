@@ -183,40 +183,10 @@ def set_seed(seed: int = 42) -> None:
 
 
 # @hydra_task_config(args_cli.task, "default_cfg")
-def train_one_seed(args_cli, agent_cfg=None, env_cfg=None, writer=None, seed=None):
+def train_one_seed(args_cli, env, agent_cfg=None, env_cfg=None, writer=None, seed=None):
     """Train with skrl agent."""
 
-    # parse configuration
-    if agent_cfg is None and env_cfg is None:
-        env_cfg, agent_cfg = register_task_to_hydra(args_cli.task, "default_cfg")
-        specialised_cfg = load_cfg_from_registry(args_cli.task, args_cli.agent_cfg)
-        agent_cfg = update_dict(agent_cfg, specialised_cfg)
-
-    print("lets train!")
-    print("seed", seed)
-    print("agent_cfg", agent_cfg)
-
-    # Choose the precision you want. Lower precision means you can fit more environments.
     dtype = torch.float32
-
-    # SEED (environment AND agent, important for seed-deterministic runs)
-    agent_cfg["seed"] = seed if seed is not None else agent_cfg["seed"]
-    set_seed(agent_cfg["seed"])
-    agent_cfg["log_path"] = LOG_PATH
-    args_cli.video = agent_cfg["experiment"]["upload_videos"]
-
-    # Update the environment config
-    env_cfg = update_env_cfg(args_cli, env_cfg, agent_cfg)
-
-    # LOGGING SETUP
-    if writer is not None:
-        writer.close_wandb()
-        writer.setup_wandb(name=str(seed))
-    else:
-        writer = Writer(agent_cfg)
-
-    # Make environment. Order must be gymnasium Env -> FrameStack -> IsaacLab
-    env = make_env(env_cfg, writer, args_cli, agent_cfg["observations"]["obs_stack"])
 
     # setup models
     policy, value, encoder, value_preprocessor = make_models(env, env_cfg, agent_cfg, dtype)
@@ -248,7 +218,5 @@ def train_one_seed(args_cli, agent_cfg=None, env_cfg=None, writer=None, seed=Non
     # Let's go!
     trainer = make_trainer(env, agent, agent_cfg, auxiliary_task, writer)
     trainer.train()
+    print("Training complete!")
 
-    # close the simulator
-    env.close()
-    writer.close_wandb()
