@@ -290,8 +290,9 @@ if __name__ == "__main__":
     agent_cfg["trainer"]["max_global_timesteps_M"] = 200
     agent_cfg["experiment"]["wandb_kwargs"]["group"] = args_cli.task + "_" + args_cli.agent_cfg + "_" + "seeded"
 
-    test_seeds = [6,7,8,9]
-    test_seeds = [8,9,5,6]
+    test_seeds = [5,6,10]
+    test_seeds = [8,9,5,6,7]
+    test_seeds = [9,10,11,12,13]
 
     # try:
     print("Running best trial on multiple seeds:", test_seeds)
@@ -305,6 +306,10 @@ if __name__ == "__main__":
 
         agent_cfg["experiment"]["wandb_kwargs"]["name"] = str(seed)
         agent_cfg["seed"] = seed
+        set_seed(agent_cfg["seed"])
+
+        env_cfg = update_env_cfg(args_cli, env_cfg, agent_cfg)
+
         writer.setup_wandb(name=str(seed))
 
         train_one_seed(args_cli, env, agent_cfg=agent_cfg, env_cfg=env_cfg, writer=writer, seed=seed)
