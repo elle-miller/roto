@@ -30,7 +30,7 @@ plt.rcParams.update(plt.rcParamsDefault)
 # Set DPI
 dpi = 600
 
-plot_raw = False
+plot_raw = True
 
 
 
@@ -39,12 +39,12 @@ log_dir = "/home/emil/code/external/IsaacLab/multimodal_gym/paper_results"
 output_dir = "/home/emil/code/external/IsaacLab/multimodal_gym/results/plots"
 
 # agenst5
-log_dir = "/home/emil/code/external/multimodal_gym/paper_results"
-output_dir = "/home/emil/code/external/multimodal_gym/results"
+log_dir = "/home/emil/code/external/roto/results/cam_ready"
+output_dir = "/home/emil/code/external/roto/results/cam_ready/plots"
 
 # local
-log_dir = "/home/elle/code/external/roto/results/cam_ready"
-output_dir = "/home/elle/code/external/roto/results/cam_ready/plots"
+# log_dir = "/home/elle/code/external/roto/results/cam_ready"
+# output_dir = "/home/elle/code/external/roto/results/cam_ready/plots"
 
 import plot_dicts,plot_dicts_paper
 from plot import get_readers_seeded, get_min_length
@@ -137,11 +137,14 @@ for ax_idx, exp in enumerate(exp_list):
                     color=exp_dict["color"][i],
                 )
         # Calculate the mean and standard deviation across the seeds
-        mean = np.mean(mean_rewards, axis=0)
-        std_dev = np.std(mean_rewards, axis=0)
-        axes[ax_idx].plot(step, mean, label=exp_dict["legend_names"][i], color=exp_dict["color"][i], linestyle=exp_dict["linestyle"][i], )
-        print(exp_dict["legend_names"][i])
-        axes[ax_idx].fill_between(step, mean - std_dev, mean + std_dev, alpha=group_dict["opacity"], color=exp_dict["color"][i])
+        if not plot_raw:
+            print("Mean rewards shape", np.shape(mean_rewards))
+            mean = np.mean(mean_rewards, axis=0)
+
+            std_dev = np.std(mean_rewards, axis=0)
+            axes[ax_idx].plot(step, mean, label=exp_dict["legend_names"][i], color=exp_dict["color"][i], linestyle=exp_dict["linestyle"][i], )
+            print(exp_dict["legend_names"][i])
+            axes[ax_idx].fill_between(step, mean - std_dev, mean + std_dev, alpha=group_dict["opacity"], color=exp_dict["color"][i])
 
         axes[ax_idx].set_title(exp_dict["title"])
         y_max = exp_dict["y_max"]

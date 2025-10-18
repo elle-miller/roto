@@ -1,29 +1,30 @@
 agent:
-  rollouts: 16
-  learning_epochs: 14
-  mini_batches: 16
+  rollouts: 32
+  learning_epochs: 6
+  mini_batches: 8
   discount_factor: 0.99
-  lambda: 0.907232209016445
-  learning_rate: 8.571638417056478e-05
+  lambda: 0.9468143653146185
+  learning_rate: 3.1739162635257763e-06
   grad_norm_clip: 1.0
-  ratio_clip: 0.15780009343526674
-  value_clip: 0.2018937033984739
-  value_loss_scale: 0.8381938759726169
-  entropy_loss_scale: 0.2551308863496997
+  ratio_clip: 0.2359054267575137
+  value_clip: 0.19126743895843024
+  value_loss_scale: 0.3068963415215419
+  entropy_loss_scale: 0.4239605567690041
   kl_threshold: 0
 
 auxiliary_task:
   type: "forward_dynamics"
   n_rollouts: 1
   tactile_only: False
-  loss_weight: 0.0024563011888180755
-  learning_rate: 0.00015653936173824111
-  seq_length: 4
+  loss_weight: 0.025075893990136915
+  learning_rate: 0.00025205565044316406
+  seq_length: 2
+  learning_epochs_ratio: 1.0
 
 experiment:
-  experiment_name: "full_dynamics"
+  experiment_name: "Bounce_full_dynamics_seeded"
   wandb: 1
   wandb_kwargs: {
-    "group": "full_dynamics",
+    "group": "Bounce_full_dynamics_seeded",
     "name": "1",
   }

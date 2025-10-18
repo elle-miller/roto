@@ -45,6 +45,6 @@ trainer:
 
 sweeper:
   storage: "sqlite:///shadow_bounce.db"
-  warmup_timesteps_M: 30
-  max_sweep_timesteps_M: 50
+  warmup_timesteps_M: 75
+  max_sweep_timesteps_M: 100
 

@@ -82,6 +82,21 @@ from isaaclab_tasks.utils.parse_cfg import load_cfg_from_registry
 
 
 if __name__ == "__main__":
+
+    # parse configuration
+    env_cfg, agent_cfg = register_task_to_hydra(args_cli.task, "default_cfg")
+    specialised_cfg = load_cfg_from_registry(args_cli.task, args_cli.agent_cfg)
+    agent_cfg = update_dict(agent_cfg, specialised_cfg)
+
+    dtype = torch.float32
+
+    agent_cfg["seed"] = args_cli.seed if args_cli.seed is not None else agent_cfg["seed"]
+    set_seed(agent_cfg["seed"])
+    agent_cfg["log_path"] = LOG_PATH
+    args_cli.video = agent_cfg["experiment"]["upload_videos"]
+
+    # Update the environment config
+    env_cfg = update_env_cfg(args_cli, env_cfg, agent_cfg)
     train_one_seed(args_cli)
 
     try:

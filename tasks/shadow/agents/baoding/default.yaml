@@ -40,9 +40,9 @@ experiment:
 
 trainer:
   num_eval_envs: 100
-  max_global_timesteps_M: 200
+  max_global_timesteps_M: 250
 
 sweeper:
   storage: "sqlite:///shadow_baoding.db"
-  warmup_timesteps_M: 70
-  max_sweep_timesteps_M: 100
+  warmup_timesteps_M: 100
+  max_sweep_timesteps_M: 150

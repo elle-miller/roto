@@ -128,7 +128,14 @@ class OptimisationRunner:
         set_seed(agent_cfg["seed"])
 
         # PPO hparams
-        rollouts = trial.suggest_categorical("rollouts", [16, 32])
+        # memory issues with large rollouts + aux tasks
+        if "auxiliary_task" in agent_cfg:
+            if (agent_cfg["auxiliary_task"]["type"] == "forward_dynamics"):
+                rollouts = trial.suggest_categorical("rollouts", [16, 32])
+            else:
+                rollouts = trial.suggest_categorical("rollouts", [16,32,64,96])
+        else:
+            rollouts = trial.suggest_categorical("rollouts", [16,32,64,96])
         mini_batches = trial.suggest_categorical("mini_batches", [4, 8, 16, 32])
         learning_epochs = trial.suggest_int("learning_epochs", low=5, high=20, step=1)
         learning_rate = trial.suggest_float("learning_rate", low=1e-6, high=0.003, log=True)
@@ -153,7 +160,7 @@ class OptimisationRunner:
         # agent_cfg["agent"]["gamma"] = gamma
         # agent_cfg["agent"]["kl_threshold"] = kl_threshold
 
-        if agent_cfg["auxiliary_task"]["type"] != None:
+        if "auxiliary_task" in agent_cfg:
             learning_rate_aux = trial.suggest_float("learning_rate_aux", low=1e-5, high=1e-3, log=True)
             loss_weight_aux = trial.suggest_float("loss_weight_aux", low=1e-3, high=10, log=True)
             learning_epochs_ratio = trial.suggest_categorical("learning_epochs_ratio", [0.25, 0.5, 0.75, 1.0])
@@ -164,7 +171,7 @@ class OptimisationRunner:
 
             if agent_cfg["auxiliary_task"]["type"] == "forward_dynamics":
                 # it can take quite long, cap at8
-                seq_length = trial.suggest_int("seq_length", low=2, high=10, step=1)
+                seq_length = trial.suggest_int("seq_length", low=2, high=8, step=1)
                 agent_cfg["auxiliary_task"]["seq_length"] = seq_length
 
         # setup models
@@ -218,7 +225,7 @@ if __name__ == "__main__":
 
     print("Running sweep with optuna")
 
-    sweep = False
+    sweep = True
 
     # parse configuration
     env_cfg, agent_cfg = register_task_to_hydra(args_cli.task, "default_cfg")
@@ -238,13 +245,16 @@ if __name__ == "__main__":
     # Update the environment config
     env_cfg = update_env_cfg(args_cli, env_cfg, agent_cfg)
 
+    max_sweep_timesteps_M = agent_cfg["sweeper"]["max_sweep_timesteps_M"]
+    max_training_timesteps_M = agent_cfg["trainer"]["max_global_timesteps_M"]
+
     if sweep:
         # LOGGING SETUP
-        agent_cfg["experiment"]["experiment_name"] = args_cli.task + "_" + args_cli.agent_cfg + "_" + "sweep"
-        agent_cfg["experiment"]["wandb_kwargs"]["group"] = args_cli.task + "_" + args_cli.agent_cfg + "_" + "sweep"
+        agent_cfg["experiment"]["experiment_name"] = args_cli.task + "_" + args_cli.agent_cfg + "_" + args_cli.study
+        agent_cfg["experiment"]["wandb_kwargs"]["group"] = args_cli.task + "_" + args_cli.agent_cfg + "_" + args_cli.study
         storage = agent_cfg["sweeper"]["storage"]
         n_warmup_steps = agent_cfg["sweeper"]["warmup_timesteps_M"] * 1e6
-        agent_cfg["trainer"]["max_global_timesteps_M"] = agent_cfg["sweeper"]["max_sweep_timesteps_M"]
+        agent_cfg["trainer"]["max_global_timesteps_M"] = max_sweep_timesteps_M
 
         study_name = args_cli.study
         total_trials = 50
@@ -286,13 +296,12 @@ if __name__ == "__main__":
         env.close()
 
     # seeds
-    agent_cfg["experiment"]["experiment_name"] = args_cli.task + "_" + args_cli.agent_cfg + "_" + "seeded"
-    agent_cfg["trainer"]["max_global_timesteps_M"] = 200
-    agent_cfg["experiment"]["wandb_kwargs"]["group"] = args_cli.task + "_" + args_cli.agent_cfg + "_" + "seeded"
+    agent_cfg["experiment"]["experiment_name"] = args_cli.task + "_" + args_cli.agent_cfg + "_" + "seeded_help"
+    agent_cfg["trainer"]["max_global_timesteps_M"] = max_training_timesteps_M
+    agent_cfg["experiment"]["wandb_kwargs"]["group"] = args_cli.task + "_" + args_cli.agent_cfg + "_" + "seeded_help"
 
-    test_seeds = [5,6,10]
-    test_seeds = [8,9,5,6,7]
-    test_seeds = [9,10,11,12,13]
+    test_seeds = [5,6,7,8,9,10]
+    # test_seeds = [9,10,11,12,13]
 
     # try:
     print("Running best trial on multiple seeds:", test_seeds)
@@ -314,6 +323,8 @@ if __name__ == "__main__":
 
         train_one_seed(args_cli, env, agent_cfg=agent_cfg, env_cfg=env_cfg, writer=writer, seed=seed)
         writer.close_wandb()
+        writer.get_new_log_path()
+
 
     env.close()
     simulation_app.close()
