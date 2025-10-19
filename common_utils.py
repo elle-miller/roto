@@ -188,6 +188,9 @@ def train_one_seed(args_cli, env, agent_cfg=None, env_cfg=None, writer=None, see
 
     dtype = torch.float32
 
+    agent_cfg["seed"] = seed
+    set_seed(agent_cfg["seed"])
+
     # setup models
     policy, value, encoder, value_preprocessor = make_models(env, env_cfg, agent_cfg, dtype)
 
