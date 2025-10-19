@@ -315,8 +315,7 @@ if __name__ == "__main__":
         print("Running seed:", seed)
 
         agent_cfg["experiment"]["wandb_kwargs"]["name"] = str(seed)
-        agent_cfg["seed"] = seed
-        set_seed(agent_cfg["seed"])
+        
 
         env_cfg = update_env_cfg(args_cli, env_cfg, agent_cfg)
 

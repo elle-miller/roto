@@ -90,14 +90,15 @@ if __name__ == "__main__":
 
     dtype = torch.float32
 
-    agent_cfg["seed"] = args_cli.seed if args_cli.seed is not None else agent_cfg["seed"]
-    set_seed(agent_cfg["seed"])
+    seed = args_cli.seed if args_cli.seed is not None else agent_cfg["seed"]
     agent_cfg["log_path"] = LOG_PATH
     args_cli.video = agent_cfg["experiment"]["upload_videos"]
 
     # Update the environment config
+    writer = Writer(agent_cfg)
     env_cfg = update_env_cfg(args_cli, env_cfg, agent_cfg)
-    train_one_seed(args_cli)
+    env = make_env(env_cfg, writer, args_cli, agent_cfg["observations"]["obs_stack"])
+    train_one_seed(args_cli, env, agent_cfg=agent_cfg, env_cfg=env_cfg, writer=writer, seed=seed)
 
     try:
         # run the main function

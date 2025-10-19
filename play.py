@@ -31,6 +31,8 @@ parser.add_argument(
 parser.add_argument("--num_envs", type=int, default=None, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default=None, help="Name of the task.")
 parser.add_argument("--checkpoint", type=str, default=None, help="Path to model checkpoint.")
+parser.add_argument("--video_dir", type=str, default=None, help="Path to model checkpoint.")
+
 parser.add_argument("--seed", type=int, default=None, help="Seed used for the environment")
 # if you have RTX5090, use these args for better rendering
 parser.add_argument(
@@ -55,7 +57,15 @@ if args_cli.video:
 sys.argv = [sys.argv[0]] + hydra_args
 app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
+import torch
+import numpy as np 
+import optuna
+from tasks import franka,shadow  # noqa: F401
 
+from isaaclab.utils import update_dict
+from isaaclab_tasks.utils.parse_cfg import load_cfg_from_registry
+from isaaclab_tasks.utils.hydra import hydra_task_config, register_task_to_hydra
+import isaaclab_tasks  # noqa: F401
 from isaaclab_rl.algorithms.ppo import PPO, PPO_DEFAULT_CONFIG
 from isaaclab_rl.tools.writer import Writer
 from isaaclab_tasks.utils.hydra import hydra_task_config
@@ -70,12 +80,17 @@ from common_utils import (
 
 import torch
 
+from isaaclab.utils import update_dict
+from isaaclab_tasks.utils.parse_cfg import load_cfg_from_registry
 
 
-@hydra_task_config(args_cli.task, "default_cfg")
-def main(env_cfg, agent_cfg: dict):
+def main():
     """Play a skrl agent."""
+# parse configuration
+    env_cfg, agent_cfg = register_task_to_hydra(args_cli.task, "default_cfg")
 
+    specialised_cfg = load_cfg_from_registry(args_cli.task, args_cli.agent_cfg)
+    agent_cfg = update_dict(agent_cfg, specialised_cfg)
     # Choose the precision you want. Lower precision means you can fit more environments.
     dtype = torch.float32
 
@@ -83,6 +98,7 @@ def main(env_cfg, agent_cfg: dict):
     agent_cfg["seed"] = args_cli.seed if args_cli.seed is not None else agent_cfg["seed"]
     set_seed(agent_cfg["seed"])
     agent_cfg["log_path"] = LOG_PATH
+    agent_cfg["experiement"]["video_dir"] = args_cli.video_dir
 
     # Update the environment config
     env_cfg = update_env_cfg(args_cli, env_cfg, agent_cfg)
@@ -168,6 +184,8 @@ def main(env_cfg, agent_cfg: dict):
             # the eval episodes get manually reset every ep_length
             if terminated | truncated:
                 mean_eval_return = returns.mean().item()
+                print("Reset - Max eval return", returns.max().item())
+
                 print("Reset - Mean eval return", mean_eval_return)
                 states, infos = env.reset(hard=True)
 
