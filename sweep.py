@@ -286,20 +286,20 @@ if __name__ == "__main__":
         agent_cfg["agent"]["ratio_clip"] = best_trial.params["ratio_clip"]
         agent_cfg["agent"]["lambda"] = best_trial.params["gae_lambda"]
 
-        if agent_cfg["auxiliary_task"]["type"] != None:
+        if "auxiliary_task" in agent_cfg:
             agent_cfg["auxiliary_task"]["learning_rate"] = best_trial.params["learning_rate_aux"]
             agent_cfg["auxiliary_task"]["loss_weight"] = best_trial.params["loss_weight_aux"]
             agent_cfg["auxiliary_task"]["learning_epochs_ratio"] = best_trial.params["learning_epochs_ratio"]
 
-        if agent_cfg["auxiliary_task"]["type"] == "forward_dynamics":
-            agent_cfg["auxiliary_task"]["seq_length"] = best_trial.params["seq_length"]
+            if agent_cfg["auxiliary_task"]["type"] == "forward_dynamics":
+                agent_cfg["auxiliary_task"]["seq_length"] = best_trial.params["seq_length"]
 
         env.close()
 
     # seeds
-    agent_cfg["experiment"]["experiment_name"] = args_cli.task + "_" + args_cli.agent_cfg + "_" + "seeded_help"
+    agent_cfg["experiment"]["experiment_name"] = args_cli.task + "_" + args_cli.agent_cfg + "_" + "seeded"
     agent_cfg["trainer"]["max_global_timesteps_M"] = max_training_timesteps_M
-    agent_cfg["experiment"]["wandb_kwargs"]["group"] = args_cli.task + "_" + args_cli.agent_cfg + "_" + "seeded_help"
+    agent_cfg["experiment"]["wandb_kwargs"]["group"] = args_cli.task + "_" + args_cli.agent_cfg + "_" + "seeded"
 
     test_seeds = [5,6,7,8,9,10]
     # test_seeds = [9,10,11,12,13]
