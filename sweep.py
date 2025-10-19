@@ -172,6 +172,7 @@ class OptimisationRunner:
             if agent_cfg["auxiliary_task"]["type"] == "forward_dynamics":
                 # it can take quite long, cap at8
                 seq_length = trial.suggest_int("seq_length", low=2, high=8, step=1)
+                seq_length = min(seq_length, 7)
                 agent_cfg["auxiliary_task"]["seq_length"] = seq_length
 
         # setup models
