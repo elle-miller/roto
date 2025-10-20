@@ -225,7 +225,7 @@ if __name__ == "__main__":
 
     print("Running sweep with optuna")
 
-    sweep = True
+    sweep = False
 
     # parse configuration
     env_cfg, agent_cfg = register_task_to_hydra(args_cli.task, "default_cfg")
@@ -293,22 +293,26 @@ if __name__ == "__main__":
         if agent_cfg["auxiliary_task"]["type"] == "forward_dynamics":
             agent_cfg["auxiliary_task"]["seq_length"] = best_trial.params["seq_length"]
 
-        env.close()
-
     # seeds
     agent_cfg["experiment"]["experiment_name"] = args_cli.task + "_" + args_cli.agent_cfg + "_" + "seeded_help"
     agent_cfg["trainer"]["max_global_timesteps_M"] = max_training_timesteps_M
     agent_cfg["experiment"]["wandb_kwargs"]["group"] = args_cli.task + "_" + args_cli.agent_cfg + "_" + "seeded_help"
 
     test_seeds = [5,6,7,8,9,10]
+
     # test_seeds = [9,10,11,12,13]
 
     # try:
     print("Running best trial on multiple seeds:", test_seeds)
     from common_utils import train_one_seed
     writer = Writer(agent_cfg, delay_wandb_startup=True)
+    print("made writer")
     env_cfg = update_env_cfg(args_cli, env_cfg, agent_cfg)
-    env = make_env(env_cfg, writer, args_cli, agent_cfg["observations"]["obs_stack"])
+    print("making env")
+    if not sweep:
+        env = make_env(env_cfg, writer, args_cli, agent_cfg["observations"]["obs_stack"])
+
+    # env = make_env(env_cfg, writer, args_cli, agent_cfg["observations"]["obs_stack"])
 
     for seed in test_seeds:
         print("Running seed:", seed)
