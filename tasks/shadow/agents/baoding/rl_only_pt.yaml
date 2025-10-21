@@ -1,15 +1,15 @@
 agent:
-  rollouts: 16
-  learning_epochs: 14
-  mini_batches: 16
+  rollouts: 32
+  learning_epochs: 17
+  mini_batches: 32
   discount_factor: 0.99
-  lambda: 0.907232209016445
-  learning_rate: 8.571638417056478e-05
+  lambda: 0.9707621095552899
+  learning_rate: 7.3962786581536985e-06
   grad_norm_clip: 1.0
-  ratio_clip: 0.15780009343526674
-  value_clip: 0.2018937033984739
-  value_loss_scale: 0.8381938759726169
-  entropy_loss_scale: 0.2551308863496997
+  ratio_clip: 0.2172949130215031
+  value_clip: 0.20670917119390142
+  value_loss_scale: 0.7473253914396395
+  entropy_loss_scale: 0.018659231626923692
   kl_threshold: 0
 
 experiment:

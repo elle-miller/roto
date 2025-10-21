@@ -56,6 +56,8 @@ python sweep.py --task Baoding --num_envs 4196 --headless --seed 1234 --agent_cf
 ### playing
 
 ```
+python play.py --task Baoding --num_envs 1 --headless --seed 1234 --video --checkpoint results/cam_ready/checkpoints/baoding_rl_pt/best_agent_6.pt
+
 python play.py --task Bounce --num_envs 1 --headless --seed 1234 --video --checkpoint results/cam_ready/checkpoints/bounce_pt.pt
 
 ```
