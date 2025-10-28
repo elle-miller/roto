@@ -1,6 +1,8 @@
-# roto
+# RoTO: Robot Tactile Olympiad
+<img src="images/roto.png" width="1000" border="1"/>
 
 
+### docs
 
 `RotoEnv` inherits from `DirectRLEnv`
 - _configure_gym_env_spaces
@@ -58,6 +60,6 @@ python sweep.py --task Baoding --num_envs 4196 --headless --seed 1234 --agent_cf
 ```
 python play.py --task Baoding --num_envs 1 --headless --seed 1234 --video --checkpoint results/cam_ready/checkpoints/baoding_rl_pt/best_agent_6.pt
 
-python play.py --task Bounce --num_envs 1 --headless --seed 1234 --video --checkpoint results/cam_ready/checkpoints/bounce_pt.pt
+python play.py --task Bounce --agent_cfg full_dynamics--num_envs 1 --headless --seed 1234 --checkpoint results/cam_ready/checkpoints/bounce_pt.pt
 
 ```
