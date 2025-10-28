@@ -89,18 +89,23 @@ To run the paper checkpoints in the original environments, please... **TODO**.
 
 ---
 ## Data
+
 The data in the paper is available.....
 ---
-## 📧 Contact
-For any questions, issues, or collaborations, please feel free to reach out:
 
-Maintainer: Elle Miller
-Email: elle.miller@ed.ac.uk
-Project Website: https://elle-miller.github.io/tactile_rl
+## 📧 Contact
+
+For any questions, issues, or collaborations, please feel free to reach out 😀
+
+- Maintainer: Elle Miller
+- Email: elle.miller@ed.ac.uk
+- Project Website: https://elle-miller.github.io/tactile_rl
 
 This project is licensed under the MIT License - see the LICENSE file for details.
+
 ---
 ## 📄 Citation
+
 If you use this benchmark environment in your academic or professional research, please cite the following work:
 
 ```
