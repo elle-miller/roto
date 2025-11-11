@@ -32,6 +32,7 @@ parser.add_argument("--num_envs", type=int, default=None, help="Number of enviro
 parser.add_argument("--task", type=str, default=None, help="Name of the task.")
 parser.add_argument("--checkpoint", type=str, default=None, help="Path to model checkpoint.")
 parser.add_argument("--video_dir", type=str, default=None, help="Path to model checkpoint.")
+parser.add_argument("--agent_cfg", type=str, default=None, help="Name of the config.")
 
 parser.add_argument("--seed", type=int, default=None, help="Seed used for the environment")
 # if you have RTX5090, use these args for better rendering
@@ -98,7 +99,7 @@ def main():
     agent_cfg["seed"] = args_cli.seed if args_cli.seed is not None else agent_cfg["seed"]
     set_seed(agent_cfg["seed"])
     agent_cfg["log_path"] = LOG_PATH
-    agent_cfg["experiement"]["video_dir"] = args_cli.video_dir
+    agent_cfg["experiment"]["video_dir"] = args_cli.video_dir
 
     # Update the environment config
     env_cfg = update_env_cfg(args_cli, env_cfg, agent_cfg)
@@ -209,14 +210,10 @@ def main():
 
 
 if __name__ == "__main__":
-    try:
-        # run the main function
-        main()
-    except Exception as err:
-        carb.log_error(err)
-        carb.log_error(traceback.format_exc())
-        raise
-    finally:
-        # close sim app
-        print("CLOSING")
-        simulation_app.close()
+
+
+    main()
+
+
+
+

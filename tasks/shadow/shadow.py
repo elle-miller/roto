@@ -237,7 +237,7 @@ class ShadowEnv(RotoEnv):
                 # self.joint_accel,
                 # actions (20 = 68)
                 self.actions,
-                control_errors
+                # control_errors
             ),
             dim=-1,
         )

@@ -157,6 +157,9 @@ class BaodingEnv(ShadowEnv):
         self.reset_goal_2_buf = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
 
         # euclidean distance
+        self.ball_1_pos = torch.zeros((self.num_envs, 3), dtype=torch.float, device=self.device)
+        self.ball_2_pos = torch.zeros((self.num_envs, 3), dtype=torch.float, device=self.device)
+
         self.ball_1_goal_dist = torch.ones((self.num_envs, ), dtype=torch.float, device=self.device)
         self.ball_2_goal_dist = torch.ones((self.num_envs, ), dtype=torch.float, device=self.device)
         self.ball_1_goal_dist3 = torch.ones((self.num_envs, 3), dtype=torch.float, device=self.device)
@@ -221,10 +224,11 @@ class BaodingEnv(ShadowEnv):
         gt = torch.cat(
             (
                 # ball
-                self.ball_1_goal_dist.unsqueeze(1),
-                self.ball_2_goal_dist.unsqueeze(1),
-                self.ball_1_goal_dist3,
-                self.ball_2_goal_dist3,
+                self.ball_1_pos,
+                self.ball_2_pos,
+                self.ball_1_linvel.unsqueeze(1),
+                self.ball_2_linvel.unsqueeze(1),
+                self.ball_dist.unsqueeze(1),
             ),
             dim=-1,
         )
@@ -389,11 +393,11 @@ def compute_rewards(
     ball_2_goal_dist: torch.Tensor,
 ):
     
-    dense_dist_reward = (distance_reward(ball_1_goal_dist) + distance_reward(ball_2_goal_dist)) * 0
+    dense_dist_reward = (distance_reward(ball_1_goal_dist) + distance_reward(ball_2_goal_dist)) * 0.1
 
     reach_goal_reward = torch.where(goal_reached == 1, 10, 0).float()
 
-    total_reward = reach_goal_reward 
+    total_reward = reach_goal_reward + dense_dist_reward
 
     return total_reward,  reach_goal_reward
 

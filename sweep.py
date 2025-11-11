@@ -253,7 +253,7 @@ if __name__ == "__main__":
         # LOGGING SETUP
         agent_cfg["experiment"]["experiment_name"] = args_cli.task + "_" + args_cli.agent_cfg + "_" + args_cli.study
         agent_cfg["experiment"]["wandb_kwargs"]["group"] = args_cli.task + "_" + args_cli.agent_cfg + "_" + args_cli.study
-        storage = agent_cfg["sweeper"]["storage"]
+        storage = "./sweep_logs/" + agent_cfg["sweeper"]["storage"]
         n_warmup_steps = agent_cfg["sweeper"]["warmup_timesteps_M"] * 1e6
         agent_cfg["trainer"]["max_global_timesteps_M"] = max_sweep_timesteps_M
 

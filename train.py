@@ -24,6 +24,8 @@ parser = argparse.ArgumentParser(description="Train an RL agent with skrl.")
 parser.add_argument("--video", action="store_true", default=False, help="Record videos during training.")
 parser.add_argument("--video_length", type=int, default=600, help="Length of the recorded video (in steps).")
 parser.add_argument("--video_interval", type=int, default=500, help="Interval between video recordings (in steps).")
+parser.add_argument("--video_dir", type=str, default=None, help="Interval between video recordings (in steps).")
+
 parser.add_argument("--num_envs", type=int, default=None, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default=None, help="Name of the task.")
 parser.add_argument("--agent_cfg", type=str, default=None, help="Name of the config.")
@@ -93,6 +95,7 @@ if __name__ == "__main__":
     seed = args_cli.seed if args_cli.seed is not None else agent_cfg["seed"]
     agent_cfg["log_path"] = LOG_PATH
     args_cli.video = agent_cfg["experiment"]["upload_videos"]
+    agent_cfg["experiment"]["video_dir"] = args_cli.video_dir
 
     # Update the environment config
     writer = Writer(agent_cfg)

@@ -245,9 +245,11 @@ class RotoEnv(DirectRLEnv):
         self.normalised_joint_pos[env_ids] = unscale(
             self.joint_pos[env_ids], self.robot_joint_pos_lower_limits, self.robot_joint_pos_upper_limits
         )
-        self.normalised_joint_vel[env_ids] = unscale(
-            self.joint_vel[env_ids], -self.robot_joint_vel_limits, self.robot_joint_vel_limits
-        )
+        self.normalised_joint_vel[env_ids] = self.joint_vel[env_ids] / 3.0
+
+        # self.normalised_joint_vel[env_ids] = unscale(
+        #     self.joint_vel[env_ids], -self.robot_joint_vel_limits, self.robot_joint_vel_limits
+        # )
 
 
 @torch.jit.script

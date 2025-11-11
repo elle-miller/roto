@@ -80,7 +80,7 @@ def make_env(env_cfg, writer, args_cli, obs_stack=1):
             "video_length": args_cli.video_length,
             "disable_logger": True,
         }
-        print("[INFO] Recording videos during training.")
+        print("[INFO] Recording videos during training to", writer.video_dir)
         env = gym.wrappers.RecordVideo(env, **video_kwargs)
     
     # FrameStack expects a gym env

@@ -37,16 +37,13 @@ class FindEnvCfg(FrankaEnvCfg):
     reset_object_position_noise = 0.1
     object_height_success_threshold = 0.05  # Height threshold for success
 
-    brat = (0.541, 0.808, 0)
-    brat_pink = (0.329, 0.318, 0.914)
-
     object_cfg: RigidObjectCfg = RigidObjectCfg(
         prim_path="/World/envs/env_.*/Object",
         init_state=RigidObjectCfg.InitialStateCfg(pos=default_object_pos, rot=[1, 0, 0, 0]),
-        spawn=sim_utils.CuboidCfg(
-            size=[0.03, 0.03, 0.03],
+        spawn=sim_utils.SphereCfg(
+            radius=0.03,
             physics_material=sim_utils.RigidBodyMaterialCfg(static_friction=1.0, dynamic_friction=0.8, restitution=0.8),
-            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=brat_pink),
+            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.541, 0.808, 0)),
             rigid_props=RigidBodyPropertiesCfg(kinematic_enabled=False),
             mass_props=sim_utils.MassPropertiesCfg(mass=3),
             collision_props=CollisionPropertiesCfg(collision_enabled=True)

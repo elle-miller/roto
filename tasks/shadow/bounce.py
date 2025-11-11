@@ -107,10 +107,14 @@ class BounceEnv(ShadowEnv):
 
         gt = torch.cat(
             (
-                self.object_pos,
-                self.object_rot,
-                self.object_linvel,
-                self.object_angvel,
+                self.object_pos, # 0,1,2
+                self.object_rot, # 3,4,5,6
+                self.object_linvel, # 7,8,9
+                self.object_angvel, # 10,11,12
+                torch.norm(self.object_linvel, dim=1).unsqueeze(-1), # 13
+                torch.norm(self.object_angvel, dim=1).unsqueeze(-1),
+                self.time_without_contact.unsqueeze(-1),
+                self.waiting_for_contact.unsqueeze(-1),
             ),
             dim=-1,
         )

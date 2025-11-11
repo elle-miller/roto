@@ -26,6 +26,7 @@ parent_dir = os.getcwd()
 
 FRANKA_PANDA_CFG = ArticulationCfg(
     spawn=sim_utils.UsdFileCfg(
+        # I used a local copy of the franka urdf/usd but you can also use the Isaac Lab asset
         # usd_path=f"{ISAACLAB_NUCLEUS_DIR}/Robots/FrankaEmika/panda_instanceable.usd",
         usd_path=os.path.join(parent_dir, "assets/franka/franka.usd"),
         activate_contact_sensors=True,
