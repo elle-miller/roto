@@ -18,6 +18,8 @@
 
 RoTO is an **open-source Reinforcement Learning benchmark environment** designed to standardise and promote future research in tactile-based manipulation. The environments are designed to cover a wide range of tactile interactions (sparse, intermittent, and sustained).
 
+<img src="images/setup.png" width="1000" border="1"/>
+
 ---
 
 ## 🛠️ Installation
