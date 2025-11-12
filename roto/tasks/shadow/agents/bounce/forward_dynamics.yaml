@@ -1,0 +1,30 @@
+agent:
+  rollouts: 16
+  learning_epochs: 10
+  mini_batches: 8
+  discount_factor: 0.99
+  lambda: 0.9167369953886306
+  learning_rate: 0.00015001490150029674
+  grad_norm_clip: 1.0
+  ratio_clip: 0.285813451249781
+  value_clip: 0.16319265955840695
+  entropy_loss_scale: 0.027920188815108424
+  value_loss_scale: 0.4653909529504796
+  kl_threshold: 0
+
+ssl_task:
+  type: "forward_dynamics"
+  tactile_only: False
+  loss_weight: 0.002120698505861521
+  learning_rate: 1.5325373023586473e-05
+  n_rollouts: 1
+  seq_length: 8
+  learning_epochs_ratio: 1.0
+
+experiment:
+  experiment_name: "forward_dynamics"
+  wandb: 1
+  wandb_kwargs: {
+    "group": "forward_dynamics",
+    "name": "null",
+  }

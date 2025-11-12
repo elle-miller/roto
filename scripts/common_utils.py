@@ -6,16 +6,16 @@ import os
 import random
 import torch
 
-from isaaclab_rl.algorithms.memories import Memory
-from isaaclab_rl.algorithms.policy_value import DeterministicValue, GaussianPolicy
-from isaaclab_rl.algorithms.trainer import Trainer
+from isaaclab_rl.rl.memories import Memory
+from isaaclab_rl.rl.policy_value import DeterministicValue, GaussianPolicy
+from isaaclab_rl.rl.trainer import Trainer
 from isaaclab_rl.models.encoder import Encoder
 from isaaclab_rl.models.running_standard_scaler import RunningStandardScaler
 from isaaclab_rl.wrappers.frame_stack import FrameStack
 from isaaclab_rl.wrappers.isaaclab_wrapper import IsaacLabWrapper
-from isaaclab_rl.auxiliary.reconstruction import Reconstruction
-from isaaclab_rl.auxiliary.dynamics import ForwardDynamics
-from isaaclab_rl.algorithms.ppo import PPO, PPO_DEFAULT_CONFIG
+from isaaclab_rl.ssl.reconstruction import Reconstruction
+from isaaclab_rl.ssl.dynamics import ForwardDynamics
+from isaaclab_rl.rl.ppo import PPO, PPO_DEFAULT_CONFIG
 from isaaclab_rl.tools.writer import Writer
 from isaaclab_tasks.utils.hydra import hydra_task_config, register_task_to_hydra
 from isaaclab.utils import update_dict
@@ -26,7 +26,7 @@ import torch
 from isaaclab.utils import update_dict
 from isaaclab_tasks.utils.parse_cfg import load_cfg_from_registry
 # ADD YOUR ENVS HERE
-from tasks import franka,shadow  # noqa: F401
+from roto.tasks import franka,shadow  # noqa: F401
 
 # change this to something else if you want
 LOG_PATH = os.getcwd()

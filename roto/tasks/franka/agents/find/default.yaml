@@ -1,0 +1,50 @@
+seed: 42
+
+observations:
+  separate: True
+  obs_list: ["prop", "tactile"]
+  obs_stack: 16
+  aux_list: []
+  preprocess:
+    normalise_prop: True
+    binary_tactile: True
+
+encoder:
+  method: "early"
+  hiddens: [1024, 512, 256]
+  activations: ["elu", "elu", "elu"]
+  layernorm: True
+  state_preprocessor: null # RunningStandardScalerDict
+
+policy:
+  clip_log_std: True
+  initial_log_std: 0
+  min_log_std: -20.0
+  max_log_std: 2.0
+  hiddens: [128, 64]
+  activations: ["elu", "elu", "tanh"]
+  
+value:
+  hiddens: [128, 64]
+  activations: ["elu", "elu", "identity"]
+
+experiment:
+  directory: "franka_find"
+  debug: 0
+  upload_videos: 0 
+  save_checkpoints: 0
+  tb_log: 0
+  wandb: 0
+  wandb_kwargs: {
+    "project": "neurips_find",
+    "entity": "my-phd",
+  }
+
+trainer:
+  num_eval_envs: 100
+  max_global_timesteps_M: 200
+
+sweeper:
+  storage: "sqlite:///franka_find.db"
+  warmup_timesteps_M: 30
+  max_sweep_timesteps_M: 50

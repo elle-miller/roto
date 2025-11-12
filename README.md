@@ -36,14 +36,17 @@ git clone git@github.com:elle-miller/isaaclab_rl.git
 cd isaaclab_rl
 pip install -e .
 ```
-3. Clone this repository
+3. Install `roto` as a local editable package
 ```
 git clone git@github.com:elle-miller/roto.git
-```
-4. Test the installation by playing a trained agent.
-```
 cd roto
-python play.py --task Baoding --num_envs 4 --agent_cfg memory --checkpoint readme_assets/checkpoints/baoding_memory.pt
+pip install -e .
+```
+4. Test the installation by playing a trained agent in the viewer or saving a video.
+```
+python scripts/play.py --task Baoding --num_envs 128 --agent_cfg memory --checkpoint readme_assets/checkpoints/baoding_memory.pt
+python scripts/play.py --task Baoding --num_envs 4 --agent_cfg memory --video --video_length 1200 --headless --checkpoint readme_assets/checkpoints/baoding_memory.pt
+
 ```
 You can find more trained checkpoints in the [roto_paper_results](https://github.com/elle-miller/roto_paper_results) repository.
 

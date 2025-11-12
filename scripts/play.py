@@ -61,13 +61,13 @@ simulation_app = app_launcher.app
 import torch
 import numpy as np 
 import optuna
-from tasks import franka,shadow  # noqa: F401
+# from roto.tasks import franka,shadow  # noqa: F401
 
 from isaaclab.utils import update_dict
 from isaaclab_tasks.utils.parse_cfg import load_cfg_from_registry
 from isaaclab_tasks.utils.hydra import hydra_task_config, register_task_to_hydra
 import isaaclab_tasks  # noqa: F401
-from isaaclab_rl.algorithms.ppo import PPO, PPO_DEFAULT_CONFIG
+from isaaclab_rl.rl.ppo import PPO, PPO_DEFAULT_CONFIG
 from isaaclab_rl.tools.writer import Writer
 from isaaclab_tasks.utils.hydra import hydra_task_config
 
@@ -141,32 +141,21 @@ def main():
         for name, data in modules.items():
             print(name)
 
-    # get environment (step) dt for real-time evaluation
-    try:
-        dt = env.step_dt
-    except AttributeError:
-        dt = env.unwrapped.step_dt
-
     # reset environment
-    states, infos = env.reset(hard=True)
     timestep = 0
-    real_time = True
 
     ep_length = env.env.unwrapped.max_episode_length - 1
 
     returns = torch.zeros(size=(env.num_envs, 1), device=env.device)
     mask = torch.Tensor([[1] for _ in range(env.num_envs)]).to(env.device)
 
+    states, infos = env.reset(hard=True)
+
     # simulate environment
     while simulation_app.is_running():
-        start_time = time.time()
 
         # run everything in inference mode
         with torch.inference_mode():
-
-            # mask the states
-            # tactile_reading = states["policy"]["tactile"][:].clone()
-            # states["policy"]["tactile"] = torch.zeros_like(tactile_reading).to(env.device)
 
             # agent stepping
             z = encoder(states)
@@ -183,10 +172,9 @@ def main():
             mask *= mask_update
 
             # the eval episodes get manually reset every ep_length
-            if terminated | truncated:
+            if timestep % ep_length == 0:
                 mean_eval_return = returns.mean().item()
                 print("Reset - Max eval return", returns.max().item())
-
                 print("Reset - Mean eval return", mean_eval_return)
                 states, infos = env.reset(hard=True)
 
@@ -210,9 +198,16 @@ def main():
 
 
 if __name__ == "__main__":
-
-
-    main()
+    try:
+        # run the main function
+        main()
+    except Exception as err:
+        print(err)
+        raise
+    finally:
+        # close sim app
+        print("CLOSING")
+        simulation_app.close()
 
 
 

@@ -1,0 +1,48 @@
+seed: 42
+
+observations:
+  obs_list: ["prop", "tactile"]
+  obs_stack: 4
+  preprocess:
+    normalise_prop: True
+    binary_tactile: True
+
+encoder:
+  method: "early"
+  hiddens: [1024, 512, 256]
+  activations: ["elu", "elu", "elu"]
+  layernorm: True
+  state_preprocessor: null
+
+policy:
+  clip_log_std: True
+  initial_log_std: 0
+  min_log_std: -20.0
+  max_log_std: 2.0
+  hiddens: [128, 64]
+  activations: ["elu", "elu", "identity"]
+  
+value:
+  hiddens: [128, 64]
+  activations: ["elu", "elu", "identity"]
+
+experiment:
+  directory: "baoding"
+  debug: 0
+  upload_videos: 0 
+  save_checkpoints: 1
+  tb_log: True
+  wandb: 1
+  wandb_kwargs: {
+    "project": "neurips_baoding",
+    "entity": "my-phd",
+  }
+
+trainer:
+  num_eval_envs: 100
+  max_global_timesteps_M: 250
+
+sweeper:
+  storage: "sqlite:///shadow_baoding.db"
+  warmup_timesteps_M: 100
+  max_sweep_timesteps_M: 150
