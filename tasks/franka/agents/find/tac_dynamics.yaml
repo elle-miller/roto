@@ -12,7 +12,7 @@ agent:
   kl_threshold: 0
   grad_norm_clip: 1.0
 
-auxiliary_task:
+ssl_task:
   type: "forward_dynamics"
   n_rollouts: 1
   tactile_only: True

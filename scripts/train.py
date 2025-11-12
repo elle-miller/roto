@@ -55,7 +55,7 @@ app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
 import isaaclab_tasks  # noqa: F401
-from isaaclab_rl.algorithms.ppo import PPO, PPO_DEFAULT_CONFIG
+from isaaclab_rl.rl.ppo import PPO, PPO_DEFAULT_CONFIG
 from isaaclab_rl.tools.writer import Writer
 from isaaclab_tasks.utils.hydra import hydra_task_config, register_task_to_hydra
 from isaaclab.utils import update_dict

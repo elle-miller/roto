@@ -30,7 +30,7 @@ models:
     hiddens: [128, 64]
     activations: ["elu", "elu", "identity"]
 
-auxiliary_task:
+ssl_task:
   type: null # "forward_dynamics"
   memory_type: "reduced_vanilla" # "vanilla", "reduced_vanilla"
   tactile_only: False

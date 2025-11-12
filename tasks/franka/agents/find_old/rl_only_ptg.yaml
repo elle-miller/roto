@@ -27,7 +27,7 @@ models:
     hiddens: [32, 32]
     activations: ["elu", "elu", "identity"]
 
-  auxiliary_task:
+  ssl_task:
     type: null
     loss_weight: 1
     learning_rate: 1

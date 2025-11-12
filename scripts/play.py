@@ -127,7 +127,7 @@ def main():
         action_space=env.action_space,
         device=env.device,
         writer=writer,
-        auxiliary_task=None,
+        ssl_task=None,
         dtype=dtype,
         debug=agent_cfg["experiment"]["debug"]
     )

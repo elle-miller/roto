@@ -30,7 +30,7 @@ models:
     hiddens: [128, 64]
     activations: ["elu", "elu", "identity"]
 
-  auxiliary_task:
+  ssl_task:
     type: "reconstruction"
     memory_type: "vanilla"
     tactile_only: False

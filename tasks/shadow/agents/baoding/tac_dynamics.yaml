@@ -12,7 +12,7 @@ agent:
   entropy_loss_scale: 0.2551308863496997
   kl_threshold: 0
 
-auxiliary_task:
+ssl_task:
   type: "forward_dynamics"
   n_rollouts: 1
   tactile_only: True

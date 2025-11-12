@@ -12,7 +12,7 @@ agent:
   value_loss_scale: 1.0
   kl_threshold: 0
 
-auxiliary_task:
+ssl_task:
   type: "forward_dynamics"
   tactile_only: True
   loss_weight: 0.701442305058738

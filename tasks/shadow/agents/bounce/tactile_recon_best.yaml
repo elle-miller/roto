@@ -30,7 +30,7 @@ models:
     hiddens: [128, 64]
     activations: ["elu", "elu", "identity"]
 
-auxiliary_task:
+ssl_task:
   type: "reconstruction"
   n_rollouts: 1
   tactile_only: True

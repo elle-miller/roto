@@ -37,20 +37,20 @@ def make_aux(env, rl_memory, encoder, value, value_preprocessor, env_cfg, agent_
 
     # configure auxiliary task
     rl_rollout = agent_cfg["agent"]["rollouts"]
-    if "auxiliary_task" in agent_cfg.keys():
+    if "ssl_task" in agent_cfg.keys():
 
-        match agent_cfg["auxiliary_task"]["type"]:
+        match agent_cfg["ssl_task"]["type"]:
             case "reconstruction":
-                auxiliary_task = Reconstruction(agent_cfg["auxiliary_task"], rl_rollout, rl_memory, encoder, value, value_preprocessor, env, env_cfg, writer)
+                ssl_task = Reconstruction(agent_cfg["ssl_task"], rl_rollout, rl_memory, encoder, value, value_preprocessor, env, env_cfg, writer)
             case "forward_dynamics":
-                auxiliary_task = ForwardDynamics(agent_cfg["auxiliary_task"], rl_rollout, rl_memory, encoder, value, value_preprocessor, env, env_cfg, writer)
+                ssl_task = ForwardDynamics(agent_cfg["ssl_task"], rl_rollout, rl_memory, encoder, value, value_preprocessor, env, env_cfg, writer)
             case _:  # default case
                 print("No auxiliary task")
-                auxiliary_task = None
+                ssl_task = None
 
     else:
-        auxiliary_task = None
-    return auxiliary_task
+        ssl_task = None
+    return ssl_task
 
 def make_env(env_cfg, writer, args_cli, obs_stack=1):
 
@@ -137,7 +137,7 @@ def make_memory(env, env_cfg, size, num_envs):
     return memory
 
 
-def make_trainer(env, agent, agent_cfg, auxiliary_task=None, writer=None):
+def make_trainer(env, agent, agent_cfg, ssl_task=None, writer=None):
 
     num_timesteps_M = agent_cfg["trainer"]["max_global_timesteps_M"]
     num_eval_envs = agent_cfg["trainer"]["num_eval_envs"]
@@ -146,7 +146,7 @@ def make_trainer(env, agent, agent_cfg, auxiliary_task=None, writer=None):
         agents=agent,
         num_timesteps_M=num_timesteps_M,
         num_eval_envs=num_eval_envs,
-        auxiliary_task=auxiliary_task,
+        ssl_task=ssl_task,
         writer=writer,
     )
     return trainer
@@ -197,7 +197,7 @@ def train_one_seed(args_cli, env, agent_cfg=None, env_cfg=None, writer=None, see
     # create tensors in memory for RL stuff [only for the training envs]
     num_training_envs = env_cfg.scene.num_envs - agent_cfg["trainer"]["num_eval_envs"]
     rl_memory = make_memory(env, env_cfg, size=agent_cfg["agent"]["rollouts"], num_envs=num_training_envs)
-    auxiliary_task = make_aux(env, rl_memory, encoder, value, value_preprocessor, env_cfg, agent_cfg, writer)
+    ssl_task = make_aux(env, rl_memory, encoder, value, value_preprocessor, env_cfg, agent_cfg, writer)
 
     # configure and instantiate PPO agent
     ppo_agent_cfg = PPO_DEFAULT_CONFIG.copy()
@@ -213,13 +213,13 @@ def train_one_seed(args_cli, env, agent_cfg=None, env_cfg=None, writer=None, see
         action_space=env.action_space,
         device=env.device,
         writer=writer,
-        auxiliary_task=auxiliary_task,
+        ssl_task=ssl_task,
         dtype=dtype,
         debug=agent_cfg["experiment"]["debug"]
     )
 
     # Let's go!
-    trainer = make_trainer(env, agent, agent_cfg, auxiliary_task, writer)
+    trainer = make_trainer(env, agent, agent_cfg, ssl_task, writer)
     trainer.train()
     print("Training complete!")
 

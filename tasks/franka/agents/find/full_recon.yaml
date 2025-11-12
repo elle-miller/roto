@@ -12,7 +12,7 @@ agent:
   grad_norm_clip: 1.0
   kl_threshold: 0
 
-auxiliary_task:
+ssl_task:
   type: "reconstruction"
   n_rollouts: 1
   tactile_only: False

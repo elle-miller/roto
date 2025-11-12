@@ -49,7 +49,7 @@ from isaaclab_tasks.utils.parse_cfg import load_cfg_from_registry
 from isaaclab_tasks.utils.hydra import hydra_task_config, register_task_to_hydra
 import isaaclab_tasks  # noqa: F401
 
-from isaaclab_rl.algorithms.ppo import PPO, PPO_DEFAULT_CONFIG
+from isaaclab_rl.rl.ppo import PPO, PPO_DEFAULT_CONFIG
 from isaaclab_rl.tools.writer import Writer
 
 from common_utils import (
@@ -129,8 +129,8 @@ class OptimisationRunner:
 
         # PPO hparams
         # memory issues with large rollouts + aux tasks
-        if "auxiliary_task" in agent_cfg:
-            if (agent_cfg["auxiliary_task"]["type"] == "forward_dynamics"):
+        if "ssl_task" in agent_cfg:
+            if (agent_cfg["ssl_task"]["type"] == "forward_dynamics"):
                 rollouts = trial.suggest_categorical("rollouts", [16, 32])
             else:
                 rollouts = trial.suggest_categorical("rollouts", [16,32,64,96])
@@ -160,20 +160,20 @@ class OptimisationRunner:
         # agent_cfg["agent"]["gamma"] = gamma
         # agent_cfg["agent"]["kl_threshold"] = kl_threshold
 
-        if "auxiliary_task" in agent_cfg:
+        if "ssl_task" in agent_cfg:
             learning_rate_aux = trial.suggest_float("learning_rate_aux", low=1e-5, high=1e-3, log=True)
             loss_weight_aux = trial.suggest_float("loss_weight_aux", low=1e-3, high=10, log=True)
             learning_epochs_ratio = trial.suggest_categorical("learning_epochs_ratio", [0.25, 0.5, 0.75, 1.0])
 
-            agent_cfg["auxiliary_task"]["learning_rate"] = learning_rate_aux
-            agent_cfg["auxiliary_task"]["loss_weight"] = loss_weight_aux
-            agent_cfg["auxiliary_task"]["learning_epochs_ratio"] = learning_epochs_ratio
+            agent_cfg["ssl_task"]["learning_rate"] = learning_rate_aux
+            agent_cfg["ssl_task"]["loss_weight"] = loss_weight_aux
+            agent_cfg["ssl_task"]["learning_epochs_ratio"] = learning_epochs_ratio
 
-            if agent_cfg["auxiliary_task"]["type"] == "forward_dynamics":
+            if agent_cfg["ssl_task"]["type"] == "forward_dynamics":
                 # it can take quite long, cap at8
                 seq_length = trial.suggest_int("seq_length", low=2, high=8, step=1)
                 seq_length = min(seq_length, 7)
-                agent_cfg["auxiliary_task"]["seq_length"] = seq_length
+                agent_cfg["ssl_task"]["seq_length"] = seq_length
 
         # setup models
         policy, value, encoder, value_preprocessor = make_models(env, env_cfg, agent_cfg, dtype)
@@ -181,7 +181,7 @@ class OptimisationRunner:
         # create tensors in memory for RL stuff [only for the training envs]
         num_training_envs = env_cfg.scene.num_envs - agent_cfg["trainer"]["num_eval_envs"]
         rl_memory = make_memory(env, env_cfg, size=agent_cfg["agent"]["rollouts"], num_envs=num_training_envs)
-        auxiliary_task = make_aux(env, rl_memory, encoder, value, value_preprocessor, env_cfg, agent_cfg, writer)
+        ssl_task = make_aux(env, rl_memory, encoder, value, value_preprocessor, env_cfg, agent_cfg, writer)
 
         # restart wandb
         writer.close_wandb()
@@ -201,13 +201,13 @@ class OptimisationRunner:
             action_space=env.action_space,
             device=env.device,
             writer=writer,
-            auxiliary_task=auxiliary_task,
+            ssl_task=ssl_task,
             dtype=dtype,
             debug=agent_cfg["experiment"]["debug"]
         )
 
         # Let's go!
-        trainer = make_trainer(env, agent, agent_cfg, auxiliary_task, writer)
+        trainer = make_trainer(env, agent, agent_cfg, ssl_task, writer)
 
         try:
             best_return, should_prune = trainer.train(trial=trial)
@@ -286,13 +286,13 @@ if __name__ == "__main__":
         agent_cfg["agent"]["ratio_clip"] = best_trial.params["ratio_clip"]
         agent_cfg["agent"]["lambda"] = best_trial.params["gae_lambda"]
 
-        if "auxiliary_task" in agent_cfg:
-            agent_cfg["auxiliary_task"]["learning_rate"] = best_trial.params["learning_rate_aux"]
-            agent_cfg["auxiliary_task"]["loss_weight"] = best_trial.params["loss_weight_aux"]
-            agent_cfg["auxiliary_task"]["learning_epochs_ratio"] = best_trial.params["learning_epochs_ratio"]
+        if "ssl_task" in agent_cfg:
+            agent_cfg["ssl_task"]["learning_rate"] = best_trial.params["learning_rate_aux"]
+            agent_cfg["ssl_task"]["loss_weight"] = best_trial.params["loss_weight_aux"]
+            agent_cfg["ssl_task"]["learning_epochs_ratio"] = best_trial.params["learning_epochs_ratio"]
 
-            if agent_cfg["auxiliary_task"]["type"] == "forward_dynamics":
-                agent_cfg["auxiliary_task"]["seq_length"] = best_trial.params["seq_length"]
+            if agent_cfg["ssl_task"]["type"] == "forward_dynamics":
+                agent_cfg["ssl_task"]["seq_length"] = best_trial.params["seq_length"]
 
     # seeds
     agent_cfg["experiment"]["experiment_name"] = args_cli.task + "_" + args_cli.agent_cfg + "_" + "seeded"
