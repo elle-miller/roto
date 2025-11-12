@@ -1,15 +1,16 @@
 # RoTO: Robot Tactile Olympiad
-RoTO is a **reinforcement learning benchmark environment** designed to standardise and promote future research in tactile-based manipulation. The environments are designed to cover a wide range of tactile interactions (sparse=Find, intermittent=Bounce, and sustained=Baoding). We will continue to add more environments and strongly welcome contributions 🤗
+RoTO is a **reinforcement learning benchmark environment** designed to standardise and promote future research in tactile-based manipulation. It is introduced in detail in [Enhancing Tactile-based RL for Robotic Control](https://elle-miller.github.io/tactile_rl/) (NeurIPS 2025).  The environments are designed to cover a wide range of tactile interactions: sparse (Find), intermittent (Bounce), and sustained (Baoding). We will continue to add more environments and strongly welcome contributions 🤗
 
-<div style="text-align: center;">
-    <img src="readme_assets/images/roto.png" width="400" border="1"/>
-</div>
+<img src="readme_assets/images/roto.png" 
+     width="400" 
+     border="1"
+     style="display: block; margin: 0 auto;"/>
 
 ## ✨ Overview
 
 <img src="readme_assets/images/setup.png" width="1000" border="1"/>
 
-RoTO is introduced in [Enhancing Tactile-based RL for Robotic Control](https://elle-miller.github.io/tactile_rl/) (NeurIPS 2025). We split the paper code across two repositories. Imagine the typical RL loop: you can think of `isaaclab_rl` as the agent, and `roto` as the environment. We did this for modularity, in case you want to use your own RL repository instead of ours (there will be some integration to achieve this but happy to help).
+We split the paper code across two repositories. Imagine the typical RL loop: you can think of `isaaclab_rl` as the agent, and `roto` as the environment. We did this for modularity, in case you want to use your own RL repository instead of ours (there will be some integration to achieve this but happy to help).
 
 `isaaclab_rl`: The motto of this repo is _"doing good RL with Isaac Lab as painlessly as possible"_. We started from the [skrl](https://github.com/Toni-SM/skrl) library and made significant changes to better handle multimodal dictionary observations, observation stacking and associated memory management, and integrated self-supervision. Many existing libraries did not provide support for doing robust RL research (correct evaluation metrics, distinct train/evaluation envs, integrated hyperparameter optimisation). These are well established norms in the RL research community, but are not yet consistently present in RL+robotics research, which we want to encourage 🚀
 
