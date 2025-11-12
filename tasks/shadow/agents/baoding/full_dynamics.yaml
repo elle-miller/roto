@@ -22,9 +22,9 @@ auxiliary_task:
   learning_epochs_ratio: 1.0
 
 experiment:
-  experiment_name: "Bounce_full_dynamics_seeded"
+  experiment_name: "Bounce_forward_dynamics_seeded"
   wandb: 1
   wandb_kwargs: {
-    "group": "Bounce_full_dynamics_seeded",
+    "group": "Bounce_forward_dynamics_seeded",
     "name": "1",
   }

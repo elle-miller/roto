@@ -28,7 +28,7 @@ pt_file = "rl_only_pt.yaml"
 ptg_file = "rl_only_ptg.yaml"
 full_recon_file = "full_recon.yaml"
 tactile_recon_file = "tac_recon.yaml"
-full_dynamics_file = "full_dynamics.yaml"
+forward_dynamics_file = "forward_dynamics.yaml"
 tactile_dynamics_file = "tac_dynamics.yaml"
 
 default_cfg = os.path.join(agents_dir, "find", "default.yaml")
@@ -37,7 +37,7 @@ find_rl_only_pt = os.path.join(agents_dir, "find", pt_file)
 find_rl_only_ptg = os.path.join(agents_dir, "find", ptg_file)
 find_tactile_recon = os.path.join(agents_dir, "find", tactile_recon_file)
 find_full_recon = os.path.join(agents_dir, "find", full_recon_file)
-find_full_dynamics = os.path.join(agents_dir, "find", full_dynamics_file)
+find_forward_dynamics = os.path.join(agents_dir, "find", forward_dynamics_file)
 find_tactile_dynamics = os.path.join(agents_dir, "find", tactile_dynamics_file)
 
 gym.register(
@@ -50,7 +50,7 @@ gym.register(
         "rl_only_pt": find_rl_only_pt,
         "tac_recon": find_tactile_recon,
         "full_recon": find_full_recon,
-        "full_dynamics": find_full_dynamics,
+        "forward_dynamics": find_forward_dynamics,
         "tac_dynamics": find_tactile_dynamics,
     },
     disable_env_checker=True,

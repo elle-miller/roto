@@ -25,7 +25,7 @@ pt_file = "rl_only_pt.yaml"
 ptg_file = "rl_only_ptg.yaml"
 full_recon_file = "full_recon.yaml"
 tactile_recon_file = "tac_recon.yaml"
-full_dynamics_file = "full_dynamics.yaml"
+forward_dynamics_file = "forward_dynamics.yaml"
 tactile_dynamics_file = "tac_dynamics.yaml"
 
 bounce_default_cfg = os.path.join(agents_dir, "bounce", "default.yaml")
@@ -34,7 +34,7 @@ bounce_rl_only_pt = os.path.join(agents_dir, "bounce", pt_file)
 bounce_rl_only_ptg = os.path.join(agents_dir, "bounce", ptg_file)
 bounce_tactile_recon = os.path.join(agents_dir, "bounce", tactile_recon_file)
 bounce_full_recon = os.path.join(agents_dir, "bounce", full_recon_file)
-bounce_full_dynamics = os.path.join(agents_dir, "bounce", full_dynamics_file)
+bounce_forward_dynamics = os.path.join(agents_dir, "bounce", forward_dynamics_file)
 bounce_tactile_dynamics = os.path.join(agents_dir, "bounce", tactile_dynamics_file)
 
 baoding_default_cfg = os.path.join(agents_dir, "baoding", "default.yaml")
@@ -43,7 +43,7 @@ baoding_rl_only_pt = os.path.join(agents_dir, "baoding", pt_file)
 baoding_rl_only_ptg = os.path.join(agents_dir, "baoding", ptg_file)
 baoding_tactile_recon = os.path.join(agents_dir, "baoding", tactile_recon_file)
 baoding_full_recon = os.path.join(agents_dir, "baoding", full_recon_file)
-baoding_full_dynamics = os.path.join(agents_dir, "baoding", full_dynamics_file)
+baoding_forward_dynamics = os.path.join(agents_dir, "baoding", forward_dynamics_file)
 baoding_tactile_dynamics = os.path.join(agents_dir, "baoding", tactile_dynamics_file)
 
 
@@ -58,7 +58,7 @@ gym.register(
         "rl_only_pt": bounce_rl_only_pt,
         "tac_recon": bounce_tactile_recon,
         "full_recon": bounce_full_recon,
-        "full_dynamics": bounce_full_dynamics,
+        "forward_dynamics": bounce_forward_dynamics,
         "tac_dynamics": bounce_tactile_dynamics,
     },
 )
@@ -74,7 +74,7 @@ gym.register(
         "rl_only_pt": baoding_rl_only_pt,
         "tac_recon": baoding_tactile_recon,
         "full_recon": baoding_full_recon,
-        "full_dynamics": baoding_full_dynamics,
+        "forward_dynamics": baoding_forward_dynamics,
         "tac_dynamics": baoding_tactile_dynamics,
     }
 )

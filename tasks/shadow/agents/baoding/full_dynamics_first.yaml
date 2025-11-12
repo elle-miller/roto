@@ -22,9 +22,9 @@ auxiliary_task:
   learning_epochs_ratio: 0.25
 
 experiment:
-  experiment_name: "full_dynamics"
+  experiment_name: "forward_dynamics"
   wandb: 1
   wandb_kwargs: {
-    "group": "full_dynamics",
+    "group": "forward_dynamics",
     "name": "1",
   }

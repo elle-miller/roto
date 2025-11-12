@@ -21,11 +21,11 @@ auxiliary_task:
   seq_length: 4
 
 experiment:
-  experiment_name: "full_dynamics"
+  experiment_name: "forward_dynamics"
   save_checkpoints: 1
   tb_log: 1
   wandb: 1
   wandb_kwargs: {
-    "group": "full_dynamics",
+    "group": "forward_dynamics",
     "name": "test",
   }

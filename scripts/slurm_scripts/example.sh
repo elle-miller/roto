@@ -13,4 +13,4 @@
 eval "$(conda shell.bash hook)"
 conda activate env_isaaclab
 
-python sweep.py --task Baoding --num_envs 4196 --headless --seed 1234 --agent_cfg full_dynamics --study baoding_sweep
+python sweep.py --task Baoding --num_envs 4196 --headless --seed 1234 --agent_cfg forward_dynamics --study baoding_sweep
