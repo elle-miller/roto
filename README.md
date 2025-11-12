@@ -17,6 +17,16 @@ We split the paper code across two repositories. Imagine the typical RL loop: yo
 `roto`: This repo just contains the robot configurations and task definitions. We take advantage of class inheritance to heavily reduce repeated code. `RotoEnv` is a child of `DirectRLEnv`, and sets up basic functions to perform joint position control of a robot and reset it. `[Robot]Env` is a child of `RotoEnv`, defining robot-specific functions that do not change task-to-task, e.g. the proprioceptive observation key. Finally, `[Task]Env` defines task-specific functions such as setting up the environment, rewards, and episode resets.
 
 
+## 🤖 Environments
+
+The agents are all joint position controlled. Franka has 9 joints, Shadow has 20 actuated joints.
+
+| Environment | Description | Observations | Rewards | Resets |
+| :---: | :--- | :--- | :--- | :--- |
+| <img src="readme_assets/images/find.png" alt="Find Environment" width="300px"> | The agent must locate a fixed ball on a plate as quickly as possible. | Proprioception + 2 binary contacts | Distance reward from end-effector to ball | Timestep limit |
+| <img src="readme_assets/images/bounce.png" alt="Bounce Environment" width="300px"> | The agent must bounce a ball as many times as possible within 10s. | Proprioception + 17 binary contacts | Small airtime reward + bounce bonus | Timestep limit, ball falls |
+| <img src="readme_assets/images/baoding.png" alt="Baoding Environment" width="300px"> | The agent must rotate two small balls around each other without letting them  drop. | Proprioception + 17 binary contacts | Small distance reward to ball target + successful rotation bonus | Timestep limit, ball falls |
+
 ## 🛠️ Installation
 
 1. Install Isaac Lab (recommend [pip installation](https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/isaaclab_pip_installation.html#))
