@@ -42,12 +42,18 @@ git clone git@github.com:elle-miller/roto.git
 cd roto
 pip install -e .
 ```
-4. Test the installation by playing a trained agent in the viewer or saving a video.
+4. Test the installation by playing a trained agent in the viewer or saving a video. Note that the viewer playback is much slower than real-time.
 ```
-python scripts/play.py --task Baoding --num_envs 128 --agent_cfg memory --checkpoint readme_assets/checkpoints/baoding_memory.pt
-python scripts/play.py --task Baoding --num_envs 4 --agent_cfg memory --video --video_length 1200 --headless --checkpoint readme_assets/checkpoints/baoding_memory.pt
+python scripts/play.py --task Baoding --num_envs 512 --agent_cfg memory --checkpoint readme_assets/checkpoints/baoding_memory.pt
+python scripts/play.py --task Baoding --num_envs 512 --agent_cfg memory --video --video_length 1200 --headless --checkpoint readme_assets/checkpoints/baoding_memory.pt
+```
+The video should pop up in a `./videos` folder and look like this:
 
-```
+<img src="readme_assets/baoding_memory.gif" 
+     width="400" 
+     border="1"
+     style="display: block; margin: 0 auto;"/>
+
 You can find more trained checkpoints in the [roto_paper_results](https://github.com/elle-miller/roto_paper_results) repository.
 
 
