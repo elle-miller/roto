@@ -147,7 +147,7 @@ If you use this benchmark environment in your academic or professional research,
 @inproceedings{miller2025tactilerl,
   author    = {Miller, Elle and McInroe, Trevor and Abel, David and Mac Aodha, Oisin and Vijayakumar, Sethu},
   title     = {Enhancing Tactile-based Reinforcement Learning for Robotic Control},
-  journal   = {NeurIPS},
+  booktitle = {NeurIPS},
   year      = {2025},
 }
 ```
