@@ -221,14 +221,22 @@ class BaodingEnv(ShadowEnv):
 
     def _get_gt(self):
 
+        # self.body_info[:, :, 0:3] = self.robot.link_pos
+        # self.body_info[:, :, 3:7] = self.robot.link_rot
+        # self.body_info[:, :, 7:10] = self.robot.link_linvel
+        # self.body_info[:, :, 10:13] = self.robot.link_angvel
+
         gt = torch.cat(
             (
                 # ball
                 self.ball_1_pos,
                 self.ball_2_pos,
-                self.ball_1_linvel.unsqueeze(1),
-                self.ball_2_linvel.unsqueeze(1),
+                self.ball_1.data.root_lin_vel_w,
+                self.ball_2.data.root_lin_vel_w,
+                self.ball_1.data.root_ang_vel_w,
+                self.ball_2.data.root_ang_vel_w,
                 self.ball_dist.unsqueeze(1),
+
             ),
             dim=-1,
         )

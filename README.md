@@ -82,37 +82,26 @@ gym.register(
 ### Training
 Here is how you would train a Find agent just with RL, a Bounce agent with RL + Tactile Reconstruction, and a Baoding agent with RL + Forward Dynamics.
 ```
-python train.py --task Find --num_envs 4196 --headless --seed 1234 --agent_cfg rl_only_pt
-python train.py --task Bounce --num_envs 4196 --headless --seed 1234 --agent_cfg tac_recon
-python train.py --task Baoding --num_envs 4196 --headless --seed 1234 --agent_cfg forward_dynamics
+python scripts/train.py --task Find --num_envs 4196 --headless --seed 1234 --agent_cfg rl_only_pt
+python scripts/train.py --task Bounce --num_envs 4196 --headless --seed 1234 --agent_cfg tac_recon
+python scripts/train.py --task Baoding --num_envs 4196 --headless --seed 1234 --agent_cfg forward_dynamics
 ```
 
 ### Sweeping
 We use `opunta` for integrated hyperparameter optimisation. The command is the same as for `train.py`, but with an additional `--study` name argument. You can specify the pruner, number of trials, number of warm up steps etc. I recommend [this blogpost](https://araffin.github.io/post/hyperparam-tuning/)  if you are new to sweeping :)
 ```
-python sweep.py --task Find --num_envs 4196 --headless --seed 1234 --agent_cfg rl_only_pt --study find_rl_only_pt
-python sweep.py --task Bounce --num_envs 4196 --headless --seed 1234 --agent_cfg tac_recon --study bounce_tac_recon
-python sweep.py --task Baoding --num_envs 4196 --headless --seed 1234 --agent_cfg forward_dynamics --study baoding_forward_dynamics
+python scripts/sweep.py --task Find --num_envs 4196 --headless --seed 1234 --agent_cfg rl_only_pt --study find_rl_only_pt
+python scripts/sweep.py --task Bounce --num_envs 4196 --headless --seed 1234 --agent_cfg tac_recon --study bounce_tac_recon
+python scripts/sweep.py --task Baoding --num_envs 4196 --headless --seed 1234 --agent_cfg forward_dynamics --study baoding_forward_dynamics
 ```
 
 ### Playing
-To play with the viewer (requires local Isaac Lab installation):
-```
-python play.py --task Bounce --agent_cfg rl_only_pt --num_envs 1 --headless --checkpoint paper_data/checkpoints/bounce_pt.pt
-```
-To generate a video:
-```
-python play.py --task Bounce --agent_cfg rl_only_pt --num_envs 1 --checkpoint paper_data/checkpoints/bounce_pt.pt --video
-```
+See last step in installation.
+
 
 ## 📊 Benchmark Results [in-progress]
 
-Please see the paper. Note that the environments in this repo have been improved since the paper:
-- Removed unnecessary dense rewards (time in air for Bounce, distance rewards for Baoding)
-- Explicitly added joint control errors to the proprioceptive observation
-- Fixed joint velocity normalisation
-
-To run the paper checkpoints in the original environments, please... **TODO**.
+Please see the paper for now.
 
 ## 📁 Data
 
@@ -147,7 +136,7 @@ If you use this benchmark environment in your academic or professional research,
 @inproceedings{miller2025tactilerl,
   author    = {Miller, Elle and McInroe, Trevor and Abel, David and Mac Aodha, Oisin and Vijayakumar, Sethu},
   title     = {Enhancing Tactile-based Reinforcement Learning for Robotic Control},
-  journal   = {NeurIPS},
+  booktitle = {NeurIPS},
   year      = {2025},
 }
 ```

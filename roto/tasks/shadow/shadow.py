@@ -190,9 +190,6 @@ class ShadowEnv(RotoEnv):
             "air_reward": None
         }
 
-        # self.extras["counters"] = {
-        #     "num_rotations": None
-        # }
 
     def _setup_scene(self):
         # add hand, in-hand object, and goal object
