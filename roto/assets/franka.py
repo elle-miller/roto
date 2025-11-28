@@ -1,20 +1,18 @@
+# Franka Emika Panda robot configuration.
+#
 # Copyright (c) 2022-2024, The Isaac Lab Project Developers.
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Configuration for the Franka Emika robots.
-
-The following configurations are available:
-
-* :obj:`FRANKA_PANDA_CFG`: Franka Emika Panda robot with Panda hand
-* :obj:`FRANKA_PANDA_HIGH_PD_CFG`: Franka Emika Panda robot with Panda hand with stiffer PD control
-
-Reference: https://github.com/frankaemika/franka_ros
 """
-##
-# Configuration
-##
+Configuration for the Franka Emika robots.
+
+Available configurations:
+- FRANKA_PANDA_CFG: Franka Panda with Panda hand
+- FRANKA_PANDA_HIGH_PD_CFG: Panda with higher PD gains for stiffer control
+"""  
+
 import os
 
 import isaaclab.sim as sim_utils
@@ -23,11 +21,9 @@ from isaaclab.assets.articulation import ArticulationCfg
 
 parent_dir = os.getcwd()
 
-
 FRANKA_PANDA_CFG = ArticulationCfg(
     spawn=sim_utils.UsdFileCfg(
-        # I used a local copy of the franka urdf/usd but you can also use the Isaac Lab asset
-        # usd_path=f"{ISAACLAB_NUCLEUS_DIR}/Robots/FrankaEmika/panda_instanceable.usd",
+        # Local USD used by default; update to ISAACLAB_NUCLEUS_DIR if desired.
         usd_path=os.path.join(parent_dir, "roto/assets/franka/franka.usd"),
         activate_contact_sensors=True,
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
@@ -35,7 +31,9 @@ FRANKA_PANDA_CFG = ArticulationCfg(
             max_depenetration_velocity=5.0,
         ),
         articulation_props=sim_utils.ArticulationRootPropertiesCfg(
-            enabled_self_collisions=True, solver_position_iteration_count=8, solver_velocity_iteration_count=0
+            enabled_self_collisions=True,
+            solver_position_iteration_count=8,
+            solver_velocity_iteration_count=0,
         ),
         # collision_props=sim_utils.CollisionPropertiesCfg(contact_offset=0.005, rest_offset=0.0),
     ),
@@ -76,16 +74,15 @@ FRANKA_PANDA_CFG = ArticulationCfg(
     },
     soft_joint_pos_limit_factor=1.0,
 )
-"""Configuration of Franka Emika Panda robot."""
-
-
+"""
+Configuration of Franka Emika Panda robot.
+"""  
 FRANKA_PANDA_HIGH_PD_CFG = FRANKA_PANDA_CFG.copy()
 FRANKA_PANDA_HIGH_PD_CFG.spawn.rigid_props.disable_gravity = True
 FRANKA_PANDA_HIGH_PD_CFG.actuators["panda_shoulder"].stiffness = 400.0
 FRANKA_PANDA_HIGH_PD_CFG.actuators["panda_shoulder"].damping = 80.0
 FRANKA_PANDA_HIGH_PD_CFG.actuators["panda_forearm"].stiffness = 400.0
 FRANKA_PANDA_HIGH_PD_CFG.actuators["panda_forearm"].damping = 80.0
-"""Configuration of Franka Emika Panda robot with stiffer PD control.
-
-This configuration is useful for task-space control using differential IK.
+"""
+High-PD variant of the Franka Panda configuration.
 """

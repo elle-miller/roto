@@ -1,29 +1,22 @@
-# Copyright (c) 2022-2025, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
+# Configuration for the dexterous hand from Shadow Robot.
+#
+# Copyright (c) 2022-2025, The Isaac Lab Project Developers.
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Configuration for the dexterous hand from Shadow Robot.
-
-The following configurations are available:
-
-* :obj:`SHADOW_HAND_CFG`: Shadow Hand with implicit actuator model.
-
-Reference:
-
-* https://www.shadowrobot.com/dexterous-hand-series/
-
 """
+Shadow Hand articulation configuration.
 
+Provides SHADOW_HAND_CFG as an ArticulationCfg preconfigured for the Shadow
+Robot hand. The configuration enables contact sensors, sets material and
+drive properties, and configures actuators for the fingers.
+"""  
 
 import isaaclab.sim as sim_utils
 from isaaclab.actuators.actuator_cfg import ImplicitActuatorCfg
 from isaaclab.assets.articulation import ArticulationCfg
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
-
-##
-# Configuration
-##
 
 SHADOW_HAND_CFG = ArticulationCfg(
     spawn=sim_utils.UsdFileCfg(
@@ -52,7 +45,12 @@ SHADOW_HAND_CFG = ArticulationCfg(
     ),
     actuators={
         "fingers": ImplicitActuatorCfg(
-            joint_names_expr=["robot0_WR.*", "robot0_(FF|MF|RF|LF|TH)J(3|2|1)", "robot0_(LF|TH)J4", "robot0_THJ0"],
+            joint_names_expr=[
+                "robot0_WR.*",
+                "robot0_(FF|MF|RF|LF|TH)J(3|2|1)",
+                "robot0_(LF|TH)J4",
+                "robot0_THJ0",
+            ],
             effort_limit_sim={
                 "robot0_WRJ1": 4.785,
                 "robot0_WRJ0": 2.175,
@@ -82,4 +80,6 @@ SHADOW_HAND_CFG = ArticulationCfg(
     },
     soft_joint_pos_limit_factor=1.0,
 )
-"""Configuration of Shadow Hand robot."""
+"""
+Configuration of Shadow Hand robot.
+"""
