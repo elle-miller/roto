@@ -16,7 +16,7 @@ agent:
 
 ssl_task:
   type: forward_dynamics
-  n_rollouts: 1
+  n_rollouts: 4
   tactile_only: false
   loss_weight: 0.025075893990136915
   learning_rate: 0.00025205565044316406

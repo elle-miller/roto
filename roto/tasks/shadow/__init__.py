@@ -13,13 +13,18 @@ from . import agents, baoding, bounce
 
 _VARIANT_FILES = {
     "default_cfg": "default.yaml",
+    # proprioception only
     "rl_only_p": "rl_only_p.yaml",
+    # proprioception + tactile
     "rl_only_pt": "rl_only_pt.yaml",
+    # proprioception + tactile + depth
+    "rl_only_ptd": "rl_only_ptd.yaml",
     "rl_only_ptg": "rl_only_ptg.yaml",
     "tac_recon": "tac_recon.yaml",
     "full_recon": "full_recon.yaml",
     "forward_dynamics": "forward_dynamics.yaml",
     "tac_dynamics": "tac_dynamics.yaml",
+    "memory": "memory.yaml",
 }
 
 _AGENTS_DIR = os.path.dirname(agents.__file__)
