@@ -28,15 +28,15 @@ The agents are all joint position controlled. Franka has 9 joints, Shadow has 20
 | <img src="readme_assets/images/baoding.png" alt="Baoding Environment" width="400px"> | The agent must rotate two small balls around each other without letting them  drop. | Proprioception + 17 binary contacts | Small distance reward to ball target + successful rotation bonus | Timestep limit, ball falls |
 
 <img src="readme_assets/rgb.gif" 
-     width="300" 
+     width="200" 
      border="1"
      style="display: block; margin: 0 auto;"/>
 <img src="readme_assets/rgb_normalise.gif" 
-     width="300" 
+     width="200" 
      border="1"
      style="display: block; margin: 0 auto;"/>
 <img src="readme_assets/depth.gif" 
-     width="300" 
+     width="200" 
      border="1"
      style="display: block; margin: 0 auto;"/>
 
