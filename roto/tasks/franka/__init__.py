@@ -4,9 +4,8 @@
 # SPDX-License-Identifier: BSD-3-Clause
 """Register Franka gym environments and expose agent configs."""
 
-import os
-
 import gymnasium as gym
+import os
 
 from . import agents, find
 

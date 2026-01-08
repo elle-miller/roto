@@ -40,7 +40,6 @@ from isaaclab.markers.config import FRAME_MARKER_CFG  # isort: skip
 from roto.assets.franka import FRANKA_PANDA_CFG  # isort: skip
 
 
-
 @configclass
 class FrankaEnvCfg(RotoEnvCfg):
     """

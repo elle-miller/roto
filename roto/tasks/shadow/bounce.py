@@ -7,9 +7,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-
 import torch
+from collections.abc import Sequence
 
 import isaaclab.sim as sim_utils
 from isaaclab.assets import RigidObject, RigidObjectCfg
@@ -59,8 +58,10 @@ class BounceCfg(ShadowEnvCfg):
         ),
     )
 
+
 class BounceEnv(ShadowEnv):
     """Bounce a sphere using the Shadow hand and binary tactile signals."""
+
     cfg: BounceCfg
 
     def __init__(self, cfg: BounceCfg, render_mode: str | None = None, **kwargs):

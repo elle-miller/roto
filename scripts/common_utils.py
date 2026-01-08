@@ -81,12 +81,7 @@ def make_env(agent_cfg, env_cfg, writer, args_cli):
                 dtype=np.uint8,
             )
         else:
-            gym_dict[k] = gym.spaces.Box(
-                low=-np.inf, 
-                high=np.inf, 
-                shape=obs_shape[1:], 
-                dtype=np.float32
-            )
+            gym_dict[k] = gym.spaces.Box(low=-np.inf, high=np.inf, shape=obs_shape[1:], dtype=np.float32)
 
     single_obs_space = gym.spaces.Dict()
     single_obs_space["policy"] = gym.spaces.Dict(gym_dict)

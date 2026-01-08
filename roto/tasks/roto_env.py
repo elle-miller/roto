@@ -8,7 +8,7 @@ Author: Elle Miller 2025
 
 Basic robot parent environment for IsaacLab RL tasks. See README.md for more details.
 
-This environment is used to define the basic robot control and observation logic for the RoTO tasks.    
+This environment is used to define the basic robot control and observation logic for the RoTO tasks.
 
 It is a child of `DirectRLEnv`, which is a base environment for Isaac Lab RL tasks.
 
@@ -220,6 +220,7 @@ class RotoEnv(DirectRLEnv):
         # self.normalised_joint_vel[env_ids] = unscale(
         #     self.joint_vel[env_ids], -self.robot_joint_vel_limits, self.robot_joint_vel_limits
         # )
+
 
 @torch.jit.script
 def scale(x, lower, upper):

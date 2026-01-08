@@ -27,6 +27,20 @@ The agents are all joint position controlled. Franka has 9 joints, Shadow has 20
 | <img src="readme_assets/images/bounce.png" alt="Bounce Environment" width="400px"> | The agent must bounce a ball as many times as possible within 10s. | Proprioception + 17 binary contacts | Small airtime reward + bounce bonus | Timestep limit, ball falls |
 | <img src="readme_assets/images/baoding.png" alt="Baoding Environment" width="400px"> | The agent must rotate two small balls around each other without letting them  drop. | Proprioception + 17 binary contacts | Small distance reward to ball target + successful rotation bonus | Timestep limit, ball falls |
 
+## Observations
+
+We use dictionary-style observations, and categorising into proprioception, tactile, pixels, and gt (ground-truth). The proprioception & tactile methods are fixed per robot, but gt information is task-dependent. 
+
+To specify which observations are used, add the keys to `obs_list` in the agent cfg.
+```
+observations:
+  obs_list:
+  - prop
+  - tactile
+  - gt
+  - pixels
+```
+Here is an example rendering of raw RGB, normalised RGB, and depth of Shadow Baoding agent.
 <img src="readme_assets/rgb.gif" 
      width="200" 
      border="1"

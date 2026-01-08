@@ -6,19 +6,19 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-
 import torch
+from collections.abc import Sequence
 
 import isaaclab.sim as sim_utils
 from isaaclab.assets import RigidObject, RigidObjectCfg
 from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
+from isaaclab.sensors import TiledCamera, TiledCameraCfg
 from isaaclab.sim.schemas.schemas_cfg import CollisionPropertiesCfg
 from isaaclab.utils import configclass
 from isaaclab.utils.math import sample_uniform
-from isaaclab.sensors import TiledCamera, TiledCameraCfg, save_images_to_file
 
 from roto.tasks.shadow.shadow import ShadowEnv, ShadowEnvCfg
+
 
 @configclass
 class BaodingCfg(ShadowEnvCfg):
@@ -125,7 +125,6 @@ class BaodingCfg(ShadowEnvCfg):
     render_cfg = sim_utils.RenderCfg(rendering_mode="quality")
 
 
-
 class BaodingEnv(ShadowEnv):
     cfg: BaodingCfg
 
@@ -181,9 +180,9 @@ class BaodingEnv(ShadowEnv):
         self.update_goal_pos()
 
         eyes = (
-                torch.tensor(self.cfg.eye, dtype=torch.float, device=self.device).repeat((self.num_envs, 1))
-                + self.scene.env_origins
-            )
+            torch.tensor(self.cfg.eye, dtype=torch.float, device=self.device).repeat((self.num_envs, 1))
+            + self.scene.env_origins
+        )
         targets = (
             torch.tensor(self.cfg.target, dtype=torch.float, device=self.device).repeat((self.num_envs, 1))
             + self.scene.env_origins
@@ -211,7 +210,6 @@ class BaodingEnv(ShadowEnv):
             # rep.settings.set_render_rtx_realtime(antialiasing="DLAA")
             self._tiled_camera = TiledCamera(self.cfg.tiled_camera)
             self.scene.sensors["tiled_camera"] = self._tiled_camera
-            
 
     def _get_gt(self) -> torch.Tensor:
         """Return a concatenated tensor of ball poses and velocities."""
@@ -231,7 +229,7 @@ class BaodingEnv(ShadowEnv):
         )
         # print("gt", gt.size())
         return gt
-    
+
     def _get_pixels(self) -> torch.Tensor:
         """Return rendered pixel observations."""
 
@@ -240,25 +238,25 @@ class BaodingEnv(ShadowEnv):
         for data_type in self.pixel_cfg["types"]:
             # Clone the specific buffer
             data = self._tiled_camera.data.output[data_type].clone()
-            
+
             if data_type == "depth":
                 # Fix: Check 'data' instead of undefined 'camera_data'
                 # Also handle both inf and NaN which are common in depth sensors
                 data[torch.isinf(data)] = 0.0
                 data[torch.isnan(data)] = 0.0
-                
+
             elif data_type == "rgb":
                 # Fix: Ensure float conversion before division
-                data = data.float() / 255.0  
+                data = data.float() / 255.0
                 # Mean subtraction (centering)
                 mean_tensor = torch.mean(data, dim=(1, 2), keepdim=True)
                 data -= mean_tensor
 
                 data = 255.0 * data  # Scale back to [0, 255]
                 data = data.to(torch.uint8)
-                
+
             processed_data.append(data)
-        
+
         # Concatenate the processed tensors along the channel dimension (last dim)
         camera_data = torch.cat(processed_data, dim=-1)
 

@@ -5,9 +5,8 @@
 
 """Register Shadow-hand gym environments and expose agent configs."""
 
-import os
-
 import gymnasium as gym
+import os
 
 from . import agents, baoding, bounce
 

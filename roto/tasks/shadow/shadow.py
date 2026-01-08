@@ -8,10 +8,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-
 import numpy as np
 import torch
+from collections.abc import Sequence
 
 import isaaclab.sim as sim_utils
 from isaaclab.assets import Articulation, ArticulationCfg
@@ -26,7 +25,6 @@ from roto.assets.shadow_hand import SHADOW_HAND_CFG
 from roto.tasks.roto_env import RotoEnv, RotoEnvCfg
 
 from isaaclab.markers.config import FRAME_MARKER_CFG  # isort: skip
-
 
 
 @configclass
@@ -117,6 +115,7 @@ class ShadowEnvCfg(RotoEnvCfg):
 
 class ShadowEnv(RotoEnv):
     """Shadow-hand base env providing tactile + proprio pipelines."""
+
     cfg: ShadowEnvCfg
 
     def __init__(self, cfg: ShadowEnvCfg, render_mode: str | None = None, **kwargs):
@@ -156,7 +155,7 @@ class ShadowEnv(RotoEnv):
         spawn_ground_plane(prim_path="/World/ground", cfg=GroundPlaneCfg())
         self.scene.clone_environments(copy_from_source=False)
         self.scene.articulations["robot"] = self.robot
-        
+
         light_cfg = sim_utils.DomeLightCfg(intensity=2000.0, color=(0.75, 0.75, 0.75))
         light_cfg.func("/World/Light", light_cfg)
 

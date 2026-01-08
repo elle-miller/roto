@@ -67,10 +67,6 @@ from isaaclab_rl.tools.writer import Writer
 # from roto.tasks import franka,shadow  # noqa: F401
 
 
-
-
-
-
 def main():
     """Play a skrl agent."""
     # parse configuration
