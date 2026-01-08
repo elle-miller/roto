@@ -178,6 +178,8 @@ class RotoEnv(DirectRLEnv):
                 obs_dict[k] = self._get_gt()
             elif k == "tactile":
                 obs_dict[k] = self._get_tactile()
+            elif k == "pixels":
+                obs_dict[k] = self._get_pixels()
             else:
                 raise ValueError(f"Unknown observation key '{k}'")
 

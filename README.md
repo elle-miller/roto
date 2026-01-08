@@ -27,8 +27,45 @@ The agents are all joint position controlled. Franka has 9 joints, Shadow has 20
 | <img src="readme_assets/images/bounce.png" alt="Bounce Environment" width="400px"> | The agent must bounce a ball as many times as possible within 10s. | Proprioception + 17 binary contacts | Small airtime reward + bounce bonus | Timestep limit, ball falls |
 | <img src="readme_assets/images/baoding.png" alt="Baoding Environment" width="400px"> | The agent must rotate two small balls around each other without letting them  drop. | Proprioception + 17 binary contacts | Small distance reward to ball target + successful rotation bonus | Timestep limit, ball falls |
 
+<img src="readme_assets/rgb.gif" 
+     width="200" 
+     border="1"
+     style="display: block; margin: 0 auto;"/>
+<img src="readme_assets/rgb_normalise.gif" 
+     width="200" 
+     border="1"
+     style="display: block; margin: 0 auto;"/>
+<img src="readme_assets/depth.gif" 
+     width="200" 
+     border="1"
+     style="display: block; margin: 0 auto;"/>
+
 ## 🛠️ Installation
 
+We need Isaac Sim, Isaac Lab, RL, and RoTO. We recommend using the latest Isaac Sim for maximum performance. The easiest route (imo) is to install both Isaac Sim and Isaac Lab as pip packages:
+
+
+```
+# 1. create conda env and install torch
+conda create -n isaaclab python=3.11
+conda activate isaaclab
+pip install --upgrade pip
+pip install -U torch==2.7.0 torchvision==0.22.0 --index-url https://download.pytorch.org/whl/cu128
+
+# 2. install isaac lab and isaac sim as pip packages
+pip install isaaclab[isaacsim,all]==2.3.0 --extra-index-url https://pypi.nvidia.com
+
+# 3. install isaaclab_rl as local editable package
+git clone git@github.com:elle-miller/isaaclab_rl.git
+cd isaaclab_rl
+pip install -e .
+# verify installation with isaacsim
+
+# 4. install roto as local editable package
+git clone git@github.com:elle-miller/roto.git
+cd roto
+pip install -e .
+```
 1. Install Isaac Lab (recommend [pip installation](https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/isaaclab_pip_installation.html#))
 2. Install [isaaclab_rl](https://github.com/elle-miller/isaaclab_rl) as a local editable package
 ```

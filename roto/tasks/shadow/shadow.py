@@ -37,7 +37,7 @@ class ShadowEnvCfg(RotoEnvCfg):
     lookat = (2, -2, 0.5)
     viewer: ViewerCfg = ViewerCfg(eye=eye, lookat=lookat, resolution=(1920, 1080))
 
-    scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=4096, env_spacing=0.6, replicate_physics=True)
+    scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=4096, env_spacing=2, replicate_physics=True)
 
     episode_length_s = 10.0
     num_actions = 20
@@ -156,19 +156,21 @@ class ShadowEnv(RotoEnv):
         spawn_ground_plane(prim_path="/World/ground", cfg=GroundPlaneCfg())
         self.scene.clone_environments(copy_from_source=False)
         self.scene.articulations["robot"] = self.robot
-
-        colour_1 = (0.4, 0.9882352941176471, 0.011764705882352941)
-        brat_pink = (0.9882352941176471, 0.011764705882352941, 0.7098039215686275)
-        colour_2 = (0.0, 1.0, 1.0)
-        light_cfg = sim_utils.DomeLightCfg(intensity=500.0, color=(0.75, 0.75, 0.75))
+        
+        light_cfg = sim_utils.DomeLightCfg(intensity=2000.0, color=(0.75, 0.75, 0.75))
         light_cfg.func("/World/Light", light_cfg)
-        light_cfg_1 = sim_utils.SphereLightCfg(intensity=20000.0, color=brat_pink)
+
+        # cool disco lights
+        pink = (0.9882352941176471, 0.011764705882352941, 0.7098039215686275)
+        aqua = (0.0, 1.0, 1.0)
+        disco_intensity = 0
+        light_cfg_1 = sim_utils.SphereLightCfg(intensity=disco_intensity, color=pink)
         light_cfg_1.func("/World/ds", light_cfg_1, translation=(1, 1, 2))
-        light_cfg_2 = sim_utils.SphereLightCfg(intensity=20000.0, color=colour_2)
+        light_cfg_2 = sim_utils.SphereLightCfg(intensity=disco_intensity, color=aqua)
         light_cfg_2.func("/World/disk", light_cfg_2, translation=(-1, 1, 2))
-        light_cfg_3 = sim_utils.SphereLightCfg(intensity=20000.0, color=brat_pink)
+        light_cfg_3 = sim_utils.SphereLightCfg(intensity=disco_intensity, color=pink)
         light_cfg_3.func("/World/ds1", light_cfg_3, translation=(-1, -1, 2))
-        light_cfg_4 = sim_utils.SphereLightCfg(intensity=20000.0, color=colour_2)
+        light_cfg_4 = sim_utils.SphereLightCfg(intensity=disco_intensity, color=aqua)
         light_cfg_4.func("/World/disk2", light_cfg_4, translation=(1, -1, 2))
 
         # if "tactile" in self.cfg.obs_list:

@@ -16,6 +16,7 @@ from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
 from isaaclab.sim.schemas.schemas_cfg import CollisionPropertiesCfg
 from isaaclab.utils import configclass
 from isaaclab.utils.math import sample_uniform
+from isaaclab.sensors import TiledCamera, TiledCameraCfg, save_images_to_file
 
 from roto.tasks.shadow.shadow import ShadowEnv, ShadowEnvCfg
 
@@ -106,6 +107,24 @@ class BaodingCfg(ShadowEnvCfg):
         },
     )
 
+    # camera
+    img_dim = 200
+    eye = (0.0, -0.6, 0.65)
+    target = (0.0, -0.35, 0.5)
+    tiled_camera: TiledCameraCfg = TiledCameraCfg(
+        prim_path="/World/envs/env_.*/Camera",
+        offset=TiledCameraCfg.OffsetCfg(pos=(0.0, 0.0, 0.7), rot=(1.0, 0.0, 0.0, 0.0), convention="world"),
+        data_types=["rgb", "depth"],
+        spawn=sim_utils.PinholeCameraCfg(
+            focal_length=24.0, focus_distance=400.0, horizontal_aperture=20.955, clipping_range=(0.1, 20.0)
+        ),
+        width=img_dim,
+        height=img_dim,
+    )
+
+    render_cfg = sim_utils.RenderCfg(rendering_mode="quality")
+
+
 
 class BaodingEnv(ShadowEnv):
     cfg: BaodingCfg
@@ -161,6 +180,16 @@ class BaodingEnv(ShadowEnv):
         self.ball_goal_idx = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
         self.update_goal_pos()
 
+        eyes = (
+                torch.tensor(self.cfg.eye, dtype=torch.float, device=self.device).repeat((self.num_envs, 1))
+                + self.scene.env_origins
+            )
+        targets = (
+            torch.tensor(self.cfg.target, dtype=torch.float, device=self.device).repeat((self.num_envs, 1))
+            + self.scene.env_origins
+        )
+        self._tiled_camera.set_world_poses_from_view(eyes=eyes, targets=targets)
+
     def _setup_scene(self):
         """Register balls and visualization markers."""
         super()._setup_scene()
@@ -172,6 +201,17 @@ class BaodingEnv(ShadowEnv):
 
         self.target1 = VisualizationMarkers(self.cfg.target1_cfg)
         self.target2 = VisualizationMarkers(self.cfg.target2_cfg)
+
+        if "pixels" in self.cfg.obs_list:
+            print("SETTING UP CAMERA")
+            # from omni.isaac.core.utils.extensions import enable_extension
+
+            # enable_extension("omni.replicator.core")
+            # import omni.replicator.core as rep
+            # rep.settings.set_render_rtx_realtime(antialiasing="DLAA")
+            self._tiled_camera = TiledCamera(self.cfg.tiled_camera)
+            self.scene.sensors["tiled_camera"] = self._tiled_camera
+            
 
     def _get_gt(self) -> torch.Tensor:
         """Return a concatenated tensor of ball poses and velocities."""
@@ -191,6 +231,38 @@ class BaodingEnv(ShadowEnv):
         )
         # print("gt", gt.size())
         return gt
+    
+    def _get_pixels(self) -> torch.Tensor:
+        """Return rendered pixel observations."""
+
+        processed_data = []
+
+        for data_type in self.pixel_cfg["types"]:
+            # Clone the specific buffer
+            data = self._tiled_camera.data.output[data_type].clone()
+            
+            if data_type == "depth":
+                # Fix: Check 'data' instead of undefined 'camera_data'
+                # Also handle both inf and NaN which are common in depth sensors
+                data[torch.isinf(data)] = 0.0
+                data[torch.isnan(data)] = 0.0
+                
+            elif data_type == "rgb":
+                # Fix: Ensure float conversion before division
+                data = data.float() / 255.0  
+                # Mean subtraction (centering)
+                mean_tensor = torch.mean(data, dim=(1, 2), keepdim=True)
+                data -= mean_tensor
+
+                data = 255.0 * data  # Scale back to [0, 255]
+                data = data.to(torch.uint8)
+                
+            processed_data.append(data)
+        
+        # Concatenate the processed tensors along the channel dimension (last dim)
+        camera_data = torch.cat(processed_data, dim=-1)
+
+        return camera_data
 
     def _compute_intermediate_values(self, env_ids=None):
         """Update ball distances, velocities and helper buffers."""

@@ -67,11 +67,12 @@ def main() -> None:
 
     writer = Writer(agent_cfg)
     env_cfg = update_env_cfg(args_cli, env_cfg, agent_cfg)
-    env = make_env(env_cfg, writer, args_cli, agent_cfg["observations"]["obs_stack"])
+    env = make_env(agent_cfg, env_cfg, writer, args_cli)
     train_one_seed(args_cli, env, agent_cfg=agent_cfg, env_cfg=env_cfg, writer=writer, seed=seed)
 
 
 if __name__ == "__main__":
+    main()
     try:
         main()
     except Exception as err:

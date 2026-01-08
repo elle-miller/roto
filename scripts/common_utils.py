@@ -55,16 +55,38 @@ def make_aux(env, rl_memory, encoder, value, value_preprocessor, env_cfg, agent_
     )
 
 
-def make_env(env_cfg, writer, args_cli, obs_stack=1):
+def make_env(agent_cfg, env_cfg, writer, args_cli):
     """Create and wrap the Isaac Lab environment with gym + writer utilities."""
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
+
+    # transfer variables to environment here!
+    env.unwrapped.obs_stack = agent_cfg["observations"]["obs_stack"]
+    env.unwrapped.pixel_cfg = agent_cfg["observations"].get("pixel_cfg", None)
+    env.unwrapped.preprocess_cfg = agent_cfg["observations"].get("preprocess_cfg", None)
 
     obs, _ = env.reset()
 
     gym_dict = {}
     for k, v in obs["policy"].items():
-        obs_shape = v.shape[1] * obs_stack
-        gym_dict[k] = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(obs_shape,))
+        # Convert shape to a list to modify it
+        obs_shape = list(v.shape)
+        # Multiply the last dimension (channels) by the stack size
+        obs_shape[-1] = obs_shape[-1] * env.unwrapped.obs_stack
+        # Pass the list directly; gym converts it to a tuple internally
+        if k == "pixels":
+            gym_dict[k] = gym.spaces.Box(
+                low=0,
+                high=255,
+                shape=obs_shape[1:],
+                dtype=np.uint8,
+            )
+        else:
+            gym_dict[k] = gym.spaces.Box(
+                low=-np.inf, 
+                high=np.inf, 
+                shape=obs_shape[1:], 
+                dtype=np.float32
+            )
 
     single_obs_space = gym.spaces.Dict()
     single_obs_space["policy"] = gym.spaces.Dict(gym_dict)
@@ -72,7 +94,6 @@ def make_env(env_cfg, writer, args_cli, obs_stack=1):
     single_action_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(env_cfg.num_actions,))
     action_space = gym.vector.utils.batch_space(single_action_space, env_cfg.scene.num_envs)
     env.unwrapped.set_spaces(single_obs_space, obs_space, single_action_space, action_space)
-    env.obs_stack = obs_stack
 
     # wrap for video recording
     if args_cli.video:
@@ -87,11 +108,11 @@ def make_env(env_cfg, writer, args_cli, obs_stack=1):
         env = gym.wrappers.RecordVideo(env, **video_kwargs)
 
     # FrameStack expects a gym env
-    if obs_stack > 1:
-        env = FrameStack(env, obs_stack=obs_stack)
+    if env.unwrapped.obs_stack > 1:
+        env = FrameStack(env, obs_stack=env.unwrapped.obs_stack)
 
     # Isaac Lab wrapper
-    env = IsaacLabWrapper(env, env_cfg.num_eval_envs, obs_stack=obs_stack, debug=env_cfg.debug)
+    env = IsaacLabWrapper(env, env_cfg.num_eval_envs, obs_stack=env.unwrapped.obs_stack, debug=env_cfg.debug)
     return env
 
 
@@ -100,7 +121,7 @@ def make_models(env, env_cfg, agent_cfg, dtype):
     observation_space = env.observation_space["policy"]
     action_space = env.action_space
 
-    encoder = Encoder(observation_space, action_space, env_cfg, agent_cfg["encoder"], device=env.device)
+    encoder = Encoder(observation_space, action_space, env_cfg, agent_cfg, device=env.device)
     z_dim = encoder.num_outputs
 
     policy = GaussianPolicy(
@@ -168,10 +189,6 @@ def update_env_cfg(args_cli, env_cfg, agent_cfg):
     env_cfg.obs_list = agent_cfg["observations"]["obs_list"]
     env_cfg.num_eval_envs = agent_cfg["trainer"]["num_eval_envs"]
     env_cfg.obs_stack = agent_cfg["observations"]["obs_stack"]
-
-    # variables that impact how env obs are processed
-    env_cfg.normalise_prop = agent_cfg["observations"]["preprocess"]["normalise_prop"]
-    env_cfg.binary_tactile = agent_cfg["observations"]["preprocess"]["binary_tactile"]
 
     return env_cfg
 
