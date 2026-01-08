@@ -17,15 +17,29 @@ from isaaclab_rl.ssl.reconstruction import Reconstruction
 from isaaclab_rl.wrappers.frame_stack import FrameStack
 from isaaclab_rl.wrappers.isaaclab_wrapper import IsaacLabWrapper
 
-# ADD YOUR ENVS HERE
+# Import task modules to register environments
 from roto.tasks import franka, shadow  # noqa: F401
 
-# change this to something else if you want
+# Logging directory (change this to a custom path if desired)
 LOG_PATH = os.getcwd()
 
 
 def make_aux(env, rl_memory, encoder, value, value_preprocessor, env_cfg, agent_cfg, writer):
-    """Instantiate the optional self-supervised auxiliary task."""
+    """Instantiate the optional self-supervised auxiliary task.
+
+    Args:
+        env: The gymnasium environment.
+        rl_memory: Rollout memory buffer for RL.
+        encoder: Encoder network.
+        value: Value network.
+        value_preprocessor: Value preprocessor.
+        env_cfg: Environment configuration.
+        agent_cfg: Agent configuration dictionary.
+        writer: Writer for logging.
+
+    Returns:
+        SSL task instance or None if no SSL task is configured.
+    """
     ssl_cfg = agent_cfg.get("ssl_task")
     if not ssl_cfg:
         return None
@@ -39,7 +53,6 @@ def make_aux(env, rl_memory, encoder, value, value_preprocessor, env_cfg, agent_
 
     task_cls = task_map.get(task_type)
     if task_cls is None:
-        print("No auxiliary task")
         return None
 
     return task_cls(
@@ -56,23 +69,32 @@ def make_aux(env, rl_memory, encoder, value, value_preprocessor, env_cfg, agent_
 
 
 def make_env(agent_cfg, env_cfg, writer, args_cli):
-    """Create and wrap the Isaac Lab environment with gym + writer utilities."""
+    """Create and wrap the Isaac Lab environment with gym + writer utilities.
+
+    Args:
+        agent_cfg: Agent configuration dictionary.
+        env_cfg: Environment configuration.
+        writer: Writer for logging.
+        args_cli: Command-line arguments.
+
+    Returns:
+        Wrapped gymnasium environment.
+    """
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
 
-    # transfer variables to environment here!
+    # Transfer observation configuration to environment
     env.unwrapped.obs_stack = agent_cfg["observations"]["obs_stack"]
     env.unwrapped.pixel_cfg = agent_cfg["observations"].get("pixel_cfg", None)
     env.unwrapped.preprocess_cfg = agent_cfg["observations"].get("preprocess_cfg", None)
 
     obs, _ = env.reset()
 
+    # Build observation space dictionary accounting for frame stacking
     gym_dict = {}
     for k, v in obs["policy"].items():
-        # Convert shape to a list to modify it
         obs_shape = list(v.shape)
         # Multiply the last dimension (channels) by the stack size
         obs_shape[-1] = obs_shape[-1] * env.unwrapped.obs_stack
-        # Pass the list directly; gym converts it to a tuple internally
         if k == "pixels":
             gym_dict[k] = gym.spaces.Box(
                 low=0,
@@ -90,11 +112,10 @@ def make_env(agent_cfg, env_cfg, writer, args_cli):
     action_space = gym.vector.utils.batch_space(single_action_space, env_cfg.scene.num_envs)
     env.unwrapped.set_spaces(single_obs_space, obs_space, single_action_space, action_space)
 
-    # wrap for video recording
+    # Wrap for video recording
     if args_cli.video:
         video_kwargs = {
             "video_folder": writer.video_dir,
-            # "step_trigger": lambda step: step % args_cli.video_interval == 0,
             "step_trigger": lambda step: step == 0,
             "video_length": args_cli.video_length,
             "disable_logger": True,
@@ -102,17 +123,27 @@ def make_env(agent_cfg, env_cfg, writer, args_cli):
         print("[INFO] Recording videos during training to", writer.video_dir)
         env = gym.wrappers.RecordVideo(env, **video_kwargs)
 
-    # FrameStack expects a gym env
+    # Apply frame stacking if needed
     if env.unwrapped.obs_stack > 1:
         env = FrameStack(env, obs_stack=env.unwrapped.obs_stack)
 
-    # Isaac Lab wrapper
+    # Apply Isaac Lab wrapper
     env = IsaacLabWrapper(env, env_cfg.num_eval_envs, obs_stack=env.unwrapped.obs_stack, debug=env_cfg.debug)
     return env
 
 
 def make_models(env, env_cfg, agent_cfg, dtype):
-    """Build encoder, policy, and value networks."""
+    """Build encoder, policy, and value networks.
+
+    Args:
+        env: The gymnasium environment.
+        env_cfg: Environment configuration.
+        agent_cfg: Agent configuration dictionary.
+        dtype: Data type for tensors.
+
+    Returns:
+        Tuple of (policy, value, encoder, value_preprocessor) networks.
+    """
     observation_space = env.observation_space["policy"]
     action_space = env.action_space
 
@@ -148,7 +179,17 @@ def make_models(env, env_cfg, agent_cfg, dtype):
 
 
 def make_memory(env, env_cfg, size, num_envs):
-    """Allocate rollout storage for PPO."""
+    """Allocate rollout storage for PPO.
+
+    Args:
+        env: The gymnasium environment.
+        env_cfg: Environment configuration.
+        size: Size of the memory buffer (number of rollout steps).
+        num_envs: Number of parallel environments.
+
+    Returns:
+        Memory buffer instance.
+    """
     memory = Memory(
         memory_size=size,
         num_envs=num_envs,
@@ -159,7 +200,18 @@ def make_memory(env, env_cfg, size, num_envs):
 
 
 def make_trainer(env, agent, agent_cfg, ssl_task=None, writer=None):
-    """Return the high-level Trainer wrapper."""
+    """Create the high-level Trainer wrapper.
+
+    Args:
+        env: The gymnasium environment.
+        agent: The RL agent (PPO).
+        agent_cfg: Agent configuration dictionary.
+        ssl_task: Optional self-supervised learning task.
+        writer: Optional writer for logging.
+
+    Returns:
+        Trainer instance.
+    """
     num_timesteps_M = agent_cfg["trainer"]["max_global_timesteps_M"]
     num_eval_envs = agent_cfg["trainer"]["num_eval_envs"]
     trainer = Trainer(
@@ -174,11 +226,20 @@ def make_trainer(env, agent, agent_cfg, ssl_task=None, writer=None):
 
 
 def update_env_cfg(args_cli, env_cfg, agent_cfg):
-    """Sync Isaac Lab config with CLI + agent overrides."""
+    """Sync Isaac Lab config with CLI + agent overrides.
+
+    Args:
+        args_cli: Command-line arguments.
+        env_cfg: Environment configuration to update.
+        agent_cfg: Agent configuration dictionary.
+
+    Returns:
+        Updated environment configuration.
+    """
     env_cfg.seed = agent_cfg["seed"]
     env_cfg.debug = agent_cfg["experiment"]["debug"]
 
-    # override configurations with either config file or args
+    # Override configurations with either config file or CLI args
     env_cfg.scene.num_envs = args_cli.num_envs if args_cli.num_envs is not None else env_cfg.scene.num_envs
     env_cfg.sim.device = args_cli.device if args_cli.device is not None else env_cfg.sim.device
     env_cfg.obs_list = agent_cfg["observations"]["obs_list"]
@@ -199,24 +260,31 @@ def set_seed(seed: int = 42) -> None:
     torch.backends.cudnn.benchmark = False
 
 
-# @hydra_task_config(args_cli.task, "default_cfg")
 def train_one_seed(args_cli, env, agent_cfg=None, env_cfg=None, writer=None, seed=None):
-    """Train the PPO agent for a single seed configuration."""
+    """Train the PPO agent for a single seed configuration.
 
+    Args:
+        args_cli: Command-line arguments.
+        env: The gymnasium environment.
+        agent_cfg: Agent configuration dictionary.
+        env_cfg: Environment configuration.
+        writer: Writer for logging.
+        seed: Random seed for training.
+    """
     dtype = torch.float32
 
     agent_cfg["seed"] = seed
     set_seed(agent_cfg["seed"])
 
-    # setup models
+    # Setup models
     policy, value, encoder, value_preprocessor = make_models(env, env_cfg, agent_cfg, dtype)
 
-    # create tensors in memory for RL stuff [only for the training envs]
+    # Create tensors in memory for RL (only for the training envs, not eval envs)
     num_training_envs = env_cfg.scene.num_envs - agent_cfg["trainer"]["num_eval_envs"]
     rl_memory = make_memory(env, env_cfg, size=agent_cfg["agent"]["rollouts"], num_envs=num_training_envs)
     ssl_task = make_aux(env, rl_memory, encoder, value, value_preprocessor, env_cfg, agent_cfg, writer)
 
-    # configure and instantiate PPO agent
+    # Configure and instantiate PPO agent
     ppo_agent_cfg = PPO_DEFAULT_CONFIG.copy()
     ppo_agent_cfg.update(agent_cfg["agent"])
     agent = PPO(
@@ -235,7 +303,7 @@ def train_one_seed(args_cli, env, agent_cfg=None, env_cfg=None, writer=None, see
         debug=agent_cfg["experiment"]["debug"],
     )
 
-    # Let's go!
+    # Start training
     trainer = make_trainer(env, agent, agent_cfg, ssl_task, writer)
     trainer.train()
     print("Training complete!")

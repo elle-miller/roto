@@ -26,8 +26,8 @@ parent_dir = os.getcwd()
 
 FRANKA_PANDA_CFG = ArticulationCfg(
     spawn=sim_utils.UsdFileCfg(
-        # I used a local copy of the franka urdf/usd but you can also use the Isaac Lab asset
-        # usd_path=f"{ISAACLAB_NUCLEUS_DIR}/Robots/FrankaEmika/panda_instanceable.usd",
+        # Uses a local copy of the Franka USD file
+        # Alternative: usd_path=f"{ISAACLAB_NUCLEUS_DIR}/Robots/FrankaEmika/panda_instanceable.usd"
         usd_path=os.path.join(parent_dir, "roto/assets/franka/franka.usd"),
         activate_contact_sensors=True,
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
@@ -37,7 +37,6 @@ FRANKA_PANDA_CFG = ArticulationCfg(
         articulation_props=sim_utils.ArticulationRootPropertiesCfg(
             enabled_self_collisions=True, solver_position_iteration_count=8, solver_velocity_iteration_count=0
         ),
-        # collision_props=sim_utils.CollisionPropertiesCfg(contact_offset=0.005, rest_offset=0.0),
     ),
     init_state=ArticulationCfg.InitialStateCfg(
         joint_pos={

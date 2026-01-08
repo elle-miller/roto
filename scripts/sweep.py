@@ -3,14 +3,13 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""
-Script to train RL agent with skrl.
+"""Script for hyperparameter sweeping with Optuna.
 
-Visit the skrl documentation (https://skrl.readthedocs.io) to see the examples structured in
-a more user-friendly way.
-"""
+Performs hyperparameter optimization using Optuna and then trains the best configuration
+across multiple seeds.
 
-"""Launch Isaac Sim Simulator first."""
+Note: Launch Isaac Sim Simulator first before running this script.
+"""
 
 
 import argparse
@@ -63,22 +62,22 @@ from isaaclab_rl.tools.writer import Writer
 
 
 class OptimisationRunner:
-    def __init__(self, study_name, n_startup_trials, n_warmup_steps, interval_steps):
+    """Optuna-based hyperparameter optimization runner."""
 
+    def __init__(self, study_name, n_startup_trials, n_warmup_steps, interval_steps):
+        """Initialize the optimization runner.
+
+        Args:
+            study_name: Name of the Optuna study.
+            n_startup_trials: Number of startup trials for the sampler.
+            n_warmup_steps: Number of warmup steps for the pruner.
+            interval_steps: Interval steps for the pruner.
+        """
         self.sampler = optuna.samplers.TPESampler(n_startup_trials=n_startup_trials)
 
         self.pruner = optuna.pruners.MedianPruner(
             n_startup_trials=n_startup_trials, n_warmup_steps=n_warmup_steps, interval_steps=interval_steps
         )
-
-        # n_steps = 200_000_000 / (env_cfg.scene.num_envs - agent_cfg["trainer"]["num_eval_envs"])
-        # n_evals = int(n_steps / 300)
-        # self.pruner=optuna.pruners.HyperbandPruner(
-        #     min_resource=1,
-        #     max_resource=n_evals,
-        #     reduction_factor=3
-        # ),
-        # self.pruner = optuna.pruners.NopPruner()
 
         self.study = optuna.create_study(
             storage=storage,
@@ -90,7 +89,14 @@ class OptimisationRunner:
         )
 
     def run(self, n_trials=50):
+        """Run the optimization study.
 
+        Args:
+            n_trials: Number of trials to run.
+
+        Returns:
+            Best trial from the study.
+        """
         self.study.optimize(
             lambda trial: self.objective(trial, env=env, env_cfg=env_cfg, agent_cfg=agent_cfg),
             n_trials=n_trials,
@@ -98,7 +104,6 @@ class OptimisationRunner:
             gc_after_trial=True,
         )
 
-        # Antonin's code
         print(f"Number of finished trials: {len(self.study.trials)}")
         print("Best trial:")
         trial = self.study.best_trial
@@ -112,18 +117,35 @@ class OptimisationRunner:
         return self.study.best_trial
 
     def free_memory(self):
+        """Free GPU memory and run garbage collection."""
         torch.cuda.empty_cache()
+        import gc
+
         gc.collect()
 
     def objective(self, trial: optuna.Trial, env, env_cfg, agent_cfg) -> float:
+        """Objective function for Optuna optimization.
+
+        Args:
+            trial: Optuna trial object.
+            env: The gymnasium environment.
+            env_cfg: Environment configuration.
+            agent_cfg: Agent configuration dictionary.
+
+        Returns:
+            Best return value from training.
+
+        Raises:
+            optuna.TrialPruned: If the trial should be pruned.
+        """
         print(f"Starting trial: {trial.number}")
 
         TRAIN_SEEDS = [0, 1, 2, 3, 4]
         agent_cfg["seed"] = int(np.random.choice(TRAIN_SEEDS))
         set_seed(agent_cfg["seed"])
 
-        # PPO hparams
-        # memory issues with large rollouts + aux tasks
+        # Suggest PPO hyperparameters
+        # Note: Memory issues can occur with large rollouts + aux tasks
         if "ssl_task" in agent_cfg:
             if agent_cfg["ssl_task"]["type"] == "forward_dynamics":
                 rollouts = trial.suggest_categorical("rollouts", [16, 32])
@@ -140,9 +162,6 @@ class OptimisationRunner:
         ratio_clip = trial.suggest_float("ratio_clip", low=0, high=0.3)
         gae_lambda = trial.suggest_float("gae_lambda", low=0.9, high=0.99)
 
-        # kl_threshold = trial.suggest_categorical("kl_threshold", [0.0, 0.003, 0.03])
-        # gamma = trial.suggest_float("gamma", low=0.8, high=0.9997)
-
         agent_cfg["agent"]["rollouts"] = rollouts
         agent_cfg["agent"]["mini_batches"] = mini_batches
         agent_cfg["agent"]["learning_epochs"] = learning_epochs
@@ -152,9 +171,8 @@ class OptimisationRunner:
         agent_cfg["agent"]["value_clip"] = value_clip
         agent_cfg["agent"]["ratio_clip"] = ratio_clip
         agent_cfg["agent"]["lambda"] = gae_lambda
-        # agent_cfg["agent"]["gamma"] = gamma
-        # agent_cfg["agent"]["kl_threshold"] = kl_threshold
 
+        # Suggest SSL task hyperparameters if applicable
         if "ssl_task" in agent_cfg:
             learning_rate_aux = trial.suggest_float("learning_rate_aux", low=1e-5, high=1e-3, log=True)
             loss_weight_aux = trial.suggest_float("loss_weight_aux", low=1e-3, high=10, log=True)
@@ -165,24 +183,24 @@ class OptimisationRunner:
             agent_cfg["ssl_task"]["learning_epochs_ratio"] = learning_epochs_ratio
 
             if agent_cfg["ssl_task"]["type"] == "forward_dynamics":
-                # it can take quite long, cap at8
+                # Cap sequence length to avoid long training times
                 seq_length = trial.suggest_int("seq_length", low=2, high=8, step=1)
                 seq_length = min(seq_length, 7)
                 agent_cfg["ssl_task"]["seq_length"] = seq_length
 
-        # setup models
+        # Setup models
         policy, value, encoder, value_preprocessor = make_models(env, env_cfg, agent_cfg, dtype)
 
-        # create tensors in memory for RL stuff [only for the training envs]
+        # Create tensors in memory for RL (only for the training envs, not eval envs)
         num_training_envs = env_cfg.scene.num_envs - agent_cfg["trainer"]["num_eval_envs"]
         rl_memory = make_memory(env, env_cfg, size=agent_cfg["agent"]["rollouts"], num_envs=num_training_envs)
         ssl_task = make_aux(env, rl_memory, encoder, value, value_preprocessor, env_cfg, agent_cfg, writer)
 
-        # restart wandb
+        # Restart wandb for this trial
         writer.close_wandb()
         writer.setup_wandb(name=trial.number)
 
-        # configure and instantiate PPO agent
+        # Configure and instantiate PPO agent
         ppo_agent_cfg = PPO_DEFAULT_CONFIG.copy()
         ppo_agent_cfg.update(agent_cfg["agent"])
         agent = PPO(
@@ -201,37 +219,35 @@ class OptimisationRunner:
             debug=agent_cfg["experiment"]["debug"],
         )
 
-        # Let's go!
+        # Train the agent
         trainer = make_trainer(env, agent, agent_cfg, ssl_task, writer)
 
         try:
             best_return, should_prune = trainer.train(trial=trial)
         except AssertionError as e:
-            # Sometimes, random hyperparams can generate NaN.
+            # Sometimes random hyperparameters can generate NaN
             print(e)
 
-        # prune trial
+        # Prune trial if needed
         if should_prune:
             raise optuna.TrialPruned()
         return best_return
 
 
 if __name__ == "__main__":
-
-    print("Running sweep with optuna")
+    print("Running sweep with Optuna")
 
     sweep = False
 
-    # parse configuration
+    # Parse configuration
     env_cfg, agent_cfg = register_task_to_hydra(args_cli.task, "default_cfg")
 
     specialised_cfg = load_cfg_from_registry(args_cli.task, args_cli.agent_cfg)
     agent_cfg = update_dict(agent_cfg, specialised_cfg)
 
-    # Choose the precision you want. Lower precision means you can fit more environments.
     dtype = torch.float32
 
-    # SEED (environment AND agent, important for seed-deterministic runs)
+    # Set seed (important for seed-deterministic runs)
     agent_cfg["seed"] = args_cli.seed if args_cli.seed is not None else agent_cfg["seed"]
     set_seed(agent_cfg["seed"])
     agent_cfg["log_path"] = LOG_PATH
@@ -244,7 +260,7 @@ if __name__ == "__main__":
     max_training_timesteps_M = agent_cfg["trainer"]["max_global_timesteps_M"]
 
     if sweep:
-        # LOGGING SETUP
+        # Setup logging for sweep
         agent_cfg["experiment"]["experiment_name"] = args_cli.task + "_" + args_cli.agent_cfg + "_" + args_cli.study
         agent_cfg["experiment"]["wandb_kwargs"]["group"] = (
             args_cli.task + "_" + args_cli.agent_cfg + "_" + args_cli.study
@@ -260,7 +276,7 @@ if __name__ == "__main__":
 
         writer = Writer(agent_cfg, delay_wandb_startup=True)
 
-        # Make environment. Order must be gymnasium Env -> FrameStack -> IsaacLab
+        # Make environment (order: gymnasium Env -> FrameStack -> IsaacLab)
         env = make_env(env_cfg, writer, args_cli, agent_cfg["observations"]["obs_stack"])
 
         runner = OptimisationRunner(study_name, n_startup_trials, n_warmup_steps, interval_steps)
@@ -271,7 +287,7 @@ if __name__ == "__main__":
 
         writer.close_wandb()
 
-        # now we run 5 seeds of the best trial :)
+        # Apply best trial hyperparameters
         agent_cfg["agent"]["rollouts"] = best_trial.params["rollouts"]
         agent_cfg["agent"]["mini_batches"] = best_trial.params["mini_batches"]
         agent_cfg["agent"]["learning_epochs"] = best_trial.params["learning_epochs"]
@@ -290,27 +306,20 @@ if __name__ == "__main__":
             if agent_cfg["ssl_task"]["type"] == "forward_dynamics":
                 agent_cfg["ssl_task"]["seq_length"] = best_trial.params["seq_length"]
 
-    # seeds
+    # Train best configuration on multiple seeds
     agent_cfg["experiment"]["experiment_name"] = args_cli.task + "_" + args_cli.agent_cfg + "_" + "seeded"
     agent_cfg["trainer"]["max_global_timesteps_M"] = max_training_timesteps_M
     agent_cfg["experiment"]["wandb_kwargs"]["group"] = args_cli.task + "_" + args_cli.agent_cfg + "_" + "seeded"
 
     test_seeds = [5, 6, 7, 8, 9, 10]
 
-    # test_seeds = [9,10,11,12,13]
-
-    # try:
     print("Running best trial on multiple seeds:", test_seeds)
     from common_utils import train_one_seed
 
     writer = Writer(agent_cfg, delay_wandb_startup=True)
-    print("made writer")
     env_cfg = update_env_cfg(args_cli, env_cfg, agent_cfg)
-    print("making env")
     if not sweep:
         env = make_env(env_cfg, writer, args_cli, agent_cfg["observations"]["obs_stack"])
-
-    # env = make_env(env_cfg, writer, args_cli, agent_cfg["observations"]["obs_stack"])
 
     for seed in test_seeds:
         print("Running seed:", seed)

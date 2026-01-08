@@ -125,18 +125,19 @@ class RotoEnv(DirectRLEnv):
         self.action_space = action
 
     def _pre_physics_step(self, actions: torch.Tensor) -> None:
-        """
-        Store actions from policy in a class variable.
+        """Store actions from policy before physics step.
 
         Args:
-            actions (torch.Tensor): Actions from the policy.
+            actions: Actions from the policy.
         """
         self.last_action = self.joint_pos_cmd[:, self.actuated_dof_indices]
         self.actions = actions.clone()
 
     def _apply_action(self) -> None:
-        """
-        Apply actions to the robot. Called multiple times per RL step for decimation.
+        """Apply actions to the robot.
+
+        Called multiple times per RL step for decimation. Applies action smoothing
+        and clamps actions to joint limits.
         """
         self.joint_pos_cmd[:, self.actuated_dof_indices] = scale(
             self.actions,
@@ -160,11 +161,10 @@ class RotoEnv(DirectRLEnv):
         )
 
     def get_observations(self):
-        """
-        Public method to get observations for the current timestep.
+        """Get observations for the current timestep.
 
         Returns:
-            dict: Dictionary of observations.
+            Dictionary of observations.
         """
         return self._get_observations()
 
@@ -187,11 +187,11 @@ class RotoEnv(DirectRLEnv):
         return obs_dict
 
     def _reset_robot(self, env_ids, joint_pos_noise=0.125):
-        """
-        Reset the robot joint positions and velocities.
+        """Reset the robot joint positions and velocities.
 
         Args:
-            env_ids (Sequence[int]): Environment indices to reset.
+            env_ids: Environment indices to reset.
+            joint_pos_noise: Standard deviation of noise added to joint positions.
         """
         joint_pos = self.robot.data.default_joint_pos[env_ids] + sample_uniform(
             -joint_pos_noise,
@@ -205,6 +205,13 @@ class RotoEnv(DirectRLEnv):
         self.robot.write_joint_state_to_sim(joint_pos, joint_vel, env_ids=env_ids)
 
     def _compute_intermediate_values(self, env_ids):
+        """Compute intermediate values for observations and rewards.
+
+        Updates joint positions, velocities, accelerations, and their normalized versions.
+
+        Args:
+            env_ids: Environment indices to update.
+        """
         # Get robot data
         self.joint_pos[env_ids] = self.robot.data.joint_pos[env_ids]
         self.joint_vel[env_ids] = self.robot.data.joint_vel[env_ids]
@@ -214,9 +221,9 @@ class RotoEnv(DirectRLEnv):
         self.normalised_joint_pos[env_ids] = unscale(
             self.joint_pos[env_ids], self.robot_joint_pos_lower_limits, self.robot_joint_pos_upper_limits
         )
+        # Normalize velocities by dividing by a fixed scale factor
+        # Note: An alternative normalization using joint velocity limits is commented below
         self.normalised_joint_vel[env_ids] = self.joint_vel[env_ids] / 3.0
-
-        # This is the better way to normalise the joint velocities, but not what I did in the paper.
         # self.normalised_joint_vel[env_ids] = unscale(
         #     self.joint_vel[env_ids], -self.robot_joint_vel_limits, self.robot_joint_vel_limits
         # )

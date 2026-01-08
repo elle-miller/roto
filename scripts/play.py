@@ -3,14 +3,13 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""
-Script to play a checkpoint of an RL agent from skrl.
+"""Script to play a checkpoint of an RL agent from skrl.
 
 Visit the skrl documentation (https://skrl.readthedocs.io) to see the examples structured in
 a more user-friendly way.
-"""
 
-"""Launch Isaac Sim Simulator first."""
+Note: Launch Isaac Sim Simulator first before running this script.
+"""
 
 
 import argparse
@@ -19,9 +18,9 @@ import sys
 
 from isaaclab.app import AppLauncher
 
-# add argparse arguments
+# Parse command-line arguments
 parser = argparse.ArgumentParser(description="Play a checkpoint of an RL agent from skrl.")
-parser.add_argument("--video", action="store_true", default=False, help="Record videos during training.")
+parser.add_argument("--video", action="store_true", default=False, help="Record videos during playback.")
 parser.add_argument("--video_length", type=int, default=200, help="Length of the recorded video (in steps).")
 parser.add_argument(
     "--disable_fabric", action="store_true", default=False, help="Disable fabric and use USD I/O operations."
@@ -29,11 +28,11 @@ parser.add_argument(
 parser.add_argument("--num_envs", type=int, default=None, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default=None, help="Name of the task.")
 parser.add_argument("--checkpoint", type=str, default=None, help="Path to model checkpoint.")
-parser.add_argument("--video_dir", type=str, default=None, help="Path to model checkpoint.")
-parser.add_argument("--agent_cfg", type=str, default=None, help="Name of the config.")
+parser.add_argument("--video_dir", type=str, default=None, help="Directory to save recorded videos.")
+parser.add_argument("--agent_cfg", type=str, default=None, help="Name of the agent configuration.")
 
-parser.add_argument("--seed", type=int, default=None, help="Seed used for the environment")
-# if you have RTX5090, use these args for better rendering
+parser.add_argument("--seed", type=int, default=None, help="Seed used for the environment.")
+# Rendering options (useful for RTX5090 and similar GPUs)
 parser.add_argument(
     "--renderer", type=str, default="PathTracing", choices=["RayTracedLighting", "PathTracing"], help="Renderer to use."
 )
@@ -64,20 +63,20 @@ from isaaclab_tasks.utils.parse_cfg import load_cfg_from_registry
 from isaaclab_rl.rl.ppo import PPO, PPO_DEFAULT_CONFIG
 from isaaclab_rl.tools.writer import Writer
 
-# from roto.tasks import franka,shadow  # noqa: F401
-
 
 def main():
-    """Play a skrl agent."""
-    # parse configuration
+    """Play a trained RL agent from a checkpoint.
+
+    Loads a checkpoint and runs the agent in the environment, optionally recording videos.
+    """
+    # Parse configuration
     env_cfg, agent_cfg = register_task_to_hydra(args_cli.task, "default_cfg")
 
     specialised_cfg = load_cfg_from_registry(args_cli.task, args_cli.agent_cfg)
     agent_cfg = update_dict(agent_cfg, specialised_cfg)
-    # Choose the precision you want. Lower precision means you can fit more environments.
     dtype = torch.float32
 
-    # SEED (environment AND agent, important for seed-deterministic runs)
+    # Set seed (important for seed-deterministic runs)
     agent_cfg["seed"] = args_cli.seed if args_cli.seed is not None else agent_cfg["seed"]
     set_seed(agent_cfg["seed"])
     agent_cfg["log_path"] = LOG_PATH
@@ -86,16 +85,16 @@ def main():
     # Update the environment config
     env_cfg = update_env_cfg(args_cli, env_cfg, agent_cfg)
 
-    # LOGGING SETUP
+    # Setup logging
     writer = Writer(agent_cfg, play=True)
 
-    # Make environment. Order must be gymnasium Env -> FrameStack -> IsaacLab
+    # Make environment (order: gymnasium Env -> FrameStack -> IsaacLab)
     env = make_env(env_cfg, writer, args_cli, agent_cfg["observations"]["obs_stack"])
 
-    # setup models
+    # Setup models
     policy, value, encoder, value_preprocessor = make_models(env, env_cfg, agent_cfg, dtype)
 
-    # configure and instantiate PPO agent
+    # Configure and instantiate PPO agent
     ppo_agent_cfg = PPO_DEFAULT_CONFIG.copy()
     ppo_agent_cfg.update(agent_cfg["agent"])
     agent = PPO(
@@ -114,18 +113,17 @@ def main():
         debug=agent_cfg["experiment"]["debug"],
     )
 
-    # initialize agent
+    # Load checkpoint
     resume_path = os.path.abspath(args_cli.checkpoint)
     agent.load(resume_path)
     print(f"[INFO] Loading model checkpoint from: {resume_path}")
     modules = torch.load(resume_path, map_location=env.device)
-    if type(modules) is dict:
-        for name, data in modules.items():
-            print(name)
+    if isinstance(modules, dict):
+        for name in modules.keys():
+            print(f"  - {name}")
 
-    # reset environment
+    # Reset environment
     timestep = 0
-
     ep_length = env.env.unwrapped.max_episode_length - 1
 
     returns = torch.zeros(size=(env.num_envs, 1), device=env.device)
@@ -133,27 +131,24 @@ def main():
 
     states, infos = env.reset(hard=True)
 
-    # simulate environment
+    # Simulate environment
     while simulation_app.is_running():
-
-        # run everything in inference mode
         with torch.inference_mode():
-
-            # agent stepping
+            # Agent stepping
             z = encoder(states)
             actions, _, _ = agent.policy.act(z, deterministic=True)
 
-            # env stepping
+            # Environment stepping
             states, rewards, terminated, truncated, infos = env.step(actions)
 
-            # compute eval rewards
+            # Compute evaluation rewards
             mask_update = 1 - torch.logical_or(terminated, truncated).float()
 
-            # update eval dicts
+            # Update evaluation metrics
             returns += rewards * mask
             mask *= mask_update
 
-            # the eval episodes get manually reset every ep_length
+            # Manually reset eval episodes every ep_length
             if timestep % ep_length == 0:
                 mean_eval_return = returns.mean().item()
                 print("Reset - Max eval return", returns.max().item())
@@ -164,29 +159,22 @@ def main():
                 mask = torch.Tensor([[1] for _ in range(env.num_envs)]).to(env.device)
 
         if args_cli.video:
-            # exit the play loop after recording one video
+            # Exit the play loop after recording one video
             if timestep == args_cli.video_length:
                 break
 
-        # time delay for real-time evaluation
-        # sleep_time = dt - (time.time() - start_time)
-        # if real_time and sleep_time > 0:
-        #     time.sleep(sleep_time)
-
         timestep += 1
 
-    # close the simulator
+    # Close the simulator
     env.close()
 
 
 if __name__ == "__main__":
     try:
-        # run the main function
         main()
     except Exception as err:
         print(err)
         raise
     finally:
-        # close sim app
         print("CLOSING")
         simulation_app.close()

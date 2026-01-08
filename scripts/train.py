@@ -3,14 +3,13 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""
-Script to train RL agent with skrl.
+"""Script to train RL agent with skrl.
 
 Visit the skrl documentation (https://skrl.readthedocs.io) to see the examples structured in
 a more user-friendly way.
-"""
 
-"""Launch Isaac Sim Simulator first."""
+Note: Launch Isaac Sim Simulator first before running this script.
+"""
 
 
 import argparse
@@ -18,24 +17,24 @@ import sys
 
 from isaaclab.app import AppLauncher
 
-# add argparse arguments
+# Parse command-line arguments
 parser = argparse.ArgumentParser(description="Train an RL agent with skrl.")
 parser.add_argument("--video", action="store_true", default=False, help="Record videos during training.")
 parser.add_argument("--video_length", type=int, default=600, help="Length of the recorded video (in steps).")
 parser.add_argument("--video_interval", type=int, default=500, help="Interval between video recordings (in steps).")
-parser.add_argument("--video_dir", type=str, default=None, help="Interval between video recordings (in steps).")
+parser.add_argument("--video_dir", type=str, default=None, help="Directory to save recorded videos.")
 
 parser.add_argument("--num_envs", type=int, default=None, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default=None, help="Name of the task.")
-parser.add_argument("--agent_cfg", type=str, default=None, help="Name of the config.")
-parser.add_argument("--seed", type=int, default=None, help="Seed used for the environment")
-# if you have RTX5090, use these args for better rendering
+parser.add_argument("--agent_cfg", type=str, default=None, help="Name of the agent configuration.")
+parser.add_argument("--seed", type=int, default=None, help="Seed used for the environment.")
+# Rendering options (useful for RTX5090 and similar GPUs)
 parser.add_argument(
     "--renderer", type=str, default="PathTracing", choices=["RayTracedLighting", "PathTracing"], help="Renderer to use."
 )
 parser.add_argument("--samples_per_pixel_per_frame", type=int, default=1, help="Number of samples per pixel per frame.")
 
-# append AppLauncher cli args
+# Append AppLauncher CLI args and initialize Isaac Sim
 AppLauncher.add_app_launcher_args(parser)
 args_cli, hydra_args = parser.parse_known_args()
 if args_cli.video:
@@ -72,7 +71,6 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
     try:
         main()
     except Exception as err:

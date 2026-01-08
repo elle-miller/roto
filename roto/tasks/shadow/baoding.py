@@ -202,21 +202,18 @@ class BaodingEnv(ShadowEnv):
         self.target2 = VisualizationMarkers(self.cfg.target2_cfg)
 
         if "pixels" in self.cfg.obs_list:
-            print("SETTING UP CAMERA")
-            # from omni.isaac.core.utils.extensions import enable_extension
-
-            # enable_extension("omni.replicator.core")
-            # import omni.replicator.core as rep
-            # rep.settings.set_render_rtx_realtime(antialiasing="DLAA")
             self._tiled_camera = TiledCamera(self.cfg.tiled_camera)
             self.scene.sensors["tiled_camera"] = self._tiled_camera
 
     def _get_gt(self) -> torch.Tensor:
-        """Return a concatenated tensor of ball poses and velocities."""
+        """Return a concatenated tensor of ball poses and velocities.
 
+        Returns:
+            Ground-truth observation tensor containing positions, linear velocities,
+            angular velocities, and inter-ball distance for both balls.
+        """
         gt = torch.cat(
             (
-                # ball
                 self.ball_1_pos,
                 self.ball_2_pos,
                 self.ball_1.data.root_lin_vel_w,
@@ -227,12 +224,17 @@ class BaodingEnv(ShadowEnv):
             ),
             dim=-1,
         )
-        # print("gt", gt.size())
         return gt
 
     def _get_pixels(self) -> torch.Tensor:
-        """Return rendered pixel observations."""
+        """Return rendered pixel observations.
 
+        Processes RGB and depth camera data, handling edge cases like inf/NaN values
+        in depth images and applying normalization to RGB images.
+
+        Returns:
+            Concatenated tensor of processed camera data.
+        """
         processed_data = []
 
         for data_type in self.pixel_cfg["types"]:
@@ -240,24 +242,21 @@ class BaodingEnv(ShadowEnv):
             data = self._tiled_camera.data.output[data_type].clone()
 
             if data_type == "depth":
-                # Fix: Check 'data' instead of undefined 'camera_data'
-                # Also handle both inf and NaN which are common in depth sensors
+                # Handle inf and NaN values which are common in depth sensors
                 data[torch.isinf(data)] = 0.0
                 data[torch.isnan(data)] = 0.0
 
             elif data_type == "rgb":
-                # Fix: Ensure float conversion before division
+                # Normalize RGB: convert to float, center by subtracting mean, then scale back
                 data = data.float() / 255.0
-                # Mean subtraction (centering)
                 mean_tensor = torch.mean(data, dim=(1, 2), keepdim=True)
                 data -= mean_tensor
-
                 data = 255.0 * data  # Scale back to [0, 255]
                 data = data.to(torch.uint8)
 
             processed_data.append(data)
 
-        # Concatenate the processed tensors along the channel dimension (last dim)
+        # Concatenate the processed tensors along the channel dimension
         camera_data = torch.cat(processed_data, dim=-1)
 
         return camera_data
@@ -373,15 +372,18 @@ class BaodingEnv(ShadowEnv):
         self.reset_goal_2_buf[reached_goal_ids] = 0
 
     def update_goal_pos(self):
-        """Toggle the active goal for each ball based on `ball_goal_idx`."""
+        """Update goal positions for each ball based on `ball_goal_idx`.
+
+        Swaps the target goals between the two balls when the index toggles.
+        """
         self.ball_1_goal_pos = torch.where(
-            self.ball_goal_idx.unsqueeze(-1),  # Expand to match dimensions [num_envs, 1]
+            self.ball_goal_idx.unsqueeze(-1),
             self.goal_pos2,  # When True
             self.goal_pos1,  # When False
         )
 
         self.ball_2_goal_pos = torch.where(
-            self.ball_goal_idx.unsqueeze(-1),  # Expand to match dimensions [num_envs, 1]
+            self.ball_goal_idx.unsqueeze(-1),
             self.goal_pos1,  # When True
             self.goal_pos2,  # When False
         )
@@ -389,7 +391,15 @@ class BaodingEnv(ShadowEnv):
 
 @torch.jit.script
 def distance_reward(object_ee_distance, std: float = 0.1):
-    """Smooth distance shaping used for both balls."""
+    """Compute smooth distance-based reward using tanh shaping.
+
+    Args:
+        object_ee_distance: Distance between object and end-effector.
+        std: Standard deviation for scaling the distance.
+
+    Returns:
+        Distance reward value.
+    """
     r_reach = 1 - torch.tanh(object_ee_distance / std)
     return r_reach
 
@@ -400,7 +410,18 @@ def compute_rewards(
     ball_1_goal_dist: torch.Tensor,
     ball_2_goal_dist: torch.Tensor,
 ):
-    """Combine dense distance shaping with a sparse success bonus."""
+    """Compute rewards for baoding task.
+
+    Combines dense distance shaping with a sparse success bonus.
+
+    Args:
+        goal_reached: Binary tensor indicating if both goals were reached.
+        ball_1_goal_dist: Distance from ball 1 to its goal.
+        ball_2_goal_dist: Distance from ball 2 to its goal.
+
+    Returns:
+        Tuple of (total_reward, reach_goal_reward).
+    """
     dense_dist_reward = (distance_reward(ball_1_goal_dist) + distance_reward(ball_2_goal_dist)) * 0.1
 
     reach_goal_reward = torch.where(goal_reached == 1, 10, 0).float()

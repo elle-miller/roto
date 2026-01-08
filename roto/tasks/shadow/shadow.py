@@ -159,7 +159,7 @@ class ShadowEnv(RotoEnv):
         light_cfg = sim_utils.DomeLightCfg(intensity=2000.0, color=(0.75, 0.75, 0.75))
         light_cfg.func("/World/Light", light_cfg)
 
-        # cool disco lights
+        # Additional sphere lights (currently disabled)
         pink = (0.9882352941176471, 0.011764705882352941, 0.7098039215686275)
         aqua = (0.0, 1.0, 1.0)
         disco_intensity = 0
@@ -172,21 +172,26 @@ class ShadowEnv(RotoEnv):
         light_cfg_4 = sim_utils.SphereLightCfg(intensity=disco_intensity, color=aqua)
         light_cfg_4.func("/World/disk2", light_cfg_4, translation=(1, -1, 2))
 
-        # if "tactile" in self.cfg.obs_list:
-        self.distal_sensor = ContactSensor(self.cfg.distal_contact_cfg)
-        self.proximal_sensor = ContactSensor(self.cfg.proximal_contact_cfg)
-        self.middle_sensor = ContactSensor(self.cfg.middle_contact_cfg)
-        self.palm_sensor = ContactSensor(self.cfg.palm_contact_cfg)
-        self.metacarpal_sensor = ContactSensor(self.cfg.metacarpal_contact_cfg)
+        if "tactile" in self.cfg.obs_list:
+            self.distal_sensor = ContactSensor(self.cfg.distal_contact_cfg)
+            self.proximal_sensor = ContactSensor(self.cfg.proximal_contact_cfg)
+            self.middle_sensor = ContactSensor(self.cfg.middle_contact_cfg)
+            self.palm_sensor = ContactSensor(self.cfg.palm_contact_cfg)
+            self.metacarpal_sensor = ContactSensor(self.cfg.metacarpal_contact_cfg)
 
-        self.scene.sensors["distal_sensor"] = self.distal_sensor
-        self.scene.sensors["proximal_sensor"] = self.proximal_sensor
-        self.scene.sensors["middle_sensor"] = self.middle_sensor
-        self.scene.sensors["palm_sensor"] = self.palm_sensor
-        self.scene.sensors["metacarpal_sensor"] = self.metacarpal_sensor
+            self.scene.sensors["distal_sensor"] = self.distal_sensor
+            self.scene.sensors["proximal_sensor"] = self.proximal_sensor
+            self.scene.sensors["middle_sensor"] = self.middle_sensor
+            self.scene.sensors["palm_sensor"] = self.palm_sensor
+            self.scene.sensors["metacarpal_sensor"] = self.metacarpal_sensor
 
     def _get_proprioception(self):
-        """Return proprioceptive feature vector (positions, velocities, actions)."""
+        """Return proprioceptive feature vector.
+
+        Returns:
+            Concatenated tensor containing normalized joint positions, normalized joint
+            velocities, and actions.
+        """
         prop = torch.cat(
             (
                 self.normalised_joint_pos,
@@ -199,7 +204,14 @@ class ShadowEnv(RotoEnv):
         return prop
 
     def _get_tactile(self):
-        """Return binary tactile activation per finger segment."""
+        """Return binary tactile activation per finger segment.
+
+        Computes contact forces from multiple sensors and converts them to binary
+        activations based on a threshold.
+
+        Returns:
+            Concatenated tensor of binary tactile activations for all finger segments.
+        """
         distal_forces = self.distal_sensor.data.net_forces_w[:].clone()
         proximal_forces = self.proximal_sensor.data.net_forces_w[:].clone()
         middle_forces = self.middle_sensor.data.net_forces_w[:].clone()
@@ -212,6 +224,7 @@ class ShadowEnv(RotoEnv):
         palm_norm = torch.norm(palm_forces, dim=-1)
         metacarpal_norm = torch.norm(metacarpal_forces, dim=-1)
 
+        # Convert to binary activations based on threshold
         if self.dtype == torch.float16:
             distal_norm = (distal_norm > self.binary_threshold).half()
             proximal_norm = (proximal_norm > self.binary_threshold).half()
@@ -232,14 +245,18 @@ class ShadowEnv(RotoEnv):
         return tactile
 
     def _reset_idx(self, env_ids: Sequence[int] | None):
-        """Reset articulation state and optionally randomize joints."""
+        """Reset articulation state and optionally randomize joints.
+
+        Args:
+            env_ids: Environment indices to reset. If None, resets all environments.
+        """
         if env_ids is None:
             env_ids = self.robot._ALL_INDICES
 
-        # resets articulation and rigid body attributes
+        # Reset articulation and rigid body attributes
         super()._reset_idx(env_ids)
 
-        # reset hand
+        # Reset hand with noise
         self._reset_robot(env_ids, joint_pos_noise=self.cfg.reset_joint_pos_noise)
 
 

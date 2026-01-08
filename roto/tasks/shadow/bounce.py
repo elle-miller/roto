@@ -81,7 +81,11 @@ class BounceEnv(ShadowEnv):
         self.time_without_contact = torch.zeros((self.num_envs,), dtype=torch.int, device=self.device)
 
     def _get_gt(self):
-        """Ground-truth features for auxiliary heads/logging."""
+        """Get ground-truth features for auxiliary heads/logging.
+
+        Returns:
+            Concatenated tensor containing object pose, velocities, and contact tracking information.
+        """
         gt = torch.cat(
             (
                 self.object_pos,
@@ -167,8 +171,11 @@ class BounceEnv(ShadowEnv):
         self.time_without_contact[env_ids] = 0
 
     def _reset_object(self, env_ids):
-        """Randomize the ball pose within a small neighbourhood."""
+        """Randomize the ball pose within a small neighbourhood.
 
+        Args:
+            env_ids: Environment indices to reset.
+        """
         object_default_state = self.object.data.default_root_state.clone()[env_ids]
         pos_noise = sample_uniform(-1.0, 1.0, (len(env_ids), 3), device=self.device)
         object_default_state[:, 0:3] = (
@@ -199,7 +206,14 @@ class BounceEnv(ShadowEnv):
 
 @torch.jit.script
 def compute_rewards(new_bounces: torch.Tensor):
-    """Return dense rewards encouraging stable bounce cadence."""
+    """Compute rewards for ball bouncing task.
+
+    Args:
+        new_bounces: Tensor indicating new bounce events.
+
+    Returns:
+        Tuple of (total_reward, bounce_reward).
+    """
     bounce_reward = new_bounces * 10
 
     total_reward = bounce_reward
