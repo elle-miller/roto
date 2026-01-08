@@ -190,10 +190,6 @@ def update_env_cfg(args_cli, env_cfg, agent_cfg):
     env_cfg.num_eval_envs = agent_cfg["trainer"]["num_eval_envs"]
     env_cfg.obs_stack = agent_cfg["observations"]["obs_stack"]
 
-    # variables that impact how env obs are processed
-    env_cfg.normalise_prop = agent_cfg["observations"]["preprocess"]["normalise_prop"]
-    env_cfg.binary_tactile = agent_cfg["observations"]["preprocess"]["binary_tactile"]
-
     return env_cfg
 
 
