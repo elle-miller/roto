@@ -5,17 +5,17 @@ observations:
   - tactile
   - pixels
   obs_stack: 3
-  preprocess_cfg:
-    normalise_prop: true
+  tactile_cfg:
     binary_tactile: true
-    normalise_rgb: true
+    binary_threshold: 0.01
   pixel_cfg:
     types: 
     - rgb
     - depth  
-    width: 100
-    height: 100
-    latent_img_dim: 128
+    width: 80
+    height: 80
+    latent_pixel_dim: 128
+    normalise_rgb: true
     
 
 agent:
@@ -34,7 +34,7 @@ agent:
 
 experiment:
   experiment_name: rl_only_ptd
-  wandb: 1
+  wandb: 0
   wandb_kwargs:
     group: rl_only_ptd
     name: '1'

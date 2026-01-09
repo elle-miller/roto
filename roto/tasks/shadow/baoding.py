@@ -3,6 +3,11 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
+"""
+Author: Elle Miller 2025
+
+Shadow-hand baoding task environment.
+"""
 
 from __future__ import annotations
 
@@ -12,7 +17,6 @@ from collections.abc import Sequence
 import isaaclab.sim as sim_utils
 from isaaclab.assets import RigidObject, RigidObjectCfg
 from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
-from isaaclab.sensors import TiledCamera, TiledCameraCfg
 from isaaclab.sim.schemas.schemas_cfg import CollisionPropertiesCfg
 from isaaclab.utils import configclass
 from isaaclab.utils.math import sample_uniform
@@ -107,23 +111,6 @@ class BaodingCfg(ShadowEnvCfg):
         },
     )
 
-    # camera
-    img_dim = 200
-    eye = (0.0, -0.6, 0.65)
-    target = (0.0, -0.35, 0.5)
-    tiled_camera: TiledCameraCfg = TiledCameraCfg(
-        prim_path="/World/envs/env_.*/Camera",
-        offset=TiledCameraCfg.OffsetCfg(pos=(0.0, 0.0, 0.7), rot=(1.0, 0.0, 0.0, 0.0), convention="world"),
-        data_types=["rgb", "depth"],
-        spawn=sim_utils.PinholeCameraCfg(
-            focal_length=24.0, focus_distance=400.0, horizontal_aperture=20.955, clipping_range=(0.1, 20.0)
-        ),
-        width=img_dim,
-        height=img_dim,
-    )
-
-    render_cfg = sim_utils.RenderCfg(rendering_mode="quality")
-
 
 class BaodingEnv(ShadowEnv):
     cfg: BaodingCfg
@@ -179,15 +166,6 @@ class BaodingEnv(ShadowEnv):
         self.ball_goal_idx = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
         self.update_goal_pos()
 
-        eyes = (
-            torch.tensor(self.cfg.eye, dtype=torch.float, device=self.device).repeat((self.num_envs, 1))
-            + self.scene.env_origins
-        )
-        targets = (
-            torch.tensor(self.cfg.target, dtype=torch.float, device=self.device).repeat((self.num_envs, 1))
-            + self.scene.env_origins
-        )
-        self._tiled_camera.set_world_poses_from_view(eyes=eyes, targets=targets)
 
     def _setup_scene(self):
         """Register balls and visualization markers."""
@@ -200,10 +178,7 @@ class BaodingEnv(ShadowEnv):
 
         self.target1 = VisualizationMarkers(self.cfg.target1_cfg)
         self.target2 = VisualizationMarkers(self.cfg.target2_cfg)
-
-        if "pixels" in self.cfg.obs_list:
-            self._tiled_camera = TiledCamera(self.cfg.tiled_camera)
-            self.scene.sensors["tiled_camera"] = self._tiled_camera
+            
 
     def _get_gt(self) -> torch.Tensor:
         """Return a concatenated tensor of ball poses and velocities.
@@ -226,40 +201,6 @@ class BaodingEnv(ShadowEnv):
         )
         return gt
 
-    def _get_pixels(self) -> torch.Tensor:
-        """Return rendered pixel observations.
-
-        Processes RGB and depth camera data, handling edge cases like inf/NaN values
-        in depth images and applying normalization to RGB images.
-
-        Returns:
-            Concatenated tensor of processed camera data.
-        """
-        processed_data = []
-
-        for data_type in self.pixel_cfg["types"]:
-            # Clone the specific buffer
-            data = self._tiled_camera.data.output[data_type].clone()
-
-            if data_type == "depth":
-                # Handle inf and NaN values which are common in depth sensors
-                data[torch.isinf(data)] = 0.0
-                data[torch.isnan(data)] = 0.0
-
-            elif data_type == "rgb":
-                # Normalize RGB: convert to float, center by subtracting mean, then scale back
-                data = data.float() / 255.0
-                mean_tensor = torch.mean(data, dim=(1, 2), keepdim=True)
-                data -= mean_tensor
-                data = 255.0 * data  # Scale back to [0, 255]
-                data = data.to(torch.uint8)
-
-            processed_data.append(data)
-
-        # Concatenate the processed tensors along the channel dimension
-        camera_data = torch.cat(processed_data, dim=-1)
-
-        return camera_data
 
     def _compute_intermediate_values(self, env_ids=None):
         """Update ball distances, velocities and helper buffers."""
@@ -299,7 +240,6 @@ class BaodingEnv(ShadowEnv):
 
         self.extras["log"] = {
             "success_reward": (reach_goal_reward),
-            "sum_forces": (torch.sum(self.tactile, dim=1)),
             "ball_1_vel": (self.ball_1_linvel),
             "ball_2_vel": (self.ball_2_linvel),
             "ball_dist": (self.ball_dist),

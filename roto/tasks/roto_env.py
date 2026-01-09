@@ -4,9 +4,9 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 """
-Author: Elle Miller 2025
+Author: Elle Miller
 
-Basic robot parent environment for IsaacLab RL tasks. See README.md for more details.
+Generalisable robot parent environment for IsaacLab RL tasks. See README.md for more details.
 
 This environment is used to define the basic robot control and observation logic for the RoTO tasks.
 
@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import torch
 
+import isaaclab.sim as sim_utils
 from isaaclab.envs import DirectRLEnv, DirectRLEnvCfg, ViewerCfg
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sim import PhysxCfg, SimulationCfg
@@ -27,6 +28,8 @@ from isaaclab.utils.math import (
     sample_uniform,
     saturate,
 )
+from isaaclab.sensors import TiledCamera, TiledCameraCfg
+from isaaclab.sensors import ContactSensor, ContactSensorCfg
 
 
 @configclass
@@ -41,6 +44,12 @@ class RotoEnvCfg(DirectRLEnvCfg):
     # Isaac 4.5 compatibility
     observation_space = 0
     state_space = 0
+
+    # Observation configuration (set from agent_cfg)
+    obs_list: list[str] = []
+    obs_stack: int = 1
+    pixel_cfg: dict | None = None
+    tactile_cfg: dict | None = None
 
     # Simulation configuration
     sim: SimulationCfg = SimulationCfg(
@@ -57,14 +66,22 @@ class RotoEnvCfg(DirectRLEnvCfg):
 
     # Scene configuration
     replicate_physics = True
+    env_spacing = 1.5
     scene: InteractiveSceneCfg = InteractiveSceneCfg(
-        num_envs=4096, env_spacing=1.5, replicate_physics=replicate_physics
+        num_envs=4096, env_spacing=env_spacing, replicate_physics=replicate_physics
     )
 
     # Viewer configuration (not used directly)
     eye = (3, 3, 3)
     lookat = (0, 0, 0)
     viewer: ViewerCfg = ViewerCfg(eye=eye, lookat=lookat, resolution=(1920, 1080))
+
+    # camera
+    img_dim = 200
+    eye = (0.0, -0.6, 0.65)
+    target = (0.0, -0.35, 0.5)
+
+    render_cfg = sim_utils.RenderCfg(rendering_mode="quality")
 
 
 class RotoEnv(DirectRLEnv):
@@ -74,12 +91,16 @@ class RotoEnv(DirectRLEnv):
 
     def __init__(self, cfg: RotoEnvCfg, render_mode: str | None = None, **kwargs):
         """Initialize tensors used by derived robot + task implementations."""
-        super().__init__(cfg, render_mode, **kwargs)
+        
+        # Observation configuration
         self.obs_stack = getattr(cfg, "obs_stack", 1)
-
+        self.pixel_cfg = getattr(cfg, "pixel_cfg", None)
+        self.tactile_cfg = getattr(cfg, "tactile_cfg", None)
+        if self.tactile_cfg is not None:
+            self.binary_threshold = self.tactile_cfg["binary_threshold"]
         self.dtype = torch.float32
-        self.binary_tactile = True
-        self.binary_threshold = 0.01
+
+        super().__init__(cfg, render_mode, **kwargs)
 
         # Joint limits and targets
         self.robot_joint_pos_lower_limits = self.robot.data.soft_joint_pos_limits[0, :, 0].to(device=self.device)
@@ -109,10 +130,41 @@ class RotoEnv(DirectRLEnv):
         self.normalised_joint_pos = torch.zeros((self.num_envs, self.num_joints), device=self.device)
         self.normalised_joint_vel = torch.zeros((self.num_envs, self.num_joints), device=self.device)
 
-        # Unit vectors for rotation calculations
-        self.x_unit_tensor = torch.tensor([1, 0, 0], dtype=torch.float, device=self.device).repeat((self.num_envs, 1))
-        self.y_unit_tensor = torch.tensor([0, 1, 0], dtype=torch.float, device=self.device).repeat((self.num_envs, 1))
-        self.z_unit_tensor = torch.tensor([0, 0, 1], dtype=torch.float, device=self.device).repeat((self.num_envs, 1))
+        # Set up camera if pixels are in the observation list
+        if "pixels" in self.cfg.obs_list:
+            eyes = (
+                torch.tensor(self.cfg.eye, dtype=torch.float, device=self.device).repeat((self.num_envs, 1))
+                + self.scene.env_origins
+            )
+            targets = (
+                torch.tensor(self.cfg.target, dtype=torch.float, device=self.device).repeat((self.num_envs, 1))
+                + self.scene.env_origins
+            )
+            self._tiled_camera.set_world_poses_from_view(eyes=eyes, targets=targets)
+
+    def _setup_scene(self):
+        """Set up the simulation scene."""
+        # Set up camera if pixels are in the observation list
+        if "pixels" in self.cfg.obs_list and self.pixel_cfg is not None:
+            print("Setting up camera for pixel observation with width: ", self.pixel_cfg["width"], "and height: ", self.pixel_cfg["height"])
+            tiled_camera = TiledCameraCfg(
+                prim_path="/World/envs/env_.*/Camera",
+                offset=TiledCameraCfg.OffsetCfg(pos=(0.0, 0.0, 0.7), rot=(1.0, 0.0, 0.0, 0.0), convention="world"),
+                data_types=["rgb", "depth"],
+                spawn=sim_utils.PinholeCameraCfg(
+                    focal_length=24.0, focus_distance=400.0, horizontal_aperture=20.955, clipping_range=(0.1, self.cfg.env_spacing)
+                ),
+                width=self.pixel_cfg["width"],
+                height=self.pixel_cfg["height"],
+            )
+            self._tiled_camera = TiledCamera(tiled_camera)
+            self.scene.sensors["tiled_camera"] = self._tiled_camera
+
+        # Add tactile sensor if listed
+        if "tactile" in self.cfg.obs_list:
+            self.robot_contact_sensor = ContactSensor(self.cfg.robot_contact_sensor_cfg)
+            self.scene.sensors["robot_contact_sensor"] = self.robot_contact_sensor
+
 
     def _configure_gym_env_spaces(self):
         """Configure Gymnasium observation and action spaces (placeholder)."""
@@ -186,6 +238,81 @@ class RotoEnv(DirectRLEnv):
         obs_dict = {"policy": obs_dict}
         return obs_dict
 
+    def _get_proprioception(self):
+        """Return proprioceptive feature vector.
+
+        Returns:
+            Concatenated tensor containing normalized joint positions, normalized joint
+            velocities, and actions.
+        """
+        prop = torch.cat(
+            (
+                self.normalised_joint_pos,
+                self.normalised_joint_vel,
+                self.actions,
+            ),
+            dim=-1,
+        )
+
+        return prop
+
+    def _get_pixels(self) -> torch.Tensor:
+        """Return rendered pixel observations.
+
+        Processes RGB and depth camera data, handling edge cases like inf/NaN values
+        in depth images and applying normalization to RGB images.
+
+        Returns:
+            Concatenated tensor of processed camera data.
+        """
+        if self.pixel_cfg is None:
+            raise ValueError("pixel_cfg is not set. Make sure 'pixels' is in obs_list and pixel_cfg is provided in agent_cfg.")
+
+        processed_data = []
+
+        for data_type in self.pixel_cfg["types"]:
+            # Clone the specific buffer
+            data = self._tiled_camera.data.output[data_type].clone()
+
+            if data_type == "depth":
+                # Handle inf and NaN values which are common in depth sensors
+                data[torch.isinf(data)] = 0.0
+                data[torch.isnan(data)] = 0.0
+
+            elif data_type == "rgb":
+                # Normalize RGB: convert to float, center by subtracting mean, then scale back
+                data = data.float() / 255.0
+                mean_tensor = torch.mean(data, dim=(1, 2), keepdim=True)
+                data -= mean_tensor
+                data = 255.0 * data  # Scale back to [0, 255]
+                data = data.to(torch.uint8)
+
+            processed_data.append(data)
+
+        # Concatenate the processed tensors along the channel dimension
+        camera_data = torch.cat(processed_data, dim=-1)
+
+        return camera_data
+
+    def _get_tactile(self):
+        """Return tactile force.
+
+        Computes contact forces from multiple sensors and converts them to binary
+        activations based on a threshold.
+
+        Returns:
+            Concatenated tensor of tactile force.
+        """
+        forces = self.robot_contact_sensor.data.net_forces_w[:].clone()
+        norm = torch.norm(forces, dim=-1)
+
+        # Convert to binary activations based on threshold if binary_tactile is True
+        if self.tactile_cfg is not None and self.tactile_cfg["binary_tactile"]:
+            norm = (norm > self.binary_threshold).float()
+            return norm
+        else:
+            return norm
+
     def _reset_robot(self, env_ids, joint_pos_noise=0.125):
         """Reset the robot joint positions and velocities.
 
@@ -217,7 +344,7 @@ class RotoEnv(DirectRLEnv):
         self.joint_vel[env_ids] = self.robot.data.joint_vel[env_ids]
         self.joint_acc[env_ids] = self.robot.data.joint_acc[env_ids]
 
-        # Normalize joint positions and velocities
+        # Normalize joint positions
         self.normalised_joint_pos[env_ids] = unscale(
             self.joint_pos[env_ids], self.robot_joint_pos_lower_limits, self.robot_joint_pos_upper_limits
         )

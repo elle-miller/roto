@@ -106,34 +106,21 @@ class FrankaEnvCfg(RotoEnvCfg):
     )
 
     # Contact sensor frame transformer configuration
-    left_sensor_cfg: FrameTransformerCfg = FrameTransformerCfg(
+    robot_contact_sensor_cfg: FrameTransformerCfg = FrameTransformerCfg(
         prim_path="/World/envs/env_.*/Robot/panda_link0",
         debug_vis=False,
         visualizer_cfg=marker_cfg,
         target_frames=[
             FrameTransformerCfg.FrameCfg(
-                prim_path="/World/envs/env_.*/Robot/left_contact_sensor",
-                name="left_sensor",
+                prim_path="/World/envs/env_.*/Robot/.*_contact_sensor",
+                name="gripper_contact_sensor",
                 offset=OffsetCfg(
                     pos=[0.0, 0.0, 0.0],
                 ),
             ),
         ],
     )
-    right_sensor_cfg: FrameTransformerCfg = FrameTransformerCfg(
-        prim_path="/World/envs/env_.*/Robot/panda_link0",
-        debug_vis=False,
-        visualizer_cfg=marker_cfg,
-        target_frames=[
-            FrameTransformerCfg.FrameCfg(
-                prim_path="/World/envs/env_.*/Robot/right_contact_sensor",
-                name="right_sensor",
-                offset=OffsetCfg(
-                    pos=[0.0, 0.0, 0.0],
-                ),
-            ),
-        ],
-    )
+
 
 
 class FrankaEnv(RotoEnv):
@@ -238,35 +225,7 @@ class FrankaEnv(RotoEnv):
         )
         return prop
 
-    def _get_tactile(self):
-        """
-        Get tactile sensor observations from contact sensors.
 
-        Returns:
-            torch.Tensor: Tactile observation vector.
-        """
-        forcesL_world = self.left_contact_sensor.data.net_forces_w[:].clone().reshape(self.num_envs, 3)
-        forcesR_world = self.right_contact_sensor.data.net_forces_w[:].clone().reshape(self.num_envs, 3)
-
-        forcesL_net = torch.linalg.vector_norm(forcesL_world, dim=1, keepdim=True)
-        forcesR_net = torch.linalg.vector_norm(forcesR_world, dim=1, keepdim=True)
-
-        if self.dtype == torch.float16:
-            forcesL_norm = (forcesL_net > self.binary_threshold).half()
-            forcesR_norm = (forcesR_net > self.binary_threshold).half()
-        else:
-            forcesL_norm = (forcesL_net > self.binary_threshold).float()
-            forcesR_norm = (forcesR_net > self.binary_threshold).float()
-
-        tactile = torch.cat(
-            (
-                forcesL_norm,
-                forcesR_norm,
-            ),
-            dim=-1,
-        )
-        self.tactile = tactile
-        return tactile
 
     def _compute_intermediate_values(self, env_ids: torch.Tensor | None = None):
         """

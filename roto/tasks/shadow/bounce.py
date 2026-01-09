@@ -3,7 +3,11 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Shadow-hand bounce task"""
+"""
+Author: Elle Miller 2025
+
+Shadow-hand bounce task environment.
+"""
 
 from __future__ import annotations
 
@@ -79,6 +83,8 @@ class BounceEnv(ShadowEnv):
         self.waiting_for_contact = torch.zeros((self.num_envs,), dtype=torch.bool, device=self.device)
         self.new_bounces = torch.zeros((self.num_envs,), dtype=self.dtype, device=self.device)
         self.time_without_contact = torch.zeros((self.num_envs,), dtype=torch.int, device=self.device)
+        self.tactile = self._get_tactile()
+        self.last_tactile = self.tactile.clone()
 
     def _get_gt(self):
         """Get ground-truth features for auxiliary heads/logging.
@@ -107,6 +113,15 @@ class BounceEnv(ShadowEnv):
 
         self.object = RigidObject(self.cfg.object_cfg)
         self.scene.rigid_objects["object"] = self.object
+
+    def _get_tactile(self):
+        """Return tactile force."""
+
+        tactile = super()._get_tactile()
+        self.last_tactile = self.tactile
+        self.tactile = tactile
+
+        return tactile
 
     def _compute_intermediate_values(self, env_ids=None):
         """Track object kinematics and bounce counts."""

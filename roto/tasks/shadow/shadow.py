@@ -3,8 +3,11 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
+"""
+Author: Elle Miller 2025
 
-"""Shadow-hand base environment utilities shared across RoTO tasks."""
+Shadow-hand base environment utilities shared across RoTO tasks.
+"""
 
 from __future__ import annotations
 
@@ -86,30 +89,13 @@ class ShadowEnvCfg(RotoEnvCfg):
     marker_cfg = FRAME_MARKER_CFG.copy()
     marker_cfg.markers["frame"].scale = (0.05, 0.05, 0.05)
     marker_cfg.prim_path = "/Visuals/ContactCfg"
-    distal_contact_cfg = ContactSensorCfg(
-        prim_path="/World/envs/env_.*/Robot/robot0_.*distal",
+
+    robot_contact_sensor_cfg = ContactSensorCfg(
+        prim_path="/World/envs/env_.*/Robot/robot0_(.*distal|.*middle|.*proximal|palm|lfmetacarpal)",
         update_period=0.0,
         history_length=1,
-    )
-    middle_contact_cfg = ContactSensorCfg(
-        prim_path="/World/envs/env_.*/Robot/robot0_.*middle",
-        update_period=0.0,
-        history_length=1,
-    )
-    proximal_contact_cfg = ContactSensorCfg(
-        prim_path="/World/envs/env_.*/Robot/robot0_.*proximal",
-        update_period=0.0,
-        history_length=1,
-    )
-    palm_contact_cfg = ContactSensorCfg(
-        prim_path="/World/envs/env_.*/Robot/robot0_palm",
-        update_period=0.0,
-        history_length=1,
-    )
-    metacarpal_contact_cfg = ContactSensorCfg(
-        prim_path="/World/envs/env_.*/Robot/robot0_lfmetacarpal",
-        update_period=0.0,
-        history_length=1,
+        visualizer_cfg=marker_cfg,
+        filter_prim_paths_expr=["/World/envs/env_.*/Object"],
     )
 
 
@@ -121,12 +107,6 @@ class ShadowEnv(RotoEnv):
     def __init__(self, cfg: ShadowEnvCfg, render_mode: str | None = None, **kwargs):
 
         super().__init__(cfg, render_mode, **kwargs)
-
-        self.num_prop_observations = 272
-        self.num_tactile_observations = 68
-
-        self.tactile = torch.zeros((self.num_envs, self.num_tactile_observations), device=self.device)
-        self.last_tactile = torch.zeros((self.num_envs, self.num_tactile_observations), device=self.device)
 
         self.extras["log"] = {
             "tactile_penalty": None,
@@ -151,6 +131,8 @@ class ShadowEnv(RotoEnv):
 
     def _setup_scene(self):
         """Register the Shadow hand, contact sensors, and lighting."""
+        super()._setup_scene()
+
         self.robot = Articulation(self.cfg.robot_cfg)
         spawn_ground_plane(prim_path="/World/ground", cfg=GroundPlaneCfg())
         self.scene.clone_environments(copy_from_source=False)
@@ -171,78 +153,6 @@ class ShadowEnv(RotoEnv):
         light_cfg_3.func("/World/ds1", light_cfg_3, translation=(-1, -1, 2))
         light_cfg_4 = sim_utils.SphereLightCfg(intensity=disco_intensity, color=aqua)
         light_cfg_4.func("/World/disk2", light_cfg_4, translation=(1, -1, 2))
-
-        if "tactile" in self.cfg.obs_list:
-            self.distal_sensor = ContactSensor(self.cfg.distal_contact_cfg)
-            self.proximal_sensor = ContactSensor(self.cfg.proximal_contact_cfg)
-            self.middle_sensor = ContactSensor(self.cfg.middle_contact_cfg)
-            self.palm_sensor = ContactSensor(self.cfg.palm_contact_cfg)
-            self.metacarpal_sensor = ContactSensor(self.cfg.metacarpal_contact_cfg)
-
-            self.scene.sensors["distal_sensor"] = self.distal_sensor
-            self.scene.sensors["proximal_sensor"] = self.proximal_sensor
-            self.scene.sensors["middle_sensor"] = self.middle_sensor
-            self.scene.sensors["palm_sensor"] = self.palm_sensor
-            self.scene.sensors["metacarpal_sensor"] = self.metacarpal_sensor
-
-    def _get_proprioception(self):
-        """Return proprioceptive feature vector.
-
-        Returns:
-            Concatenated tensor containing normalized joint positions, normalized joint
-            velocities, and actions.
-        """
-        prop = torch.cat(
-            (
-                self.normalised_joint_pos,
-                self.normalised_joint_vel,
-                self.actions,
-            ),
-            dim=-1,
-        )
-
-        return prop
-
-    def _get_tactile(self):
-        """Return binary tactile activation per finger segment.
-
-        Computes contact forces from multiple sensors and converts them to binary
-        activations based on a threshold.
-
-        Returns:
-            Concatenated tensor of binary tactile activations for all finger segments.
-        """
-        distal_forces = self.distal_sensor.data.net_forces_w[:].clone()
-        proximal_forces = self.proximal_sensor.data.net_forces_w[:].clone()
-        middle_forces = self.middle_sensor.data.net_forces_w[:].clone()
-        palm_forces = self.palm_sensor.data.net_forces_w[:].clone()
-        metacarpal_forces = self.metacarpal_sensor.data.net_forces_w[:].clone()
-
-        distal_norm = torch.norm(distal_forces, dim=-1)
-        proximal_norm = torch.norm(proximal_forces, dim=-1)
-        middle_norm = torch.norm(middle_forces, dim=-1)
-        palm_norm = torch.norm(palm_forces, dim=-1)
-        metacarpal_norm = torch.norm(metacarpal_forces, dim=-1)
-
-        # Convert to binary activations based on threshold
-        if self.dtype == torch.float16:
-            distal_norm = (distal_norm > self.binary_threshold).half()
-            proximal_norm = (proximal_norm > self.binary_threshold).half()
-            middle_norm = (middle_norm > self.binary_threshold).half()
-            palm_norm = (palm_norm > self.binary_threshold).half()
-            metacarpal_norm = (metacarpal_norm > self.binary_threshold).half()
-        else:
-            distal_norm = (distal_norm > self.binary_threshold).float()
-            proximal_norm = (proximal_norm > self.binary_threshold).float()
-            middle_norm = (middle_norm > self.binary_threshold).float()
-            palm_norm = (palm_norm > self.binary_threshold).float()
-            metacarpal_norm = (metacarpal_norm > self.binary_threshold).float()
-
-        tactile = torch.cat((distal_norm, proximal_norm, middle_norm, palm_norm, metacarpal_norm), dim=-1)
-
-        self.last_tactile = self.tactile
-        self.tactile = tactile
-        return tactile
 
     def _reset_idx(self, env_ids: Sequence[int] | None):
         """Reset articulation state and optionally randomize joints.

@@ -80,13 +80,18 @@ def make_env(agent_cfg, env_cfg, writer, args_cli):
     Returns:
         Wrapped gymnasium environment.
     """
+    # Update env_cfg with observation settings from agent_cfg
+    # Note: configclass instances don't have .update() method, so we assign attributes directly
+    if "observations" in agent_cfg:
+        obs_cfg = agent_cfg["observations"]
+        env_cfg.obs_list = obs_cfg.get("obs_list", getattr(env_cfg, "obs_list", []))
+        env_cfg.obs_stack = obs_cfg.get("obs_stack", getattr(env_cfg, "obs_stack", 1))
+        if "pixel_cfg" in obs_cfg:
+            env_cfg.pixel_cfg = obs_cfg["pixel_cfg"]
+        if "tactile_cfg" in obs_cfg:
+            env_cfg.tactile_cfg = obs_cfg["tactile_cfg"]
+
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
-
-    # Transfer observation configuration to environment
-    env.unwrapped.obs_stack = agent_cfg["observations"]["obs_stack"]
-    env.unwrapped.pixel_cfg = agent_cfg["observations"].get("pixel_cfg", None)
-    env.unwrapped.preprocess_cfg = agent_cfg["observations"].get("preprocess_cfg", None)
-
     obs, _ = env.reset()
 
     # Build observation space dictionary accounting for frame stacking

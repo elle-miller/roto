@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 """
+Author: Elle Miller 2025
+
 FrankaFind RL Task Environment
 
 This module defines the FindEnv environment for the Franka Panda robot,
