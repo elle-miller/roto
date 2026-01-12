@@ -26,7 +26,7 @@ parent_dir = os.getcwd()
 
 FRANKA_PANDA_CFG = ArticulationCfg(
     spawn=sim_utils.UsdFileCfg(
-        # Uses a local copy of the Franka USD file
+        # Uses a local copy of the Franka USD file with added bodies for contact sensors (red and blue links for viz)
         # Alternative: usd_path=f"{ISAACLAB_NUCLEUS_DIR}/Robots/FrankaEmika/panda_instanceable.usd"
         usd_path=os.path.join(parent_dir, "roto/assets/franka/franka.usd"),
         activate_contact_sensors=True,

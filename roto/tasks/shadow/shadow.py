@@ -94,8 +94,6 @@ class ShadowEnvCfg(RotoEnvCfg):
         prim_path="/World/envs/env_.*/Robot/robot0_(.*distal|.*middle|.*proximal|palm|lfmetacarpal)",
         update_period=0.0,
         history_length=1,
-        visualizer_cfg=marker_cfg,
-        filter_prim_paths_expr=["/World/envs/env_.*/Object"],
     )
 
 

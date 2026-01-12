@@ -3,12 +3,9 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Script to play a checkpoint of an RL agent from skrl.
+"""Script to play a trained RL agent with isaaclab_rl.
 
-Visit the skrl documentation (https://skrl.readthedocs.io) to see the examples structured in
-a more user-friendly way.
-
-Note: Launch Isaac Sim Simulator first before running this script.
+Author: Elle Miller 
 """
 
 
@@ -89,7 +86,7 @@ def main():
     writer = Writer(agent_cfg, play=True)
 
     # Make environment (order: gymnasium Env -> FrameStack -> IsaacLab)
-    env = make_env(env_cfg, writer, args_cli, agent_cfg["observations"]["obs_stack"])
+    env = make_env(agent_cfg, env_cfg, writer, args_cli)
 
     # Setup models
     policy, value, encoder, value_preprocessor = make_models(env, env_cfg, agent_cfg, dtype)

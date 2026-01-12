@@ -77,11 +77,13 @@ class RotoEnvCfg(DirectRLEnvCfg):
     viewer: ViewerCfg = ViewerCfg(eye=eye, lookat=lookat, resolution=(1920, 1080))
 
     # camera
-    img_dim = 200
     eye = (0.0, -0.6, 0.65)
     target = (0.0, -0.35, 0.5)
 
     render_cfg = sim_utils.RenderCfg(rendering_mode="quality")
+
+    # tactile sensor configuration
+    robot_contact_sensor_cfg = None
 
 
 class RotoEnv(DirectRLEnv):
@@ -162,9 +164,9 @@ class RotoEnv(DirectRLEnv):
 
         # Add tactile sensor if listed
         if "tactile" in self.cfg.obs_list:
+            print("Adding contact sensor for tactile observation")
             self.robot_contact_sensor = ContactSensor(self.cfg.robot_contact_sensor_cfg)
             self.scene.sensors["robot_contact_sensor"] = self.robot_contact_sensor
-
 
     def _configure_gym_env_spaces(self):
         """Configure Gymnasium observation and action spaces (placeholder)."""
@@ -279,7 +281,7 @@ class RotoEnv(DirectRLEnv):
                 data[torch.isinf(data)] = 0.0
                 data[torch.isnan(data)] = 0.0
 
-            elif data_type == "rgb":
+            elif data_type == "rgb" and self.pixel_cfg["normalise_rgb"]:
                 # Normalize RGB: convert to float, center by subtracting mean, then scale back
                 data = data.float() / 255.0
                 mean_tensor = torch.mean(data, dim=(1, 2), keepdim=True)
@@ -303,8 +305,10 @@ class RotoEnv(DirectRLEnv):
         Returns:
             Concatenated tensor of tactile force.
         """
+
+        # Forces is [num_envs, num_sensors, 3], take the norm to be [num_envs, num_sensors]
         forces = self.robot_contact_sensor.data.net_forces_w[:].clone()
-        norm = torch.norm(forces, dim=-1)
+        norm = torch.linalg.vector_norm(forces, dim=-1, keepdim=False)
 
         # Convert to binary activations based on threshold if binary_tactile is True
         if self.tactile_cfg is not None and self.tactile_cfg["binary_tactile"]:

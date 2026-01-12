@@ -8,7 +8,7 @@
 Performs hyperparameter optimization using Optuna and then trains the best configuration
 across multiple seeds.
 
-Note: Launch Isaac Sim Simulator first before running this script.
+Author: Elle Miller 
 """
 
 

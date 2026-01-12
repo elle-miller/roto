@@ -1,0 +1,44 @@
+# Franka Find config: rl_only_ptg
+observations:
+  obs_list:
+  - prop
+  - tactile
+  - gt
+  obs_stack: 1
+  tactile_cfg:
+    binary_tactile: true
+    binary_threshold: 0.01
+
+encoder:
+  method: early
+  hiddens:
+  - 512
+  - 256
+  activations:
+  - elu
+  - elu
+  layernorm: true
+  state_preprocessor: null
+
+agent:
+  rollouts: 16
+  learning_epochs: 8
+  mini_batches: 16
+  discount_factor: 0.99
+  lambda: 0.95
+  value_clip: 0.2
+  ratio_clip: 0.2
+  kl_threshold: 0
+  learning_rate: 1.0e-05
+  entropy_loss_scale: 0
+  value_loss_scale: 1.0
+  grad_norm_clip: 1.0
+
+experiment:
+  experiment_name: rl_only_ptg
+  save_checkpoints: 1
+  tb_log: 1
+  wandb: 1
+  wandb_kwargs:
+    group: rl_only_ptg
+    name: '1'

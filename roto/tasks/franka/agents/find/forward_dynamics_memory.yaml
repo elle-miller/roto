@@ -1,4 +1,4 @@
-# Franka Find config: forward_dynamics
+# Franka Find config: forward_dynamics_memory
 
 agent:
   rollouts: 64
@@ -16,17 +16,17 @@ agent:
 
 ssl_task:
   type: forward_dynamics
-  n_rollouts: 1
+  n_rollouts: 3
   tactile_only: false
-  loss_weight: 0.0062
-  learning_rate: 1.55e-04
-  seq_length: 3
+  loss_weight: 00.1364
+  learning_rate: 3.81e-05
+  seq_length: 4
 
 experiment:
-  experiment_name: forward_dynamics
+  experiment_name: forward_dynamics_memory
   save_checkpoints: 1
   tb_log: 1
   wandb: 1
   wandb_kwargs:
-    group: forward_dynamics
+    group: forward_dynamics_memory
     name: test

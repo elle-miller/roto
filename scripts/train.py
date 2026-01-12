@@ -3,14 +3,10 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Script to train RL agent with skrl.
+"""Script to train RL agent with isaaclab_rl.
 
-Visit the skrl documentation (https://skrl.readthedocs.io) to see the examples structured in
-a more user-friendly way.
-
-Note: Launch Isaac Sim Simulator first before running this script.
+Author: Elle Miller 
 """
-
 
 import argparse
 import sys
@@ -48,7 +44,6 @@ from common_utils import LOG_PATH, make_env, train_one_seed, update_env_cfg
 from isaaclab.utils import update_dict
 from isaaclab_tasks.utils.hydra import register_task_to_hydra
 from isaaclab_tasks.utils.parse_cfg import load_cfg_from_registry
-
 from isaaclab_rl.tools.writer import Writer
 
 

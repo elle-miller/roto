@@ -36,7 +36,7 @@ class FindEnvCfg(FrankaEnvCfg):
     """
 
     episode_length_s = 5.0  # Episode length in seconds
-    act_moving_average = 0.0  # Action smoothing factor
+    act_moving_average = 1.0  # Action smoothing factor. 1.0 means no smoothing
     default_object_pos = [0.5, 0, 0.03]
     reset_object_position_noise = 0.1
 
@@ -47,8 +47,8 @@ class FindEnvCfg(FrankaEnvCfg):
             radius=0.03,
             physics_material=sim_utils.RigidBodyMaterialCfg(static_friction=1.0, dynamic_friction=0.8, restitution=0.8),
             visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.541, 0.808, 0)),
-            rigid_props=RigidBodyPropertiesCfg(kinematic_enabled=True),
-            mass_props=sim_utils.MassPropertiesCfg(mass=100),
+            rigid_props=RigidBodyPropertiesCfg(kinematic_enabled=False),
+            mass_props=sim_utils.MassPropertiesCfg(mass=1000000),
             collision_props=CollisionPropertiesCfg(collision_enabled=True),
         ),
     )
@@ -63,6 +63,10 @@ class FindEnvCfg(FrankaEnvCfg):
             )
         },
     )
+    
+    # camera
+    eye = (1.0, 0, 0.45)
+    target = (0.4, 0, 0.2)
 
 
 class FindEnv(FrankaEnv):
@@ -300,7 +304,7 @@ def compute_rewards(object_ee_distance: torch.Tensor):
     Returns:
             torch.Tensor: Distance reward.
     """
-    std = 0.03
+    std = 0.1
     r_dist = distance_reward(object_ee_distance, std=std)
     return r_dist
 

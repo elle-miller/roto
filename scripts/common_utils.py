@@ -222,6 +222,7 @@ def make_trainer(env, agent, agent_cfg, ssl_task=None, writer=None):
     trainer = Trainer(
         env=env,
         agents=agent,
+        agent_cfg=agent_cfg,
         num_timesteps_M=num_timesteps_M,
         num_eval_envs=num_eval_envs,
         ssl_task=ssl_task,

@@ -57,22 +57,16 @@ class FrankaEnvCfg(RotoEnvCfg):
     marker_cfg = FRAME_MARKER_CFG.copy()
     marker_cfg.markers["frame"].scale = (0.1, 0.1, 0.1)
     marker_cfg.prim_path = "/Visuals/ContactCfg"
-    left_contact_cfg = ContactSensorCfg(
-        prim_path="/World/envs/env_.*/Robot/left_contact_sensor",
+
+    # Contact sensor configuration: I created additional links in the custom Franka USD file called "left_contact_sensor" and "right_contact_sensor"
+    robot_contact_sensor_cfg = ContactSensorCfg(
+        prim_path=f"/World/envs/env_.*/Robot/(left|right)_contact_sensor",
         update_period=0.0,
         history_length=1,
         debug_vis=False,
         visualizer_cfg=marker_cfg,
-        filter_prim_paths_expr=["/World/envs/env_.*/Object"],
     )
-    right_contact_cfg = ContactSensorCfg(
-        prim_path="/World/envs/env_.*/Robot/right_contact_sensor",
-        update_period=0.0,
-        history_length=1,
-        debug_vis=False,
-        visualizer_cfg=marker_cfg,
-        filter_prim_paths_expr=["/World/envs/env_.*/Object"],
-    )
+    
 
     # Actuated joint names for Franka Panda
     actuated_joint_names = [
@@ -104,23 +98,6 @@ class FrankaEnvCfg(RotoEnvCfg):
             ),
         ],
     )
-
-    # Contact sensor frame transformer configuration
-    robot_contact_sensor_cfg: FrameTransformerCfg = FrameTransformerCfg(
-        prim_path="/World/envs/env_.*/Robot/panda_link0",
-        debug_vis=False,
-        visualizer_cfg=marker_cfg,
-        target_frames=[
-            FrameTransformerCfg.FrameCfg(
-                prim_path="/World/envs/env_.*/Robot/.*_contact_sensor",
-                name="gripper_contact_sensor",
-                offset=OffsetCfg(
-                    pos=[0.0, 0.0, 0.0],
-                ),
-            ),
-        ],
-    )
-
 
 
 class FrankaEnv(RotoEnv):
@@ -164,13 +141,13 @@ class FrankaEnv(RotoEnv):
         """
         Set up the simulation scene, including robot, sensors, and lighting.
         """
+        super()._setup_scene()
+        
         self.robot = Articulation(self.cfg.robot_cfg)
 
         # Frame transformers for end-effector and contact sensors
         self.ee_frame = FrameTransformer(self.cfg.ee_config)
         self.ee_frame.set_debug_vis(False)
-        self.left_sensor_frame = FrameTransformer(self.cfg.left_sensor_cfg)
-        self.right_sensor_frame = FrameTransformer(self.cfg.right_sensor_cfg)
 
         # Add ground plane
         spawn_ground_plane(prim_path="/World/ground", cfg=GroundPlaneCfg(size=(10000, 10000)))
@@ -181,8 +158,6 @@ class FrankaEnv(RotoEnv):
         # Register components to scene
         self.scene.articulations["robot"] = self.robot
         self.scene.sensors["ee_frame"] = self.ee_frame
-        self.scene.sensors["left_sensor_frame"] = self.left_sensor_frame
-        self.scene.sensors["right_sensor_frame"] = self.right_sensor_frame
 
         # Add lighting
         yellow = (1.0, 0.96, 0.0)
@@ -194,13 +169,6 @@ class FrankaEnv(RotoEnv):
         light_cfg_2 = sim_utils.SphereLightCfg(intensity=10000.0, color=orange)
         light_cfg_2.func("/World/disk", light_cfg_2, translation=(-1, 0, 1))
 
-        # Add tactile contact sensors if required
-        if "tactile" in self.cfg.obs_list:
-            self.left_contact_sensor = ContactSensor(self.cfg.left_contact_cfg)
-            self.scene.sensors["left_contact_sensor"] = self.left_contact_sensor
-
-            self.right_contact_sensor = ContactSensor(self.cfg.right_contact_cfg)
-            self.scene.sensors["right_contact_sensor"] = self.right_contact_sensor
 
     def _get_proprioception(self):
         """
@@ -218,8 +186,8 @@ class FrankaEnv(RotoEnv):
                 self.ee_pos,
                 self.ee_rot,
                 self.actions,
-                control_errors,
-                self.episode_length_buf.unsqueeze(1),
+                # control_errors,
+                # self.episode_length_buf.unsqueeze(1),
             ),
             dim=-1,
         )
