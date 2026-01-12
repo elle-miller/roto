@@ -6,16 +6,16 @@ import os
 import random
 import torch
 
-from isaaclab_rl.models.encoder import Encoder
-from isaaclab_rl.models.running_standard_scaler import RunningStandardScaler
-from isaaclab_rl.rl.memories import Memory
-from isaaclab_rl.rl.policy_value import DeterministicValue, GaussianPolicy
-from isaaclab_rl.rl.ppo import PPO, PPO_DEFAULT_CONFIG
-from isaaclab_rl.rl.trainer import Trainer
-from isaaclab_rl.ssl.dynamics import ForwardDynamics
-from isaaclab_rl.ssl.reconstruction import Reconstruction
-from isaaclab_rl.wrappers.frame_stack import FrameStack
-from isaaclab_rl.wrappers.isaaclab_wrapper import IsaacLabWrapper
+from rigorous_rl.models.encoder import Encoder
+from rigorous_rl.models.running_standard_scaler import RunningStandardScaler
+from rigorous_rl.rl.memories import Memory
+from rigorous_rl.rl.policy_value import DeterministicValue, GaussianPolicy
+from rigorous_rl.rl.ppo import PPO, PPO_DEFAULT_CONFIG
+from rigorous_rl.rl.trainer import Trainer
+from rigorous_rl.ssl.dynamics import ForwardDynamics
+from rigorous_rl.ssl.reconstruction import Reconstruction
+from rigorous_rl.wrappers.frame_stack import FrameStack
+from rigorous_rl.wrappers.isaaclab_wrapper import IsaacLabWrapper
 
 # Import task modules to register environments
 from roto.tasks import franka, shadow  # noqa: F401

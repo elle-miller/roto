@@ -1,4 +1,4 @@
-"""Installation script for the 'isaaclab_rl' python package."""
+"""Installation script for the 'roto' python package."""
 
 import os
 

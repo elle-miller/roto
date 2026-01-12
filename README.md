@@ -10,9 +10,9 @@ RoTO is a **reinforcement learning benchmark environment** designed to standardi
 
 <img src="readme_assets/images/setup.png" width="1000" border="1"/>
 
-We split the paper code across two repositories. Imagine the typical RL loop: you can think of `isaaclab_rl` as the agent, and `roto` as the environment. We did this for modularity, in case you want to use your own RL repository instead of ours (there will be some integration to achieve this but happy to help).
+We split the paper code across two repositories. Imagine the typical RL loop: you can think of `rigorous_rl` as the agent, and `roto` as the environment. We did this for modularity, in case you want to use your own RL repository instead of ours (there will be some integration to achieve this but happy to help).
 
-`isaaclab_rl`: The motto of this repo is _"doing good RL with Isaac Lab as painlessly as possible"_. We started from the [skrl](https://github.com/Toni-SM/skrl) library and made significant changes to better handle multimodal dictionary observations, observation stacking and associated memory management, and integrated self-supervision. Many existing libraries did not provide support for doing robust RL research (correct evaluation metrics, distinct train/evaluation envs, integrated hyperparameter optimisation). These are well established norms in the RL research community, but are not yet consistently present in RL+robotics research, which we want to encourage 🚀
+`rigorous_rl`: The motto of this repo is _"doing good RL with Isaac Lab as painlessly as possible"_. We started from the [skrl](https://github.com/Toni-SM/skrl) library and made significant changes to better handle multimodal dictionary observations, observation stacking and associated memory management, and integrated self-supervision. Many existing libraries did not provide support for doing robust RL research (correct evaluation metrics, distinct train/evaluation envs, integrated hyperparameter optimisation). These are well established norms in the RL research community, but are not yet consistently present in RL+robotics research, which we want to encourage 🚀
 
 `roto`: This repo just contains the robot configurations and task definitions. We take advantage of class inheritance to heavily reduce repeated code. `RotoEnv` is a child of `DirectRLEnv`, and sets up basic functions to perform joint position control of a robot and reset it. `[Robot]Env` is a child of `RotoEnv`, defining robot-specific functions that do not change task-to-task, e.g. the proprioceptive observation key. Finally, `[Task]Env` defines task-specific functions such as setting up the environment, rewards, and episode resets.
 
@@ -76,9 +76,9 @@ pip install -U torch==2.7.0 torchvision==0.22.0 --index-url https://download.pyt
 # 2. install isaac lab and isaac sim as pip packages
 pip install isaaclab[isaacsim,all]==2.3.0 --extra-index-url https://pypi.nvidia.com
 
-# 3. install isaaclab_rl as local editable package
-git clone git@github.com:elle-miller/isaaclab_rl.git
-cd isaaclab_rl
+# 3. install rigorous_rl as local editable package
+git clone git@github.com:elle-miller/rigorous_rl.git
+cd rigorous_rl
 pip install -e .
 # verify installation with isaacsim
 
@@ -88,10 +88,10 @@ cd roto
 pip install -e .
 ```
 1. Install Isaac Lab (recommend [pip installation](https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/isaaclab_pip_installation.html#))
-2. Install [isaaclab_rl](https://github.com/elle-miller/isaaclab_rl) as a local editable package
+2. Install [rigorous_rl](https://github.com/elle-miller/rigorous_rl) as a local editable package
 ```
-git clone git@github.com:elle-miller/isaaclab_rl.git
-cd isaaclab_rl
+git clone git@github.com:elle-miller/rigorous_rl.git
+cd rigorous_rl
 pip install -e .
 ```
 3. Install `roto` as a local editable package
