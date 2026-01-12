@@ -29,21 +29,19 @@ The agents are all joint position controlled. Franka has 9 joints, Shadow has 20
 
 ## Observations
 
-We use dictionary-style observations, and categorising into proprioception, tactile, pixels, and gt (ground-truth). The proprioception & tactile methods should be defined in RobotEnv, but gt information is task-dependent. To specify which observations are used, add the keys to `obs_list` in the agent cfg.
+We use dictionary-style observations, and categorising into proprioception, tactile, rgb, depth, and gt (ground-truth). The proprioception & tactile methods should be defined in RobotEnv, but gt information is task-dependent. To specify which observations are used, add the keys to `obs_list` in the agent cfg. Note that `rgb` and `depth` are separate observation keys (not a combined `pixels` key).
 ```
 observations:
   obs_list:
   - prop
   - tactile
-  - pixels
+  - rgb
+  - depth
   obs_stack: 3
   tactile_cfg:
     binary_tactile: true
     binary_threshold: 0.01
   pixel_cfg:
-    types: 
-    - rgb
-    - depth  
     width: 80
     height: 80
     latent_pixel_dim: 128

@@ -1,25 +1,25 @@
 # Shadow Baoding config: tac_dynamics
 
 agent:
-  rollouts: 16
-  learning_epochs: 14
+  rollouts: 32
+  learning_epochs: 4
   mini_batches: 16
   discount_factor: 0.99
-  lambda: 0.907232209016445
-  learning_rate: 8.571638417056478e-05
+  lambda: 0.95
+  learning_rate: 2.08e-05
   grad_norm_clip: 1.0
-  ratio_clip: 0.15780009343526674
-  value_clip: 0.2018937033984739
-  value_loss_scale: 0.8381938759726169
-  entropy_loss_scale: 0.2551308863496997
+  ratio_clip: 0.2
+  value_clip: 0.2
+  value_loss_scale: 1.0
+  entropy_loss_scale: 0.05
   kl_threshold: 0
 
 ssl_task:
   type: forward_dynamics
   n_rollouts: 1
   tactile_only: true
-  loss_weight: 0.0024563011888180755
-  learning_rate: 0.00015653936173824111
+  loss_weight: 0.04839
+  learning_rate: 1.53e-04
   seq_length: 4
 
 experiment:

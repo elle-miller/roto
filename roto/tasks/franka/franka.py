@@ -133,9 +133,6 @@ class FrankaEnv(RotoEnv):
         }
         self.extras["counters"] = {}
 
-        # Need these dimensions explicitly for tactile decoding
-        self.num_prop_observations = self._get_proprioception().shape[1]
-        self.num_tactile_observations = self._get_tactile().shape[1]
 
     def _setup_scene(self):
         """

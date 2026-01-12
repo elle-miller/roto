@@ -3,15 +3,13 @@ observations:
   obs_list:
   - prop
   - tactile
-  - pixels
+  - rgb
+  - depth
   obs_stack: 3
   tactile_cfg:
     binary_tactile: true
     binary_threshold: 0.01
   pixel_cfg:
-    types: 
-    - rgb
-    - depth  
     width: 80
     height: 80
     latent_pixel_dim: 128
@@ -23,18 +21,18 @@ agent:
   learning_epochs: 17
   mini_batches: 32
   discount_factor: 0.99
-  lambda: 0.9707621095552899
+  lambda: 0.95
   learning_rate: 7.3962786581536985e-06
   grad_norm_clip: 1.0
-  ratio_clip: 0.2172949130215031
-  value_clip: 0.20670917119390142
-  value_loss_scale: 0.7473253914396395
-  entropy_loss_scale: 0.018659231626923692
+  ratio_clip: 0.2
+  value_clip: 0.2
+  value_loss_scale: 1.0
+  entropy_loss_scale: 0
   kl_threshold: 0
 
 experiment:
   experiment_name: rl_only_ptd
-  wandb: 0
+  wandb: 1
   wandb_kwargs:
     group: rl_only_ptd
     name: '1'

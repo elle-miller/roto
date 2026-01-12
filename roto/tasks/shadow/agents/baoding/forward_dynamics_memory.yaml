@@ -2,7 +2,7 @@
 
 agent:
   rollouts: 32
-  learning_epochs: 6
+  learning_epochs: 4
   mini_batches: 16
   discount_factor: 0.99
   lambda: 0.95
@@ -16,15 +16,15 @@ agent:
 
 ssl_task:
   type: forward_dynamics
-  n_rollouts: 1
+  n_rollouts: 4
   tactile_only: false
-  loss_weight: 3.686
-  learning_rate: 2.83e-04
-  seq_length: 3
+  loss_weight: 1.6349
+  learning_rate: 1.67e-05
+  seq_length: 5
 
 experiment:
-  experiment_name: forward_dynamics
+  experiment_name: forward_dynamics_memory
   wandb: 1
   wandb_kwargs:
-    group: forward_dynamics
+    group: forward_dynamics_memory
     name: '1'

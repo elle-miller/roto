@@ -100,12 +100,19 @@ def make_env(agent_cfg, env_cfg, writer, args_cli):
         obs_shape = list(v.shape)
         # Multiply the last dimension (channels) by the stack size
         obs_shape[-1] = obs_shape[-1] * env.unwrapped.obs_stack
-        if k == "pixels":
+        if k == "rgb":
             gym_dict[k] = gym.spaces.Box(
                 low=0,
                 high=255,
                 shape=obs_shape[1:],
                 dtype=np.uint8,
+            )
+        elif k == "depth":
+            gym_dict[k] = gym.spaces.Box(
+                low=0.0,
+                high=1.0,
+                shape=obs_shape[1:],
+                dtype=np.float32,
             )
         else:
             gym_dict[k] = gym.spaces.Box(low=-np.inf, high=np.inf, shape=obs_shape[1:], dtype=np.float32)

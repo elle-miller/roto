@@ -83,7 +83,7 @@ class BounceEnv(ShadowEnv):
         self.waiting_for_contact = torch.zeros((self.num_envs,), dtype=torch.bool, device=self.device)
         self.new_bounces = torch.zeros((self.num_envs,), dtype=self.dtype, device=self.device)
         self.time_without_contact = torch.zeros((self.num_envs,), dtype=torch.int, device=self.device)
-        self.tactile = self._get_tactile()
+        self.tactile = super()._get_tactile()
         self.last_tactile = self.tactile.clone()
 
     def _get_gt(self):
@@ -101,7 +101,6 @@ class BounceEnv(ShadowEnv):
                 torch.norm(self.object_linvel, dim=1).unsqueeze(-1),
                 torch.norm(self.object_angvel, dim=1).unsqueeze(-1),
                 self.time_without_contact.unsqueeze(-1),
-                self.waiting_for_contact.unsqueeze(-1),
             ),
             dim=-1,
         )

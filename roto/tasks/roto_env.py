@@ -40,6 +40,7 @@ class RotoEnvCfg(DirectRLEnvCfg):
     physics_dt = 1 / 120  # Simulation timestep (seconds)
     decimation = 2  # Number of physics steps per control step
     render_interval = 2  # Physics steps per rendering step
+    act_moving_average = 1.0
 
     # Isaac 4.5 compatibility
     observation_space = 0
@@ -132,8 +133,8 @@ class RotoEnv(DirectRLEnv):
         self.normalised_joint_pos = torch.zeros((self.num_envs, self.num_joints), device=self.device)
         self.normalised_joint_vel = torch.zeros((self.num_envs, self.num_joints), device=self.device)
 
-        # Set up camera if pixels are in the observation list
-        if "pixels" in self.cfg.obs_list:
+        # Set up camera if rgb or depth are in the observation list
+        if "rgb" in self.cfg.obs_list or "depth" in self.cfg.obs_list:
             eyes = (
                 torch.tensor(self.cfg.eye, dtype=torch.float, device=self.device).repeat((self.num_envs, 1))
                 + self.scene.env_origins
@@ -146,8 +147,8 @@ class RotoEnv(DirectRLEnv):
 
     def _setup_scene(self):
         """Set up the simulation scene."""
-        # Set up camera if pixels are in the observation list
-        if "pixels" in self.cfg.obs_list and self.pixel_cfg is not None:
+        # Set up camera if rgb or depth are in the observation list
+        if ("rgb" in self.cfg.obs_list or "depth" in self.cfg.obs_list) and self.pixel_cfg is not None:
             print("Setting up camera for pixel observation with width: ", self.pixel_cfg["width"], "and height: ", self.pixel_cfg["height"])
             tiled_camera = TiledCameraCfg(
                 prim_path="/World/envs/env_.*/Camera",
@@ -232,8 +233,10 @@ class RotoEnv(DirectRLEnv):
                 obs_dict[k] = self._get_gt()
             elif k == "tactile":
                 obs_dict[k] = self._get_tactile()
-            elif k == "pixels":
-                obs_dict[k] = self._get_pixels()
+            elif k == "rgb":
+                obs_dict[k] = self._get_rgb()
+            elif k == "depth":
+                obs_dict[k] = self._get_depth()
             else:
                 raise ValueError(f"Unknown observation key '{k}'")
 
@@ -258,43 +261,65 @@ class RotoEnv(DirectRLEnv):
 
         return prop
 
-    def _get_pixels(self) -> torch.Tensor:
-        """Return rendered pixel observations.
+    def _get_rgb(self) -> torch.Tensor:
+        """Return rendered RGB observations.
 
-        Processes RGB and depth camera data, handling edge cases like inf/NaN values
-        in depth images and applying normalization to RGB images.
+        Processes RGB camera data, optionally applying normalization.
 
         Returns:
-            Concatenated tensor of processed camera data.
+            RGB tensor with shape [num_envs, height, width, 3] and dtype uint8.
         """
         if self.pixel_cfg is None:
-            raise ValueError("pixel_cfg is not set. Make sure 'pixels' is in obs_list and pixel_cfg is provided in agent_cfg.")
+            raise ValueError("pixel_cfg is not set. Make sure 'rgb' is in obs_list and pixel_cfg is provided in agent_cfg.")
 
-        processed_data = []
+        # Clone the RGB buffer
+        data = self._tiled_camera.data.output["rgb"].clone()
 
-        for data_type in self.pixel_cfg["types"]:
-            # Clone the specific buffer
-            data = self._tiled_camera.data.output[data_type].clone()
+        if self.pixel_cfg.get("normalise_rgb", False):
+            # Normalize RGB: convert to float, center by subtracting mean, then scale back
+            data = data.float() / 255.0
+            mean_tensor = torch.mean(data, dim=(1, 2), keepdim=True)
+            data -= mean_tensor
+            data = 255.0 * data  # Scale back to [0, 255]
+            data = data.to(torch.uint8)
 
-            if data_type == "depth":
-                # Handle inf and NaN values which are common in depth sensors
-                data[torch.isinf(data)] = 0.0
-                data[torch.isnan(data)] = 0.0
+        return data
 
-            elif data_type == "rgb" and self.pixel_cfg["normalise_rgb"]:
-                # Normalize RGB: convert to float, center by subtracting mean, then scale back
-                data = data.float() / 255.0
-                mean_tensor = torch.mean(data, dim=(1, 2), keepdim=True)
-                data -= mean_tensor
-                data = 255.0 * data  # Scale back to [0, 255]
-                data = data.to(torch.uint8)
+    def _get_depth(self) -> torch.Tensor:
+        """Return rendered depth observations.
 
-            processed_data.append(data)
+        Processes depth camera data, handling edge cases like inf/NaN values.
 
-        # Concatenate the processed tensors along the channel dimension
-        camera_data = torch.cat(processed_data, dim=-1)
+        Returns:
+            Depth tensor with shape [num_envs, height, width, 1] and dtype float32.
+        """
+        if self.pixel_cfg is None:
+            raise ValueError("pixel_cfg is not set. Make sure 'depth' is in obs_list and pixel_cfg is provided in agent_cfg.")
 
-        return camera_data
+        # Clone the depth buffer
+        data = self._tiled_camera.data.output["depth"].clone()
+
+        min_depth = 0.0
+        max_depth = self.pixel_cfg["max_depth"]
+
+        # 1. Handle inf/NaN: Set to max_depth instead of 0
+        data[torch.isinf(data) | torch.isnan(data)] = max_depth
+        
+        # 2. Clip: Ensure no values are outside [min_depth, max_depth]
+        data = torch.clamp(data, min_depth, max_depth)
+        
+        # 3. Normalize: Scale to [0.0, 1.0]
+        # Form: (value - min) / (max - min)
+        data = (data - min_depth) / (max_depth - min_depth)
+        
+        # Optional: Invert if you want closer objects to be "brighter"
+        data = 1.0 - data
+
+        # Ensure depth has a channel dimension: [num_envs, height, width, 1]
+        if data.dim() == 3:
+            data = data.unsqueeze(-1)
+
+        return data
 
     def _get_tactile(self):
         """Return tactile force.

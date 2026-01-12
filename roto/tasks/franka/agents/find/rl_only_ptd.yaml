@@ -2,23 +2,22 @@
 observations:
   obs_list:
   - prop
+  - depth
   - tactile
-  - pixels
   obs_stack: 3
   tactile_cfg:
     binary_tactile: true
     binary_threshold: 0.0
   pixel_cfg:
-    types: 
-    - depth
     width: 80
     height: 80
-    latent_pixel_dim: 128
+    latent_pixel_dim: 256
     normalise_rgb: false
+    max_depth: 2.0
 
 agent:
-  rollouts: 16
-  learning_epochs: 8
+  rollouts: 32
+  learning_epochs: 4
   mini_batches: 8
   discount_factor: 0.99
   lambda: 0.95
@@ -26,8 +25,8 @@ agent:
   ratio_clip: 0.2
   kl_threshold: 0
   learning_rate: 1.0e-05
-  entropy_loss_scale: 0
-  value_loss_scale: 1.0
+  entropy_loss_scale: 0.01
+  value_loss_scale: 0.5
   grad_norm_clip: 1.0
 
 experiment:
@@ -37,8 +36,14 @@ experiment:
   wandb: 1
   wandb_kwargs:
     group: rl_only_ptd
-    name: '1'
+    name: new hparam
 
 trainer:
   num_eval_envs: 20
   max_global_timesteps_M: 400
+
+
+sweeper:
+  storage: sqlite:///franka_find_pixels.db
+  warmup_timesteps_M: 15
+  max_sweep_timesteps_M: 25
