@@ -37,7 +37,6 @@ def _variant_paths(task_name: str) -> dict[str, str]:
 def _register_task(task_id: str, env_cls, cfg_cls) -> None:
     kwargs = {"env_cfg_entry_point": cfg_cls}
     kwargs.update(_variant_paths(task_id.lower()))
-    kwargs["memory"] = kwargs["forward_dynamics"]
 
     gym.register(
         id=task_id,
