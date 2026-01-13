@@ -29,7 +29,7 @@ The agents are all joint position controlled. Franka has 9 joints, Shadow has 20
 
 ## Observations
 
-We use dictionary-style observations, and categorising into proprioception, tactile, rgb, depth, and gt (ground-truth). The proprioception & tactile methods should be defined in RobotEnv, but gt information is task-dependent. To specify which observations are used, add the keys to `obs_list` in the agent cfg. Note that `rgb` and `depth` are separate observation keys (not a combined `pixels` key).
+We use dictionary-style observations, and categorising into proprioception, tactile, rgb, depth, and gt (ground-truth). The proprioception & tactile methods should be defined in `RobotEnv`, but gt information is task-dependent. To specify which observations are used, add the keys to `obs_list` in the agent cfg..
 ```
 observations:
   obs_list:
@@ -37,6 +37,7 @@ observations:
   - tactile
   - rgb
   - depth
+  - gt
   obs_stack: 3
   tactile_cfg:
     binary_tactile: true
@@ -44,8 +45,9 @@ observations:
   pixel_cfg:
     width: 80
     height: 80
-    latent_pixel_dim: 128
+    latent_pixel_dim: 128 
     normalise_rgb: true
+    max_depth: 2.0  # meters
 ```
 Here is an example rendering of raw RGB, normalised RGB, and depth of Shadow Baoding agent.
 <img src="readme_assets/rgb.gif" 
@@ -63,31 +65,10 @@ Here is an example rendering of raw RGB, normalised RGB, and depth of Shadow Bao
 
 ## 🛠️ Installation
 
-We need Isaac Sim, Isaac Lab, RL, and RoTO. We recommend using the latest Isaac Sim for maximum performance. The easiest route (imo) is to install both Isaac Sim and Isaac Lab as pip packages:
+We need to install Isaac Sim, Isaac Lab, `multimodal_rl` and `roto` in a conda environment. We recommend using the latest Isaac Sim for maximum performance.
 
+1. Create conda environment and install Isaac Lab and Isaac Sim (easiest to install both as [pip packages](https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/isaaclab_pip_installation.html#))
 
-```
-# 1. create conda env and install torch
-conda create -n isaaclab python=3.11
-conda activate isaaclab
-pip install --upgrade pip
-pip install -U torch==2.7.0 torchvision==0.22.0 --index-url https://download.pytorch.org/whl/cu128
-
-# 2. install isaac lab and isaac sim as pip packages
-pip install isaaclab[isaacsim,all]==2.3.0 --extra-index-url https://pypi.nvidia.com
-
-# 3. install multimodal_rl as local editable package
-git clone git@github.com:elle-miller/multimodal_rl.git
-cd multimodal_rl
-pip install -e .
-# verify installation with isaacsim
-
-# 4. install roto as local editable package
-git clone git@github.com:elle-miller/roto.git
-cd roto
-pip install -e .
-```
-1. Install Isaac Lab (recommend [pip installation](https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/isaaclab_pip_installation.html#))
 2. Install [multimodal_rl](https://github.com/elle-miller/multimodal_rl) as a local editable package
 ```
 git clone git@github.com:elle-miller/multimodal_rl.git
@@ -127,7 +108,6 @@ gym.register(
     kwargs={
         "env_cfg_entry_point": baoding.BaodingCfg,
         "default_cfg": baoding_default_cfg,
-        "rl_only_p": baoding_rl_only_p,
         "rl_only_pt": baoding_rl_only_pt,
         "tac_recon": baoding_tactile_recon,
         "full_recon": baoding_full_recon,
@@ -179,7 +159,6 @@ This project is licensed under the BSD-3 License.
 This is our plan for future additions, but we highly welcome community contributions and PRs!
 
 - More environments
-- Pixel observations (code exists just need to integrate)
 - Observation augmentations (code exists just need to integrate)
 - Integrate TacSL for high-resolution touch sensing when it becomes released: https://github.com/isaac-sim/IsaacGymEnvs/issues/244
 - Provide transformer architectures
