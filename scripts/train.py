@@ -3,7 +3,7 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Script to train RL agent with rigorous_rl.
+"""Script to train RL agent with multimodal_rl.
 
 Author: Elle Miller 
 """
@@ -44,7 +44,7 @@ from common_utils import LOG_PATH, make_env, train_one_seed, update_env_cfg
 from isaaclab.utils import update_dict
 from isaaclab_tasks.utils.hydra import register_task_to_hydra
 from isaaclab_tasks.utils.parse_cfg import load_cfg_from_registry
-from rigorous_rl.tools.writer import Writer
+from multimodal_rl.tools.writer import Writer
 
 
 def main() -> None:

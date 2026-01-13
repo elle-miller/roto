@@ -57,8 +57,8 @@ from isaaclab.utils import update_dict
 from isaaclab_tasks.utils.hydra import register_task_to_hydra
 from isaaclab_tasks.utils.parse_cfg import load_cfg_from_registry
 
-from rigorous_rl.rl.ppo import PPO, PPO_DEFAULT_CONFIG
-from rigorous_rl.tools.writer import Writer
+from multimodal_rl.rl.ppo import PPO, PPO_DEFAULT_CONFIG
+from multimodal_rl.tools.writer import Writer
 
 
 class OptimisationRunner:
