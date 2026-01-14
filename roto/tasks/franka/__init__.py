@@ -11,14 +11,14 @@ from . import agents, find, pick_and_place
 
 _VARIANT_FILES = {
     "default_cfg": "default.yaml",
-    # "rl_only_pt": "rl_only_pt.yaml",
+    "rl_only_pt": "rl_only_pt.yaml",
     "rl_only_ptg": "rl_only_ptg.yaml",
-    # "rl_only_ptd": "rl_only_ptd.yaml",
-    # "tac_recon": "tac_recon.yaml",
-    # "full_recon": "full_recon.yaml",
-    # "forward_dynamics": "forward_dynamics.yaml",
-    # "tac_dynamics": "tac_dynamics.yaml",
-    # "forward_dynamics_memory": "forward_dynamics_memory.yaml",
+    "rl_only_ptd": "rl_only_ptd.yaml",
+    "tac_recon": "tac_recon.yaml",
+    "full_recon": "full_recon.yaml",
+    "forward_dynamics": "forward_dynamics.yaml",
+    "tac_dynamics": "tac_dynamics.yaml",
+    "forward_dynamics_memory": "forward_dynamics_memory.yaml",
 
 }
 

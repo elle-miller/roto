@@ -30,6 +30,7 @@ from isaaclab.utils.math import (
 )
 from isaaclab.sensors import TiledCamera, TiledCameraCfg
 from isaaclab.sensors import ContactSensor, ContactSensorCfg
+from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
 
 
 @configclass
@@ -85,6 +86,21 @@ class RotoEnvCfg(DirectRLEnvCfg):
 
     # tactile sensor configuration
     robot_contact_sensor_cfg = None
+    
+    # Evaluation environment visualization
+    num_eval_envs: int = 1  # Number of evaluation environments (for visual markers)
+    eval_marker_cfg: VisualizationMarkersCfg = VisualizationMarkersCfg(
+        prim_path="/Visuals/eval_env_markers",
+        markers={
+            "eval_box": sim_utils.CuboidCfg(
+                size=(1.0, 1.0, 0.01),  # 1m x 1m x 1m box
+                visual_material=sim_utils.PreviewSurfaceCfg(
+                    opacity=1,  # Fully opaque
+                    diffuse_color=(1.0, 0.2, 0.2),  # Pink color (RGB)
+                ),
+            )
+        },
+    )
 
 
 class RotoEnv(DirectRLEnv):
@@ -144,6 +160,16 @@ class RotoEnv(DirectRLEnv):
                 + self.scene.env_origins
             )
             self._tiled_camera.set_world_poses_from_view(eyes=eyes, targets=targets)
+        
+        # Visualize evaluation environment markers (pink boxes)
+        if self.cfg.num_eval_envs > 0 and hasattr(self, "eval_markers"):
+            # Position markers at evaluation environment origins (first num_eval_envs)
+            # Offset by 0.5m in Z to center the 1m tall box on the ground
+            eval_positions = self.scene.env_origins[: self.cfg.num_eval_envs].clone()
+            eval_positions[:, 2] += 0.0  # Raise by half box height to center on ground
+            eval_rotations = torch.zeros((self.cfg.num_eval_envs, 4), dtype=torch.float, device=self.device)
+            eval_rotations[:, 0] = 1.0  # Identity quaternion
+            self.eval_markers.visualize(eval_positions, eval_rotations)
 
     def _setup_scene(self):
         """Set up the simulation scene."""
@@ -168,6 +194,10 @@ class RotoEnv(DirectRLEnv):
             print("Adding contact sensor for tactile observation")
             self.robot_contact_sensor = ContactSensor(self.cfg.robot_contact_sensor_cfg)
             self.scene.sensors["robot_contact_sensor"] = self.robot_contact_sensor
+        
+        # Create visual markers for evaluation environments (pink boxes)
+        if self.cfg.num_eval_envs > 0:
+            self.eval_markers = VisualizationMarkers(self.cfg.eval_marker_cfg)
 
     def _configure_gym_env_spaces(self):
         """Configure Gymnasium observation and action spaces (placeholder)."""
