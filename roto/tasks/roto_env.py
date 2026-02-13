@@ -398,6 +398,9 @@ class RotoEnv(DirectRLEnv):
         Args:
             env_ids: Environment indices to update.
         """
+        if env_ids is None:
+            env_ids = self.robot._ALL_INDICES
+        
         # Get robot data
         self.joint_pos[env_ids] = self.robot.data.joint_pos[env_ids]
         self.joint_vel[env_ids] = self.robot.data.joint_vel[env_ids]

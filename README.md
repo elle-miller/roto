@@ -83,8 +83,8 @@ pip install -e .
 ```
 4. Test the installation by playing a trained agent in the viewer or saving a video. Note that the viewer playback is much slower than real-time.
 ```
-python scripts/play.py --task Baoding --num_envs 512 --agent_cfg memory --checkpoint readme_assets/checkpoints/baoding_memory.pt
-python scripts/play.py --task Baoding --num_envs 512 --agent_cfg memory --video --video_length 1200 --headless --checkpoint readme_assets/checkpoints/baoding_memory.pt
+python scripts/play.py --task Baoding --num_envs 512 --agent_cfg forward_dynamics_memory --checkpoint readme_assets/checkpoints/baoding_memory.pt
+python scripts/play.py --task Baoding --num_envs 512 --agent_cfg forward_dynamics_memory --video --video_length 1200 --headless --checkpoint readme_assets/checkpoints/baoding_memory.pt
 ```
 The video should pop up in a `./videos` folder and look like this:
 

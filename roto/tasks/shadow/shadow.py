@@ -34,11 +34,13 @@ from isaaclab.markers.config import FRAME_MARKER_CFG  # isort: skip
 class ShadowEnvCfg(RotoEnvCfg):
     """Default configuration for the Shadow hand."""
 
+    scene: InteractiveSceneCfg = InteractiveSceneCfg(
+        num_envs=4096, env_spacing=0.7, replicate_physics=True
+    )
+
     eye = (4, -4, 2.1)
     lookat = (2, -2, 0.5)
     viewer: ViewerCfg = ViewerCfg(eye=eye, lookat=lookat, resolution=(1920, 1080))
-
-    scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=4096, env_spacing=2, replicate_physics=True)
 
     episode_length_s = 10.0
     num_actions = 20
@@ -96,6 +98,11 @@ class ShadowEnvCfg(RotoEnvCfg):
         history_length=1,
     )
 
+    # Legacy ordering of body groups for policy replay compatibility.
+    # _get_tactile() reindexes the single sensor output to match:
+    #   [all distal, all proximal, all middle, palm, metacarpal]
+    tactile_body_groups = ["distal", "proximal", "middle", "palm", "metacarpal"]
+
 
 class ShadowEnv(RotoEnv):
     """Shadow-hand base env providing tactile + proprio pipelines."""
@@ -105,6 +112,12 @@ class ShadowEnv(RotoEnv):
     def __init__(self, cfg: ShadowEnvCfg, render_mode: str | None = None, **kwargs):
 
         super().__init__(cfg, render_mode, **kwargs)
+
+        # Tactile buffers — sized to 0 initially, resized by _build_tactile_reindex()
+        # on the first _get_tactile() call once the sensor is initialized.
+        self.num_tactile_observations = 0
+        self.tactile = torch.zeros((self.num_envs, 0), device=self.device)
+        self.last_tactile = torch.zeros((self.num_envs, 0), device=self.device)
 
         self.extras["log"] = {
             "tactile_penalty": None,
@@ -136,13 +149,13 @@ class ShadowEnv(RotoEnv):
         self.scene.clone_environments(copy_from_source=False)
         self.scene.articulations["robot"] = self.robot
 
-        light_cfg = sim_utils.DomeLightCfg(intensity=2000.0, color=(0.75, 0.75, 0.75))
+        light_cfg = sim_utils.DomeLightCfg(intensity=200.0, color=(0.75, 0.75, 0.75))
         light_cfg.func("/World/Light", light_cfg)
 
         # Additional sphere lights (currently disabled)
         pink = (0.9882352941176471, 0.011764705882352941, 0.7098039215686275)
         aqua = (0.0, 1.0, 1.0)
-        disco_intensity = 0
+        disco_intensity = 20000
         light_cfg_1 = sim_utils.SphereLightCfg(intensity=disco_intensity, color=pink)
         light_cfg_1.func("/World/ds", light_cfg_1, translation=(1, 1, 2))
         light_cfg_2 = sim_utils.SphereLightCfg(intensity=disco_intensity, color=aqua)
@@ -151,6 +164,31 @@ class ShadowEnv(RotoEnv):
         light_cfg_3.func("/World/ds1", light_cfg_3, translation=(-1, -1, 2))
         light_cfg_4 = sim_utils.SphereLightCfg(intensity=disco_intensity, color=aqua)
         light_cfg_4.func("/World/disk2", light_cfg_4, translation=(1, -1, 2))
+
+        self.robot_contact_sensor = ContactSensor(self.cfg.robot_contact_sensor_cfg)
+        self.scene.sensors["robot_contact_sensor"] = self.robot_contact_sensor
+
+
+    def _get_tactile(self):
+        """Return binary tactile activation per finger segment.
+
+        Reindexes the single contact sensor to match the legacy ordering:
+        [all distal, all proximal, all middle, palm, metacarpal].
+        """
+        # Lazy-build the reindex on first call (sensor must be initialized first)
+        if not hasattr(self, "_tactile_reindex"):
+            self._build_tactile_reindex()
+
+        forces = self.robot_contact_sensor.data.net_forces_w[:].clone()  # [N, B, 3]
+        norm = torch.linalg.vector_norm(forces, dim=-1)  # [N, B]
+        norm = norm[:, self._tactile_reindex]  # reorder to legacy grouping
+
+        if self.tactile_cfg is not None and self.tactile_cfg.get("binary_tactile", True):
+            norm = (norm > self.binary_threshold).float()
+
+        self.last_tactile = self.tactile
+        self.tactile = norm
+        return norm
 
     def _reset_idx(self, env_ids: Sequence[int] | None):
         """Reset articulation state and optionally randomize joints.
@@ -166,3 +204,33 @@ class ShadowEnv(RotoEnv):
 
         # Reset hand with noise
         self._reset_robot(env_ids, joint_pos_noise=self.cfg.reset_joint_pos_noise)
+
+    def _build_tactile_reindex(self):
+        """Build a permutation index so the single sensor output matches the legacy
+        [distal, proximal, middle, palm, metacarpal] grouping used by saved policies.
+        
+        Delete if you do not need to play the saved checkpoints
+        """
+        body_names = self.robot_contact_sensor.body_names
+        groups = {g: [] for g in self.cfg.tactile_body_groups}
+        for i, name in enumerate(body_names):
+            matched = False
+            for group in self.cfg.tactile_body_groups:
+                if name.endswith(group):
+                    groups[group].append(i)
+                    matched = True
+                    break
+            if not matched:
+                raise ValueError(f"Contact body '{name}' doesn't match any group in {self.cfg.tactile_body_groups}")
+        order = []
+        for g in self.cfg.tactile_body_groups:
+            order.extend(groups[g])
+        self._tactile_reindex = torch.tensor(order, dtype=torch.long, device=self.device)
+        self.num_tactile_observations = len(order)
+        # Resize tactile buffers now that we know the true count
+        self.tactile = torch.zeros((self.num_envs, self.num_tactile_observations), device=self.device)
+        self.last_tactile = torch.zeros((self.num_envs, self.num_tactile_observations), device=self.device)
+        print(f"[ShadowEnv] Tactile reindex: {len(body_names)} bodies → "
+              f"{self.num_tactile_observations} outputs in legacy order")
+        print(f"  Body names: {body_names}")
+        print(f"  Group sizes: { {g: len(groups[g]) for g in self.cfg.tactile_body_groups} }")

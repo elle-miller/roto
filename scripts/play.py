@@ -86,6 +86,7 @@ def main():
     writer = Writer(agent_cfg, play=True)
 
     # Make environment (order: gymnasium Env -> FrameStack -> IsaacLab)
+    env_cfg.num_eval_envs = 0 # don't need the visualization of eval envs
     env = make_env(agent_cfg, env_cfg, writer, args_cli)
 
     # Setup models
@@ -167,11 +168,5 @@ def main():
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except Exception as err:
-        print(err)
-        raise
-    finally:
-        print("CLOSING")
-        simulation_app.close()
+    main()
+

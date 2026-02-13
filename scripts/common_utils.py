@@ -127,7 +127,7 @@ def make_env(agent_cfg, env_cfg, writer, args_cli):
     # Wrap for video recording
     if args_cli.video:
         video_kwargs = {
-            "video_folder": writer.video_dir,
+            "video_folder": "./videos/", 
             "step_trigger": lambda step: step == 0,
             "video_length": args_cli.video_length,
             "disable_logger": True,
