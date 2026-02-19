@@ -136,11 +136,11 @@ class RotoEnv(DirectRLEnv):
         ]
         self.actuated_dof_indices.sort()
 
-        # Action and state tensors
+        # Actions are the (-1, 1) normalized joint position commands
         self.actions = torch.zeros((self.num_envs, self.cfg.num_actions), device=self.device)
         self.prev_actions = torch.zeros((self.num_envs, self.cfg.num_actions), device=self.device)
-        self.smoothed_actions = torch.zeros((self.num_envs, self.cfg.num_actions), device=self.device)
-        
+
+        # Joint position commands are what are sent
         default_joint_pos = self.robot.data.default_joint_pos
         self.joint_pos_cmd[:, :] = default_joint_pos[:, :]
         self.prev_joint_pos_cmd[:] = self.joint_pos_cmd
@@ -201,7 +201,7 @@ class RotoEnv(DirectRLEnv):
         
         # Create visual markers for evaluation environments (pink boxes)
         # if self.cfg.num_eval_envs > 0:
-            # self.eval_markers = VisualizationMarkers(self.cfg.eval_marker_cfg)
+        #     self.eval_markers = VisualizationMarkers(self.cfg.eval_marker_cfg)
 
     def _configure_gym_env_spaces(self):
         """Configure Gymnasium observation and action spaces (placeholder)."""
@@ -214,30 +214,30 @@ class RotoEnv(DirectRLEnv):
         self.action_space = action
 
     def _pre_physics_step(self, actions: torch.Tensor) -> None:
-        # Compute action_diff BEFORE self.actions is updated (so it compares current vs previous step)
-        self.action_diff = torch.abs(actions - self.actions)
+        """Store actions from policy before physics step.
 
-        # 1. Store the raw action
-        self.actions[:] = actions
+        Args:
+            actions: Actions from the policy.
+        """
+        self.prev_joint_pos_cmd[:] = self.joint_pos_cmd
+        self.prev_actions[:] = self.actions
 
-        # 2. Apply EMA Smoothing (Once per RL step)
-        # This creates the 'intent' for this entire decimation cycle
-        self.smoothed_actions = (
-            self.cfg.act_moving_average * self.actions
-            + (1.0 - self.cfg.act_moving_average) * self.prev_actions
-        )
-        self.prev_actions[:] = self.smoothed_actions
-
-        # 3. Pre-scale to joint limits (Once per RL step)
-        # Now self.joint_pos_target is in RADIANS/METERS, ready for the sim
+        # compute current
+        self.actions = actions.clone()
         self.joint_pos_cmd[:, self.actuated_dof_indices] = scale(
-            self.smoothed_actions,
+            self.actions,
             self.robot_joint_pos_lower_limits[self.actuated_dof_indices],
             self.robot_joint_pos_upper_limits[self.actuated_dof_indices],
         )
 
+
     def _apply_action(self) -> None:
-        """Runs N times per RL step (decimation)."""
+        """Apply actions to the robot.
+
+        Called multiple times per RL step for decimation. Applies action smoothing
+        and clamps actions to joint limits.
+        """
+
         self.robot.set_joint_position_target(self.joint_pos_cmd)
 
     def get_observations(self):
@@ -279,8 +279,7 @@ class RotoEnv(DirectRLEnv):
             (
                 self.normalised_joint_pos,
                 self.normalised_joint_vel,
-                # better to learn from intent
-                self.smoothed_actions,
+                self.actions,
             ),
             dim=-1,
         )
@@ -388,8 +387,8 @@ class RotoEnv(DirectRLEnv):
 
         self.actions[env_ids] = 0.0
         self.prev_actions[env_ids] = 0.0
-        self.smoothed_actions[env_ids] = 0.0
-
+        self.joint_pos_cmd[env_ids] = joint_pos
+        self.prev_joint_pos_cmd[env_ids] = self.joint_pos_cmd[env_ids]
 
     def _compute_intermediate_values(self, env_ids):
         """Compute intermediate values for observations and rewards.
@@ -399,7 +398,9 @@ class RotoEnv(DirectRLEnv):
         Args:
             env_ids: Environment indices to update.
         """
-        env_ids = self.robot._ALL_INDICES
+        if env_ids is None:
+            env_ids = self.robot._ALL_INDICES
+        
         # Get robot data
         self.joint_pos[env_ids] = self.robot.data.joint_pos[env_ids]
         self.joint_vel[env_ids] = self.robot.data.joint_vel[env_ids]
