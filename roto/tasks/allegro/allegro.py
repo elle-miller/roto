@@ -73,7 +73,7 @@ class AllegroEnvCfg(RotoEnvCfg):
     viewer: ViewerCfg = ViewerCfg(eye=eye, lookat=lookat, resolution=(1920, 1080))
 
     episode_length_s = 10.0
-    num_actions = 10
+    num_actions = 16
     action_space = num_actions
 
     reset_joint_pos_noise = 0.2
@@ -85,7 +85,9 @@ class AllegroEnvCfg(RotoEnvCfg):
     ).replace(
         init_state=ArticulationCfg.InitialStateCfg(
             pos=(0.0, 0.0, hand_height),
-            rot =   (1.0, 0.0, 0.0, 0.0), # (0.63742, -0.33667, 0.59201, -0.36038) ,   # -90 about Y
+            # palm up: 0.270598, -0.653283, -0.270598, 0.65328
+            #  palm side: (0.0, -0.9239, -0.3827, 0.0)
+            rot = (0.0, 0.3827, -0.9239, 0.0), # (0.63742, -0.33667, 0.59201, -0.36038) ,   # -90 about Y
             # joint_pos=ALLEGRO_HAND_CFG.init_state.joint_pos,  # keep thumb_joint_0=0.28 etc.
             # start with curled pos
             joint_pos={
@@ -103,6 +105,10 @@ class AllegroEnvCfg(RotoEnvCfg):
         "index_joint_2", "middle_joint_2", "ring_joint_2", "thumb_joint_2",
         "index_joint_3", "middle_joint_3", "ring_joint_3", "thumb_joint_3",
     ]
+
+    # num actions has to correspond with the number of actuated joints
+    num_actions = len(actuated_joint_names)
+
     fingertip_body_names = [
         "index_link_3",
         "middle_biotac_tip",
@@ -240,7 +246,7 @@ class AllegroEnv(RotoEnv):
         super()._reset_idx(env_ids)
 
         # make palm horizontal
-        self._level_palm_to_world_up(env_ids)
+        # self._level_palm_to_world_up(env_ids)
 
         # Reset hand with noise
         self._reset_robot(env_ids, joint_pos_noise=self.cfg.reset_joint_pos_noise)

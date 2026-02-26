@@ -1,4 +1,4 @@
-# Shadow Bounce config: rl_only_pt
+# allegro Bounce config: rl_only_pt
 
 agent:
   rollouts: 16
@@ -15,8 +15,8 @@ agent:
   kl_threshold: 0
 
 experiment:
-  experiment_name: shadow_bounce_rl_only_pt
+  experiment_name: allegro_bounce_rl_only_pt
   wandb: 1
   wandb_kwargs:
-    group: shadow_bounce_rl_only_pt
-    name: PT
+    group: allegro_bounce_rl_only_pt
+    name: P

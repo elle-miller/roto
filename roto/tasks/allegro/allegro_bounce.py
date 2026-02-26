@@ -29,9 +29,9 @@ class BounceCfg(AllegroEnvCfg):
 
     fall_height = 0.3
     reset_position_noise = 0.01
-    object_y_pos = -0.39
-    object_z_pos = 0.6
-    default_object_pos = (0.0, object_y_pos, object_z_pos)
+    object_y_pos = 0.0
+    object_z_pos = 0.55
+    default_object_pos = (0.1, object_y_pos, object_z_pos)
     out_of_bounds = 0.2
     min_timesteps_between_contact = 5
 
