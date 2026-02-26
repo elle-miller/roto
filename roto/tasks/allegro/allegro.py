@@ -23,12 +23,42 @@ from isaaclab.sensors import ContactSensor, ContactSensorCfg
 from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
 from isaaclab.utils import configclass
 from isaaclab.utils.math import quat_conjugate, quat_from_angle_axis, quat_mul
+from isaaclab.utils.math import quat_apply
 
 from roto.assets.allegro import ALLEGRO_HAND_CFG
 from roto.tasks.roto_env import RotoEnv, RotoEnvCfg
 
 from isaaclab.markers.config import FRAME_MARKER_CFG  # isort: skip
 
+def quat_normalize(q: torch.Tensor, eps: float = 1e-8) -> torch.Tensor:
+    return q / (torch.norm(q, dim=-1, keepdim=True) + eps)
+
+def quat_from_two_vectors(v1: torch.Tensor, v2: torch.Tensor, eps = 1e-8) -> torch.Tensor:
+    v1 = v1 / (torch.norm(v1, dim=-1, keepdim=True) + eps)
+    v2 = v2 / (torch.norm(v2, dim=-1, keepdim=True) + eps)
+    v = torch.cross(v1, v2, dim=-1)
+    w = 1.0 + torch.sum(v1 * v2, dim=-1, keepdim = True)
+
+    # If vectors are opposite, w ~ 0 -> choose an orthogonal axis
+    mask = (w.squeeze(-1) < eps)
+    if mask.any():
+        # pick an axis not parallel to a
+        axis = torch.zeros_like(v1)
+        axis[..., 0] = 1.0
+        alt = torch.zeros_like(v1)
+        alt[..., 1] = 1.0
+        # if a is too aligned with x, use y
+        use_alt = (torch.abs(v1[..., 0]) > 0.9)
+        axis[use_alt] = alt[use_alt]
+
+        v2 = torch.cross(v1, axis, dim=-1)
+        q2 = torch.cat([torch.zeros_like(w), v2], dim=-1)
+        q = torch.cat([w, v], dim=-1)
+        q[mask] = q2[mask]
+    else:
+        q = torch.cat([w, v], dim=-1)
+
+    return quat_normalize(q)
 
 @configclass
 class AllegroEnvCfg(RotoEnvCfg):
@@ -50,41 +80,34 @@ class AllegroEnvCfg(RotoEnvCfg):
     reset_joint_vel_noise = 0.0
 
     hand_height = 0.5
-    robot_cfg: ArticulationCfg = ALLEGRO_HAND_CFG.replace(prim_path="/World/envs/env_.*/Robot").replace(
+    robot_cfg: ArticulationCfg = ALLEGRO_HAND_CFG.replace(
+        prim_path="/World/envs/env_.*/Robot"
+    ).replace(
         init_state=ArticulationCfg.InitialStateCfg(
             pos=(0.0, 0.0, hand_height),
-            rot=(1.0, 0.0, 0.0, 0.0),
+            rot =   (1.0, 0.0, 0.0, 0.0), # (0.63742, -0.33667, 0.59201, -0.36038) ,   # -90 about Y
+            # joint_pos=ALLEGRO_HAND_CFG.init_state.joint_pos,  # keep thumb_joint_0=0.28 etc.
+            # start with curled pos
+            joint_pos={
+                "index_joint_1": 0.6, "index_joint_2": 0.6, "index_joint_3": 0.6,
+                "middle_joint_1": 0.6, "middle_joint_2": 0.6, "middle_joint_3": 0.6,
+                "ring_joint_1": 0.6, "ring_joint_2": 0.6, "ring_joint_3": 0.6,
+                "thumb_joint_0": 0.5, "thumb_joint_1": 0.6, "thumb_joint_2": 0.6, "thumb_joint_3": 0.6,
+                }
         )
     )
 
     actuated_joint_names = [
-        "robot0_WRJ1",
-        "robot0_WRJ0",
-        "robot0_FFJ3",
-        "robot0_FFJ2",
-        "robot0_FFJ1",
-        "robot0_MFJ3",
-        "robot0_MFJ2",
-        "robot0_MFJ1",
-        "robot0_RFJ3",
-        "robot0_RFJ2",
-        "robot0_RFJ1",
-        "robot0_LFJ4",
-        "robot0_LFJ3",
-        "robot0_LFJ2",
-        "robot0_LFJ1",
-        "robot0_THJ4",
-        "robot0_THJ3",
-        "robot0_THJ2",
-        "robot0_THJ1",
-        "robot0_THJ0",
+        "index_joint_0", "middle_joint_0", "ring_joint_0", "thumb_joint_0",
+        "index_joint_1", "middle_joint_1", "ring_joint_1", "thumb_joint_1",
+        "index_joint_2", "middle_joint_2", "ring_joint_2", "thumb_joint_2",
+        "index_joint_3", "middle_joint_3", "ring_joint_3", "thumb_joint_3",
     ]
     fingertip_body_names = [
-        "robot0_ffdistal",
-        "robot0_mfdistal",
-        "robot0_rfdistal",
-        "robot0_lfdistal",
-        "robot0_thdistal",
+        "index_link_3",
+        "middle_biotac_tip",
+        "ring_biotac_tip",
+        "thumb_biotac_tip",
     ]
 
     marker_cfg = FRAME_MARKER_CFG.copy()
@@ -93,7 +116,8 @@ class AllegroEnvCfg(RotoEnvCfg):
 
     # Update this to match the Allegro hand
     robot_contact_sensor_cfg = ContactSensorCfg(
-        prim_path="/World/envs/env_.*/Robot",
+        # prim_path="/World/envs/env_.*/Robot",
+        prim_path="/World/envs/env_.*/Robot/.*",   
         update_period=0.0,
         history_length=1,
     )
@@ -107,6 +131,9 @@ class AllegroEnv(RotoEnv):
     def __init__(self, cfg: AllegroEnvCfg, render_mode: str | None = None, **kwargs):
 
         super().__init__(cfg, render_mode, **kwargs)
+
+        print("NUM JOINTS:", len(self.robot.joint_names))
+        print("JOINT NAMES:", self.robot.joint_names)
 
         # Tactile buffers — sized to 0 initially, resized by _build_tactile_reindex()
         # on the first _get_tactile() call once the sensor is initialized.
@@ -134,6 +161,42 @@ class AllegroEnv(RotoEnv):
             "bounce_reward": None,
             "air_reward": None,
         }
+
+    def _level_palm_to_world_up(self, env_ids = None): 
+        if env_ids is None:
+            env_ids = self.robot._ALL_INDICES
+
+        palm_idx = self.robot.body_names.index("palm_link")
+
+        # pick a candidate local normal axis of the palm link (try +Z first)
+        palm_local_normal = torch.tensor([0.0, 0.0, 1.0], device=self.device).repeat(len(env_ids), 1)
+        world_up = torch.tensor([0.0, 0.0, 1.0], device=self.device).repeat(len(env_ids), 1)
+
+        # env 0: palm orientation in world
+        palm_quat_w = self.robot.data.body_quat_w[env_ids, palm_idx, :]  # (w,x,y,z)
+        palm_normal_w = quat_apply(palm_quat_w, palm_local_normal)   # (N, 3) --> normal direction of the palm
+        # print("before palm_normal_w[0]:", palm_normal_w[0].tolist())
+        
+        q_delta = quat_from_two_vectors(palm_normal_w, world_up)          # (N,4)
+
+        # Current root pose
+        root_state = self.robot.data.root_state_w[env_ids].clone()        # (N,13): pos(3), quat(4), linvel(3), angvel(3)
+        root_pos = root_state[:, 0:3]
+        root_quat = root_state[:, 3:7]
+
+        # Apply delta to root orientation: q_new = q_delta ⊗ q_root
+        root_quat_new = quat_mul(q_delta, root_quat)
+
+        # Write back (zero velocities so it doesn't kick)
+        self.robot.write_root_pose_to_sim(torch.cat([root_pos, root_quat_new], dim=-1), env_ids)
+        self.robot.write_root_velocity_to_sim(torch.zeros((len(env_ids), 6), device=self.device), env_ids)
+
+        # step once (or otherwise refresh robot.data) before re-reading body_quat_w
+        self.sim.step(render=False)
+
+        palm_quat_w2 = self.robot.data.body_quat_w[env_ids, palm_idx, :]
+        palm_normal_w2 = quat_apply(palm_quat_w2, palm_local_normal)
+        # print("after  palm_normal_w[0]:", palm_normal_w2[0].tolist())
 
     def _setup_scene(self):
         """Register the Allegro hand, contact sensors, and lighting."""
@@ -175,6 +238,9 @@ class AllegroEnv(RotoEnv):
 
         # Reset articulation and rigid body attributes
         super()._reset_idx(env_ids)
+
+        # make palm horizontal
+        self._level_palm_to_world_up(env_ids)
 
         # Reset hand with noise
         self._reset_robot(env_ids, joint_pos_noise=self.cfg.reset_joint_pos_noise)

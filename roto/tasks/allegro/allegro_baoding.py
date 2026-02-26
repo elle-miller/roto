@@ -20,6 +20,7 @@ from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
 from isaaclab.sim.schemas.schemas_cfg import CollisionPropertiesCfg
 from isaaclab.utils import configclass
 from isaaclab.utils.math import sample_uniform
+from isaaclab.utils.math import quat_apply
 
 from roto.tasks.allegro.allegro import AllegroEnv, AllegroEnvCfg
 
@@ -119,6 +120,7 @@ class BaodingEnv(AllegroEnv):
         """Shadow-hand baoding task with two tracked goal locations."""
         super().__init__(cfg, render_mode, **kwargs)
 
+        self.palm_idx = self.robot.body_names.index("palm_link")
         # these buffers are populated in the reward computation with 1 if the goal has been reached
         self.reset_goal_1_buf = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
         self.reset_goal_2_buf = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
@@ -276,25 +278,35 @@ class BaodingEnv(AllegroEnv):
 
     def _reset_object(self, env_ids: Sequence[int]) -> None:
         """Reset both balls close to their default pose with a small position noise."""
-        # reset ball
-        ball_1_default_state = self.ball_1.data.default_root_state.clone()[env_ids]
-        ball_2_default_state = self.ball_2.data.default_root_state.clone()[env_ids]
+        palm_pos_w = self.robot.data.body_pos_w[env_ids, self.palm_idx, :]    # (N,3)
+        palm_quat_w = self.robot.data.body_quat_w[env_ids, self.palm_idx, :]  # (N,4) wxyz
 
-        # half a cm in any direction
+        # base offsets in palm LOCAL frame (tune)
+        z_up = self.cfg.ball_radius_m + 0.02
+        x_fwd = 0.04   # 3 cm toward fingers (tune: 0.01–0.05)
+        y_side = 0.04  # sideways shift if you want
+        off1_local = torch.tensor([x_fwd,  y_side, z_up], device=self.device).repeat(len(env_ids), 1)
+        off2_local = torch.tensor([x_fwd, -y_side, z_up], device=self.device).repeat(len(env_ids), 1)
+
+        off1_w = quat_apply(palm_quat_w, off1_local)
+        off2_w = quat_apply(palm_quat_w, off2_local)
+
+        # noise (same as OG): ±5mm
         pos_noise = sample_uniform(-0.005, 0.005, (len(env_ids), 3), device=self.device)
 
-        # ball 1
-        ball_1_default_state[:, 0:3] = ball_1_default_state[:, 0:3] + pos_noise + self.scene.env_origins[env_ids]
-        ball_1_default_state[:, 7:] = torch.zeros_like(self.ball_1.data.default_root_state[env_ids, 7:])
+        ball1_pos_w = palm_pos_w + off1_w + pos_noise
+        ball2_pos_w = palm_pos_w + off2_w + pos_noise
 
-        # ball 2
-        ball_2_default_state[:, 0:3] = ball_2_default_state[:, 0:3] + pos_noise + self.scene.env_origins[env_ids]
-        ball_2_default_state[:, 7:] = torch.zeros_like(self.ball_2.data.default_root_state[env_ids, 7:])
+        quat_w = torch.tensor([1.0, 0.0, 0.0, 0.0], device=self.device).repeat(len(env_ids), 1)
+        ball1_pose = torch.cat([ball1_pos_w, quat_w], dim=-1)
+        ball2_pose = torch.cat([ball2_pos_w, quat_w], dim=-1)
 
-        self.ball_1.write_root_pose_to_sim(ball_1_default_state[:, :7], env_ids)
-        self.ball_1.write_root_velocity_to_sim(ball_1_default_state[:, 7:], env_ids)
-        self.ball_2.write_root_pose_to_sim(ball_2_default_state[:, :7], env_ids)
-        self.ball_2.write_root_velocity_to_sim(ball_2_default_state[:, 7:], env_ids)
+        self.ball_1.write_root_pose_to_sim(ball1_pose, env_ids)
+        self.ball_2.write_root_pose_to_sim(ball2_pose, env_ids)
+
+        zeros6 = torch.zeros((len(env_ids), 6), device=self.device)
+        self.ball_1.write_root_velocity_to_sim(zeros6, env_ids)
+        self.ball_2.write_root_velocity_to_sim(zeros6, env_ids)
 
     def _reset_target_pose(self, reached_goal_ids):
         """Swap the active target for envs that completed a rotation."""
