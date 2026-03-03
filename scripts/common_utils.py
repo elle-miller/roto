@@ -18,7 +18,7 @@ from multimodal_rl.wrappers.frame_stack import FrameStack
 from multimodal_rl.wrappers.isaaclab_wrapper import IsaacLabWrapper
 
 # Import task modules to register environments
-from roto.tasks import franka, shadow, allegro  # noqa: F401
+from roto.tasks import franka, shadow, allegro, orca  # noqa: F401
 
 # Logging directory (change this to a custom path if desired)
 LOG_PATH = os.getcwd()
