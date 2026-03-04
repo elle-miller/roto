@@ -11,8 +11,8 @@ from math import radians
 
 AIREC_CFG = ArticulationCfg(
     spawn=sim_utils.UrdfFileCfg(
-            asset_path=f"/home/elle/code/debug/roto/roto/assets/orca/orcahand_right.urdf",
-            usd_dir=f"/home/elle/code/debug/roto/roto/assets/orca",
+            asset_path=f"/home/jayaram/research_threads/NUS_RA/roto/roto/assets/orca/orcahand_right.urdf",
+            usd_dir=f"/home/jayaram/research_threads/NUS_RA/roto/roto/assets/orca/orcahand_right.urdf",
             usd_file_name="orcahand_right.usd",
             fix_base=False,
             joint_drive=None,

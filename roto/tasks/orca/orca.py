@@ -102,21 +102,24 @@ class OrcaEnvCfg(RotoEnvCfg):
 
     # update to match the Orca hand
     actuated_joint_names = [
-        "index_joint_0", "middle_joint_0", "ring_joint_0", "thumb_joint_0",
-        "index_joint_1", "middle_joint_1", "ring_joint_1", "thumb_joint_1",
-        "index_joint_2", "middle_joint_2", "ring_joint_2", "thumb_joint_2",
-        "index_joint_3", "middle_joint_3", "ring_joint_3", "thumb_joint_3",
+        "right_wrist",
+        "right_index_abd", "right_index_mcp", "right_index_pip",
+        "right_middle_abd", "right_middle_mcp", "right_middle_pip",
+        "right_ring_abd", "right_ring_mcp", "right_ring_pip",
+        "right_pinky_abd", "right_pinky_mcp", "right_pinky_pip",
+        "right_thumb_abd", "right_thumb_mcp", "right_thumb_pip", "right_thumb_dip",
     ]
+
 
     # num actions has to correspond with the number of actuated joints
     num_actions = len(actuated_joint_names)
 
-    fingertip_body_names = [
-        "index_link_3",
-        "middle_biotac_tip",
-        "ring_biotac_tip",
-        "thumb_biotac_tip",
-    ]
+    # fingertip_body_names = [
+    #     "index_link_3",
+    #     "middle_biotac_tip",
+    #     "ring_biotac_tip",
+    #     "thumb_biotac_tip",
+    # ]
 
     marker_cfg = FRAME_MARKER_CFG.copy()
     marker_cfg.markers["frame"].scale = (0.05, 0.05, 0.05)
