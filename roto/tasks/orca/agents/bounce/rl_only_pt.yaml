@@ -19,4 +19,4 @@ experiment:
   wandb: 1
   wandb_kwargs:
     group: orca_bounce_rl_only_pt
-    name: P
+    name: RL_ONLY_PT

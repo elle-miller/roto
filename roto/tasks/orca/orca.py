@@ -72,6 +72,7 @@ class OrcaEnvCfg(RotoEnvCfg):
     lookat = (2, -2, 0.5)
     viewer: ViewerCfg = ViewerCfg(eye=eye, lookat=lookat, resolution=(1920, 1080))
 
+
     episode_length_s = 10.0
     num_actions = 16
     action_space = num_actions
@@ -82,23 +83,24 @@ class OrcaEnvCfg(RotoEnvCfg):
     hand_height = 0.5
     robot_cfg: ArticulationCfg = ORCA_HAND_CFG.replace(
         prim_path="/World/envs/env_.*/Robot"
+    ).replace(
+        init_state=ArticulationCfg.InitialStateCfg(
+            pos=(0.0, 0.0, hand_height),
+            # rot=(0.7071, 0, 0.7071, 0),
+            rot = (0.5, 0.5, 0.5, 0.5),
+            # palm up: 0.270598, -0.653283, -0.270598, 0.65328
+            #  palm side: (0.0, -0.9239, -0.3827, 0.0)
+            # rot = (0.0, 0.3827, -0.9239, 0.0), # (0.63742, -0.33667, 0.59201, -0.36038) ,   # -90 about Y
+            # # joint_pos=ALLEGRO_HAND_CFG.init_state.joint_pos,  # keep thumb_joint_0=0.28 etc.
+            # # start with curled pos
+            # joint_pos={
+            #     "index_joint_1": 0.6, "index_joint_2": 0.6, "index_joint_3": 0.6,
+            #     "middle_joint_1": 0.6, "middle_joint_2": 0.6, "middle_joint_3": 0.6,
+            #     "ring_joint_1": 0.6, "ring_joint_2": 0.6, "ring_joint_3": 0.6,
+            #     "thumb_joint_0": 0.5, "thumb_joint_1": 0.6, "thumb_joint_2": 0.6, "thumb_joint_3": 0.6,
+            #     }
+        )
     )
-    #.replace(
-    #     init_state=ArticulationCfg.InitialStateCfg(
-    #         pos=(0.0, 0.0, hand_height),
-    #         # palm up: 0.270598, -0.653283, -0.270598, 0.65328
-    #         #  palm side: (0.0, -0.9239, -0.3827, 0.0)
-    #         rot = (0.0, 0.3827, -0.9239, 0.0), # (0.63742, -0.33667, 0.59201, -0.36038) ,   # -90 about Y
-    #         # joint_pos=ALLEGRO_HAND_CFG.init_state.joint_pos,  # keep thumb_joint_0=0.28 etc.
-    #         # start with curled pos
-    #         joint_pos={
-    #             "index_joint_1": 0.6, "index_joint_2": 0.6, "index_joint_3": 0.6,
-    #             "middle_joint_1": 0.6, "middle_joint_2": 0.6, "middle_joint_3": 0.6,
-    #             "ring_joint_1": 0.6, "ring_joint_2": 0.6, "ring_joint_3": 0.6,
-    #             "thumb_joint_0": 0.5, "thumb_joint_1": 0.6, "thumb_joint_2": 0.6, "thumb_joint_3": 0.6,
-    #             }
-    #     )
-    # )
 
     # update to match the Orca hand
     actuated_joint_names = [
