@@ -26,4 +26,4 @@ experiment:
   wandb: 1
   wandb_kwargs:
     group: forward_dynamics
-    name: 'null'
+    name: orca bounce dynamics
