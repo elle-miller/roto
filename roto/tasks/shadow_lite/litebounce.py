@@ -202,13 +202,14 @@ class BounceEnv(ShadowLiteEnv):
 
     def _get_rewards(self) -> torch.Tensor:
         """Reward bounces."""
-        total_reward, bounce_reward = compute_rewards(self.new_bounces)
+        total_reward, bounce_reward, air_reward = compute_rewards(self.new_bounces, self.time_without_contact)
 
         self.extras["log"] = {
             "object_z_linvel": (self.object_linvel[:, 2].half()),
             "object_z_angvel": (self.object_angvel[:, 2].half()),
             "sum_forces": (torch.sum(self.tactile, dim=1)),
             "bounce_reward": (bounce_reward).float(),
+            "air_reward": (air_reward).float(),
         }
 
         self.extras["counters"] = {
@@ -219,7 +220,7 @@ class BounceEnv(ShadowLiteEnv):
 
 
 @torch.jit.script
-def compute_rewards(new_bounces: torch.Tensor):
+def compute_rewards(new_bounces: torch.Tensor, time_without_contact: torch.Tensor):
     """Compute rewards for ball bouncing task.
 
     Args:
@@ -230,6 +231,8 @@ def compute_rewards(new_bounces: torch.Tensor):
     """
     bounce_reward = new_bounces * 10
 
-    total_reward = bounce_reward
+    air_reward = time_without_contact * 1.0
 
-    return total_reward, bounce_reward
+    total_reward = bounce_reward + air_reward
+
+    return total_reward, bounce_reward, air_reward
