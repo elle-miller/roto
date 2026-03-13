@@ -38,8 +38,11 @@ class ShadowEnvCfg(RotoEnvCfg):
         num_envs=4096, env_spacing=0.7, replicate_physics=True
     )
 
-    eye = (4, -4, 2.1)
-    lookat = (2, -2, 0.5)
+    eye = (0.8, 0.2, 0.6)
+    lookat = (0.3, 0, 0.5)
+
+    # eye = (4, -4, 2.1)
+    # lookat = (2, -2, 0.5)
     viewer: ViewerCfg = ViewerCfg(eye=eye, lookat=lookat, resolution=(1920, 1080))
 
     episode_length_s = 10.0
@@ -145,28 +148,28 @@ class ShadowEnv(RotoEnv):
         super()._setup_scene()
 
         self.robot = Articulation(self.cfg.robot_cfg)
-        spawn_ground_plane(prim_path="/World/ground", cfg=GroundPlaneCfg())
+        spawn_ground_plane(prim_path="/World/ground", cfg=GroundPlaneCfg(visible=True))
+
         self.scene.clone_environments(copy_from_source=False)
         self.scene.articulations["robot"] = self.robot
+        self.robot_contact_sensor = ContactSensor(self.cfg.robot_contact_sensor_cfg)
+        self.scene.sensors["robot_contact_sensor"] = self.robot_contact_sensor
+
+        # Additional sphere lights (currently disabled)
+        # pink = (0.9882352941176471, 0.011764705882352941, 0.7098039215686275)
+        # aqua = (0.0, 1.0, 1.0)
+        # disco_intensity = 20000
+        # light_cfg_1 = sim_utils.SphereLightCfg(intensity=disco_intensity, color=pink)
+        # light_cfg_1.func("/World/ds", light_cfg_1, translation=(1, 1, 2))
+        # light_cfg_2 = sim_utils.SphereLightCfg(intensity=disco_intensity, color=aqua)
+        # light_cfg_2.func("/World/disk", light_cfg_2, translation=(-1, 1, 2))
+        # light_cfg_3 = sim_utils.SphereLightCfg(intensity=disco_intensity, color=pink)
+        # light_cfg_3.func("/World/ds1", light_cfg_3, translation=(-1, -1, 2))
+        # light_cfg_4 = sim_utils.SphereLightCfg(intensity=disco_intensity, color=aqua)
+        # light_cfg_4.func("/World/disk2", light_cfg_4, translation=(1, -1, 2))
 
         light_cfg = sim_utils.DomeLightCfg(intensity=200.0, color=(0.75, 0.75, 0.75))
         light_cfg.func("/World/Light", light_cfg)
-
-        # Additional sphere lights (currently disabled)
-        pink = (0.9882352941176471, 0.011764705882352941, 0.7098039215686275)
-        aqua = (0.0, 1.0, 1.0)
-        disco_intensity = 20000
-        light_cfg_1 = sim_utils.SphereLightCfg(intensity=disco_intensity, color=pink)
-        light_cfg_1.func("/World/ds", light_cfg_1, translation=(1, 1, 2))
-        light_cfg_2 = sim_utils.SphereLightCfg(intensity=disco_intensity, color=aqua)
-        light_cfg_2.func("/World/disk", light_cfg_2, translation=(-1, 1, 2))
-        light_cfg_3 = sim_utils.SphereLightCfg(intensity=disco_intensity, color=pink)
-        light_cfg_3.func("/World/ds1", light_cfg_3, translation=(-1, -1, 2))
-        light_cfg_4 = sim_utils.SphereLightCfg(intensity=disco_intensity, color=aqua)
-        light_cfg_4.func("/World/disk2", light_cfg_4, translation=(1, -1, 2))
-
-        self.robot_contact_sensor = ContactSensor(self.cfg.robot_contact_sensor_cfg)
-        self.scene.sensors["robot_contact_sensor"] = self.robot_contact_sensor
 
 
     def _get_tactile(self):

@@ -51,6 +51,8 @@ class BaodingCfg(ShadowEnvCfg):
 
     colour_1 = (0.4, 0.9882352941176471, 0.011764705882352941)
     colour_2 = (0.0, 1.0, 1.0)
+    pink_colour = (0.7294117647058823, 0.3176470588235294, 0.7137254901960784)
+
 
     ball_1_cfg: RigidObjectCfg = RigidObjectCfg(
         prim_path="/World/envs/env_.*/ball1",
@@ -58,7 +60,7 @@ class BaodingCfg(ShadowEnvCfg):
         spawn=sim_utils.SphereCfg(
             radius=ball_radius_m,
             physics_material=sim_utils.RigidBodyMaterialCfg(static_friction=1.0, dynamic_friction=1.0, restitution=0.0),
-            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=colour_1, metallic=0.5),
+            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=colour_1, opacity=0.2),
             rigid_props=sim_utils.RigidBodyPropertiesCfg(
                 kinematic_enabled=False,
                 disable_gravity=False,
@@ -79,7 +81,7 @@ class BaodingCfg(ShadowEnvCfg):
         spawn=sim_utils.SphereCfg(
             radius=ball_radius_m,
             physics_material=sim_utils.RigidBodyMaterialCfg(static_friction=1.0, dynamic_friction=1.0, restitution=0.0),
-            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=colour_2, metallic=0.5),
+            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=colour_2, opacity=0.2),
             rigid_props=sim_utils.RigidBodyPropertiesCfg(
                 kinematic_enabled=False,
                 disable_gravity=False,
@@ -170,6 +172,15 @@ class BaodingEnv(ShadowEnv):
     def _setup_scene(self):
         """Register balls and visualization markers."""
         super()._setup_scene()
+
+        light = sim_utils.DomeLightCfg(
+            color=(1.1, 1.0, 1.0),
+            intensity=250.0,
+            texture_file="/home/elle/code/debug/roto/roto/assets/rooms/qwantani_dusk_2_puresky_4k.hdr",
+            texture_format="latlong"
+        )
+        light.func("/World/bglight", light)
+
         # add hand, in-hand ball, and goal ball
         self.ball_1 = RigidObject(self.cfg.ball_1_cfg)
         self.ball_2 = RigidObject(self.cfg.ball_2_cfg)
@@ -178,6 +189,8 @@ class BaodingEnv(ShadowEnv):
 
         self.target1 = VisualizationMarkers(self.cfg.target1_cfg)
         self.target2 = VisualizationMarkers(self.cfg.target2_cfg)
+
+
             
 
     def _get_gt(self) -> torch.Tensor:
