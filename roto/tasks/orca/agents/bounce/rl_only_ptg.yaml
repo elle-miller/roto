@@ -24,8 +24,8 @@ agent:
   kl_threshold: 0
 
 experiment:
-  experiment_name: shadow_bounce_rl_only_ptg
+  experiment_name: orca_bounce_rl_only_ptg
   wandb: 1
   wandb_kwargs:
-    group: shadow_bounce_rl_only_ptg
-    name: PGT
+    group: orca_bounce_rl_only_ptg
+    name: PGT - tendons
