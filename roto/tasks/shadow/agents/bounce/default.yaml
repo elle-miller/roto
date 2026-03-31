@@ -14,15 +14,13 @@ observations:
 encoder:
   method: early
   hiddens:
-  - 1024
   - 512
   - 256
   activations:
   - elu
   - elu
-  - elu
   layernorm: true
-  state_preprocessor: null
+  state_preprocessor: True
 
 policy:
   clip_log_std: true

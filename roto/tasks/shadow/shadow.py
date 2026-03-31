@@ -98,10 +98,6 @@ class ShadowEnvCfg(RotoEnvCfg):
         history_length=1,
     )
 
-    # Legacy ordering of body groups for policy replay compatibility.
-    # _get_tactile() reindexes the single sensor output to match:
-    #   [all distal, all proximal, all middle, palm, metacarpal]
-    tactile_body_groups = ["distal", "proximal", "middle", "palm", "metacarpal"]
 
 
 class ShadowEnv(RotoEnv):
@@ -145,7 +141,7 @@ class ShadowEnv(RotoEnv):
         super()._setup_scene()
 
         self.robot = Articulation(self.cfg.robot_cfg)
-        spawn_ground_plane(prim_path="/World/ground", cfg=GroundPlaneCfg())
+        # spawn_ground_plane(prim_path="/World/ground", cfg=GroundPlaneCfg())
         self.scene.clone_environments(copy_from_source=False)
         self.scene.articulations["robot"] = self.robot
 
@@ -156,14 +152,14 @@ class ShadowEnv(RotoEnv):
         pink = (0.9882352941176471, 0.011764705882352941, 0.7098039215686275)
         aqua = (0.0, 1.0, 1.0)
         disco_intensity = 20000
-        light_cfg_1 = sim_utils.SphereLightCfg(intensity=disco_intensity, color=pink)
-        light_cfg_1.func("/World/ds", light_cfg_1, translation=(1, 1, 2))
-        light_cfg_2 = sim_utils.SphereLightCfg(intensity=disco_intensity, color=aqua)
-        light_cfg_2.func("/World/disk", light_cfg_2, translation=(-1, 1, 2))
-        light_cfg_3 = sim_utils.SphereLightCfg(intensity=disco_intensity, color=pink)
-        light_cfg_3.func("/World/ds1", light_cfg_3, translation=(-1, -1, 2))
-        light_cfg_4 = sim_utils.SphereLightCfg(intensity=disco_intensity, color=aqua)
-        light_cfg_4.func("/World/disk2", light_cfg_4, translation=(1, -1, 2))
+        # light_cfg_1 = sim_utils.SphereLightCfg(intensity=disco_intensity, color=pink)
+        # light_cfg_1.func("/World/ds", light_cfg_1, translation=(1, 1, 2))
+        # light_cfg_2 = sim_utils.SphereLightCfg(intensity=disco_intensity, color=aqua)
+        # light_cfg_2.func("/World/disk", light_cfg_2, translation=(-1, 1, 2))
+        # light_cfg_3 = sim_utils.SphereLightCfg(intensity=disco_intensity, color=pink)
+        # light_cfg_3.func("/World/ds1", light_cfg_3, translation=(-1, -1, 2))
+        # light_cfg_4 = sim_utils.SphereLightCfg(intensity=disco_intensity, color=aqua)
+        # light_cfg_4.func("/World/disk2", light_cfg_4, translation=(1, -1, 2))
 
         self.robot_contact_sensor = ContactSensor(self.cfg.robot_contact_sensor_cfg)
         self.scene.sensors["robot_contact_sensor"] = self.robot_contact_sensor
@@ -175,13 +171,9 @@ class ShadowEnv(RotoEnv):
         Reindexes the single contact sensor to match the legacy ordering:
         [all distal, all proximal, all middle, palm, metacarpal].
         """
-        # Lazy-build the reindex on first call (sensor must be initialized first)
-        if not hasattr(self, "_tactile_reindex"):
-            self._build_tactile_reindex()
 
         forces = self.robot_contact_sensor.data.net_forces_w[:].clone()  # [N, B, 3]
         norm = torch.linalg.vector_norm(forces, dim=-1)  # [N, B]
-        norm = norm[:, self._tactile_reindex]  # reorder to legacy grouping
 
         if self.tactile_cfg is not None and self.tactile_cfg.get("binary_tactile", True):
             norm = (norm > self.binary_threshold).float()
@@ -204,33 +196,3 @@ class ShadowEnv(RotoEnv):
 
         # Reset hand with noise
         self._reset_robot(env_ids, joint_pos_noise=self.cfg.reset_joint_pos_noise)
-
-    def _build_tactile_reindex(self):
-        """Build a permutation index so the single sensor output matches the legacy
-        [distal, proximal, middle, palm, metacarpal] grouping used by saved policies.
-        
-        Delete if you do not need to play the saved checkpoints
-        """
-        body_names = self.robot_contact_sensor.body_names
-        groups = {g: [] for g in self.cfg.tactile_body_groups}
-        for i, name in enumerate(body_names):
-            matched = False
-            for group in self.cfg.tactile_body_groups:
-                if name.endswith(group):
-                    groups[group].append(i)
-                    matched = True
-                    break
-            if not matched:
-                raise ValueError(f"Contact body '{name}' doesn't match any group in {self.cfg.tactile_body_groups}")
-        order = []
-        for g in self.cfg.tactile_body_groups:
-            order.extend(groups[g])
-        self._tactile_reindex = torch.tensor(order, dtype=torch.long, device=self.device)
-        self.num_tactile_observations = len(order)
-        # Resize tactile buffers now that we know the true count
-        self.tactile = torch.zeros((self.num_envs, self.num_tactile_observations), device=self.device)
-        self.last_tactile = torch.zeros((self.num_envs, self.num_tactile_observations), device=self.device)
-        print(f"[ShadowEnv] Tactile reindex: {len(body_names)} bodies → "
-              f"{self.num_tactile_observations} outputs in legacy order")
-        print(f"  Body names: {body_names}")
-        print(f"  Group sizes: { {g: len(groups[g]) for g in self.cfg.tactile_body_groups} }")

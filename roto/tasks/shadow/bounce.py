@@ -22,12 +22,43 @@ from isaaclab.utils.math import sample_uniform
 
 from roto.tasks.shadow.shadow import ShadowEnv, ShadowEnvCfg
 
+from roto.tasks.physics import contact_props
+
+
+# Different balls
+stress_ball_radius_m = 0.035
+stress_ball_mass_g = 30
+tennis_ball_radius_m = 0.033
+tennis_ball_mass_g = 57
+
+bounce_ball_mass_g = stress_ball_mass_g
+bounce_ball_radius_m = stress_ball_radius_m
+
+bounce_ball_rigid_props = sim_utils.RigidBodyPropertiesCfg(
+    kinematic_enabled=False,
+    disable_gravity=False,
+    enable_gyroscopic_forces=True,
+    solver_position_iteration_count=12, # Increased for stability
+    solver_velocity_iteration_count=4,  # MUST be > 0 for bounce physics
+    sleep_threshold=0.001,              # Lowered to prevent premature "falling asleep"
+    stabilization_threshold=0.001,
+    max_depenetration_velocity=10.0,    # 1000 is very high; can cause "explosions"
+)
+
+bounce_ball_material = sim_utils.RigidBodyMaterialCfg(
+    static_friction=0.8, 
+    dynamic_friction=0.8, 
+    restitution=0.1
+)
+
+bounce_ball_mass_props = sim_utils.MassPropertiesCfg(mass=bounce_ball_mass_g/1000)
+
 
 @configclass
 class BounceCfg(ShadowEnvCfg):
     """Configuration parameters for the Shadow bounce task."""
 
-    fall_height = 0.3
+    fall_height = 0.4
     reset_position_noise = 0.01
     object_y_pos = -0.39
     object_z_pos = 0.6
@@ -37,28 +68,16 @@ class BounceCfg(ShadowEnvCfg):
 
     ball_colour = (0.7294117647058823, 0.3176470588235294, 0.7137254901960784)
 
-    radius_m = 0.035
-    mass_g = 30
-    mass_kg = mass_g / 1000
     object_cfg: RigidObjectCfg = RigidObjectCfg(
         prim_path="/World/envs/env_.*/Object",
         init_state=RigidObjectCfg.InitialStateCfg(pos=default_object_pos, rot=(1.0, 0.0, 0.0, 0.0)),
         spawn=sim_utils.SphereCfg(
-            radius=radius_m,
-            physics_material=sim_utils.RigidBodyMaterialCfg(static_friction=1.0, dynamic_friction=1.0, restitution=0.0),
+            radius=bounce_ball_radius_m,
+            physics_material=bounce_ball_material,
             visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=ball_colour, metallic=0.1),
-            rigid_props=sim_utils.RigidBodyPropertiesCfg(
-                kinematic_enabled=False,
-                disable_gravity=False,
-                enable_gyroscopic_forces=True,
-                solver_position_iteration_count=8,
-                solver_velocity_iteration_count=0,
-                sleep_threshold=0.005,
-                stabilization_threshold=0.0025,
-                max_depenetration_velocity=1000.0,
-            ),
-            mass_props=sim_utils.MassPropertiesCfg(mass=mass_kg),
-            collision_props=CollisionPropertiesCfg(collision_enabled=True),
+            rigid_props=bounce_ball_rigid_props,
+            mass_props=bounce_ball_mass_props,
+            collision_props=contact_props,
         ),
     )
 
@@ -95,11 +114,11 @@ class BounceEnv(ShadowEnv):
         gt = torch.cat(
             (
                 self.object_pos,
-                self.object_rot,
+                # self.object_rot,
                 self.object_linvel,
-                self.object_angvel,
+                # self.object_angvel,
                 torch.norm(self.object_linvel, dim=1).unsqueeze(-1),
-                torch.norm(self.object_angvel, dim=1).unsqueeze(-1),
+                # torch.norm(self.object_angvel, dim=1).unsqueeze(-1),
                 self.time_without_contact.unsqueeze(-1),
             ),
             dim=-1,
@@ -112,6 +131,15 @@ class BounceEnv(ShadowEnv):
 
         self.object = RigidObject(self.cfg.object_cfg)
         self.scene.rigid_objects["object"] = self.object
+
+        light = sim_utils.DomeLightCfg(
+            color=(1.0, 1.0, 1.0),
+            intensity=1000.0,
+            texture_file="/home/elle/code/debug/roto/roto/assets/rooms/stierberg_sunrise_4k.hdr",
+            texture_format="latlong"
+        )
+        light.func("/World/bglight", light)
+
 
     def _get_tactile(self):
         """Return tactile force."""
@@ -202,13 +230,14 @@ class BounceEnv(ShadowEnv):
 
     def _get_rewards(self) -> torch.Tensor:
         """Reward bounces."""
-        total_reward, bounce_reward = compute_rewards(self.new_bounces)
+        total_reward, bounce_reward, air_reward = compute_rewards(self.new_bounces, self.time_without_contact)
 
         self.extras["log"] = {
             "object_z_linvel": (self.object_linvel[:, 2].half()),
             "object_z_angvel": (self.object_angvel[:, 2].half()),
             "sum_forces": (torch.sum(self.tactile, dim=1)),
             "bounce_reward": (bounce_reward).float(),
+            "air_reward": (air_reward).float(),
         }
 
         self.extras["counters"] = {
@@ -219,7 +248,7 @@ class BounceEnv(ShadowEnv):
 
 
 @torch.jit.script
-def compute_rewards(new_bounces: torch.Tensor):
+def compute_rewards(new_bounces: torch.Tensor, time_without_contact: torch.Tensor):
     """Compute rewards for ball bouncing task.
 
     Args:
@@ -229,7 +258,8 @@ def compute_rewards(new_bounces: torch.Tensor):
         Tuple of (total_reward, bounce_reward).
     """
     bounce_reward = new_bounces * 10
+    air_reward = time_without_contact * 0.01
 
-    total_reward = bounce_reward
+    total_reward = bounce_reward + air_reward
 
-    return total_reward, bounce_reward
+    return total_reward, bounce_reward, air_reward
