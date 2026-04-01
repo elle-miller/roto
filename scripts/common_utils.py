@@ -293,8 +293,9 @@ def train_one_seed(args_cli, env, agent_cfg=None, env_cfg=None, writer=None, see
     policy, value, encoder, value_preprocessor = make_models(env, env_cfg, agent_cfg, dtype)
 
     # Create tensors in memory for RL (only for the training envs, not eval envs)
-    env.num_train_envs = env_cfg.scene.num_envs - agent_cfg["trainer"]["num_eval_envs"]
-    rl_memory = make_memory(env, env_cfg, size=agent_cfg["agent"]["rollouts"], num_envs=env.num_train_envs)
+    rl_memory = make_memory(
+        env, env_cfg, size=agent_cfg["agent"]["rollouts"], num_envs=env.num_train_envs
+    )
     ssl_task = make_aux(env, rl_memory, encoder, value, value_preprocessor, env_cfg, agent_cfg, writer)
 
     # Configure and instantiate PPO agent

@@ -157,9 +157,9 @@ class OptimisationRunner:
         learning_epochs = trial.suggest_int("learning_epochs", low=5, high=20, step=1)
         learning_rate = trial.suggest_float("learning_rate", low=1e-6, high=0.003, log=True)
         entropy_loss_scale = trial.suggest_float("entropy_loss_scale", low=0, high=0.5)
-        value_loss_scale = trial.suggest_float("value_loss_scale", low=0, high=1.0)
-        value_clip = trial.suggest_float("value_clip", low=0, high=0.3)
-        ratio_clip = trial.suggest_float("ratio_clip", low=0, high=0.3)
+        value_loss_scale = trial.suggest_float("value_loss_scale", low=0.05, high=1.0)
+        value_clip = trial.suggest_float("value_clip", low=0.05, high=0.3)
+        ratio_clip = trial.suggest_float("ratio_clip", low=0.05, high=0.3)
         gae_lambda = trial.suggest_float("gae_lambda", low=0.9, high=0.99)
 
         agent_cfg["agent"]["rollouts"] = rollouts
@@ -237,7 +237,7 @@ class OptimisationRunner:
 if __name__ == "__main__":
     print("Running sweep with Optuna")
 
-    sweep = False
+    sweep = True
 
     # Parse configuration
     env_cfg, agent_cfg = register_task_to_hydra(args_cli.task, "default_cfg")
@@ -265,19 +265,19 @@ if __name__ == "__main__":
         agent_cfg["experiment"]["wandb_kwargs"]["group"] = (
             args_cli.task + "_" + args_cli.agent_cfg + "_" + args_cli.study
         )
-        storage = "./sweep_logs/" + agent_cfg["sweeper"]["storage"]
+        storage = agent_cfg["sweeper"]["storage"]
         n_warmup_steps = agent_cfg["sweeper"]["warmup_timesteps_M"] * 1e6
         agent_cfg["trainer"]["max_global_timesteps_M"] = max_sweep_timesteps_M
 
         study_name = args_cli.study
-        total_trials = 50
+        total_trials = 30
         n_startup_trials = 5
         interval_steps = 1
 
         writer = Writer(agent_cfg, delay_wandb_startup=True)
 
         # Make environment (order: gymnasium Env -> FrameStack -> IsaacLab)
-        env = make_env(env_cfg, writer, args_cli, agent_cfg["observations"]["obs_stack"])
+        env = make_env(agent_cfg, env_cfg, writer, args_cli)
 
         runner = OptimisationRunner(study_name, n_startup_trials, n_warmup_steps, interval_steps)
 
@@ -319,7 +319,7 @@ if __name__ == "__main__":
     writer = Writer(agent_cfg, delay_wandb_startup=True)
     env_cfg = update_env_cfg(args_cli, env_cfg, agent_cfg)
     if not sweep:
-        env = make_env(env_cfg, writer, args_cli, agent_cfg["observations"]["obs_stack"])
+        env = make_env(agent_cfg, env_cfg, writer, args_cli)
 
     for seed in test_seeds:
         print("Running seed:", seed)
