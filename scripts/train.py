@@ -22,6 +22,12 @@ parser.add_argument("--video_dir", type=str, default=None, help="Directory to sa
 
 parser.add_argument("--num_envs", type=int, default=None, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default=None, help="Name of the task.")
+parser.add_argument(
+    "--robot",
+    type=str,
+    default=None,
+    help="Robot: Bounce/Baoding → shadow|orca|allegro; Find → franka. Defaults: shadow or franka.",
+)
 parser.add_argument("--agent_cfg", type=str, default=None, help="Name of the agent configuration.")
 parser.add_argument("--seed", type=int, default=None, help="Seed used for the environment.")
 # Rendering options (useful for RTX5090 and similar GPUs)
@@ -40,7 +46,7 @@ app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
 import isaaclab_tasks  # noqa: F401
-from common_utils import LOG_PATH, make_env, train_one_seed, update_env_cfg
+from common_utils import LOG_PATH, make_env, resolve_gym_env_id, train_one_seed, update_env_cfg
 from isaaclab.utils import update_dict
 from isaaclab_tasks.utils.hydra import register_task_to_hydra
 from isaaclab_tasks.utils.parse_cfg import load_cfg_from_registry
@@ -49,8 +55,9 @@ from multimodal_rl.tools.writer import Writer
 
 def main() -> None:
     """Train a RoTO policy using the selected Isaac Lab task and agent config."""
-    env_cfg, agent_cfg = register_task_to_hydra(args_cli.task, "default_cfg")
-    specialised_cfg = load_cfg_from_registry(args_cli.task, args_cli.agent_cfg)
+    args_cli.gym_env_id = resolve_gym_env_id(args_cli.task, args_cli.robot)
+    env_cfg, agent_cfg = register_task_to_hydra(args_cli.gym_env_id, "default_cfg")
+    specialised_cfg = load_cfg_from_registry(args_cli.gym_env_id, args_cli.agent_cfg)
     agent_cfg = update_dict(agent_cfg, specialised_cfg)
 
     seed = args_cli.seed if args_cli.seed is not None else agent_cfg["seed"]

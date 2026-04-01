@@ -57,17 +57,17 @@ physx_optimized = PhysxCfg(
     # Prevents fingers from "tunneling" through thin objects during fast movements.
     enable_ccd=True,
 
-    # Refined GPU Buffer Management
-    gpu_max_rigid_patch_count=2**19,       # Covers your ~233k requirement with 100% margin
-    gpu_max_rigid_contact_count=2**22,     # Increased to 4M to support high-contact density
-    gpu_heap_capacity=2**27,               # Bumped slightly to support the contact increase
-    gpu_total_aggregate_pairs_capacity=2**21, # Still massive, but more reasonable
-    gpu_found_lost_pairs_capacity=2**21,
+    # Refined GPU Buffer Management if needed
+    # gpu_max_rigid_patch_count=2**19,       # Covers your ~233k requirement with 100% margin
+    # gpu_max_rigid_contact_count=2**22,     # Increased to 4M to support high-contact density
+    # gpu_heap_capacity=2**27,               # Bumped slightly to support the contact increase
+    # gpu_total_aggregate_pairs_capacity=2**21, # Still massive, but more reasonable
+    # gpu_found_lost_pairs_capacity=2**21,
 )
 
 robot_material = sim_utils.RigidBodyMaterialCfg(
-    static_friction=1.5,
-    dynamic_friction=1.2, 
+    static_friction=1.0,
+    dynamic_friction=1.0, 
     restitution=0.0      
 )
 
@@ -77,3 +77,31 @@ roto_sim_cfg = SimulationCfg(
     physics_material=robot_material,
     physx=physx_optimized
 )
+
+
+### BOUNCE PHYSICS ###
+stress_ball_radius_m = 0.035
+stress_ball_mass_g = 30
+tennis_ball_radius_m = 0.033
+tennis_ball_mass_g = 57
+bounce_ball_mass_g = stress_ball_mass_g
+bounce_ball_radius_m = stress_ball_radius_m
+bounce_ball_mass_props = sim_utils.MassPropertiesCfg(mass=bounce_ball_mass_g/1000)
+
+bounce_ball_rigid_props = sim_utils.RigidBodyPropertiesCfg(
+    kinematic_enabled=False,
+    disable_gravity=False,
+    enable_gyroscopic_forces=True,
+    solver_position_iteration_count=12, # Increased for stability
+    solver_velocity_iteration_count=4,  # MUST be > 0 for bounce physics
+    sleep_threshold=SLEEP_THRESHOLD,              # Lowered to prevent premature "falling asleep"
+    stabilization_threshold=STABILIZATION_THRESHOLD,
+    max_depenetration_velocity=MAX_DEPENETRATION_VELOCITY,
+)
+
+bounce_ball_material = sim_utils.RigidBodyMaterialCfg(
+    static_friction=0.8, 
+    dynamic_friction=0.8, 
+    restitution=0.1
+)
+

@@ -24,6 +24,12 @@ parser.add_argument(
 )
 parser.add_argument("--num_envs", type=int, default=None, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default=None, help="Name of the task.")
+parser.add_argument(
+    "--robot",
+    type=str,
+    default=None,
+    help="Robot: Bounce/Baoding → shadow|orca|allegro; Find → franka. Defaults: shadow or franka.",
+)
 parser.add_argument("--checkpoint", type=str, default=None, help="Path to model checkpoint.")
 parser.add_argument("--video_dir", type=str, default=None, help="Directory to save recorded videos.")
 parser.add_argument("--agent_cfg", type=str, default=None, help="Name of the agent configuration.")
@@ -50,6 +56,7 @@ from common_utils import (
     LOG_PATH,
     make_env,
     make_models,
+    resolve_gym_env_id,
     set_seed,
     update_env_cfg,
 )
@@ -67,9 +74,10 @@ def main():
     Loads a checkpoint and runs the agent in the environment, optionally recording videos.
     """
     # Parse configuration
-    env_cfg, agent_cfg = register_task_to_hydra(args_cli.task, "default_cfg")
+    args_cli.gym_env_id = resolve_gym_env_id(args_cli.task, args_cli.robot)
+    env_cfg, agent_cfg = register_task_to_hydra(args_cli.gym_env_id, "default_cfg")
 
-    specialised_cfg = load_cfg_from_registry(args_cli.task, args_cli.agent_cfg)
+    specialised_cfg = load_cfg_from_registry(args_cli.gym_env_id, args_cli.agent_cfg)
     agent_cfg = update_dict(agent_cfg, specialised_cfg)
     dtype = torch.float32
 

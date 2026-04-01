@@ -24,6 +24,12 @@ parser.add_argument("--video_length", type=int, default=600, help="Length of the
 parser.add_argument("--video_interval", type=int, default=500, help="Interval between video recordings (in steps).")
 parser.add_argument("--num_envs", type=int, default=None, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default=None, help="Name of the task.")
+parser.add_argument(
+    "--robot",
+    type=str,
+    default=None,
+    help="Robot: Bounce/Baoding → shadow|orca|allegro; Find → franka. Defaults: shadow or franka.",
+)
 parser.add_argument("--agent_cfg", type=str, default=None, help="Name of the config.")
 parser.add_argument("--seed", type=int, default=None, help="Seed used for the environment")
 parser.add_argument("--study", type=str, default="default", help="study name")
@@ -50,6 +56,7 @@ from common_utils import (
     make_memory,
     make_models,
     make_trainer,
+    resolve_gym_env_id,
     set_seed,
     update_env_cfg,
 )
@@ -240,9 +247,10 @@ if __name__ == "__main__":
     sweep = False
 
     # Parse configuration
-    env_cfg, agent_cfg = register_task_to_hydra(args_cli.task, "default_cfg")
+    args_cli.gym_env_id = resolve_gym_env_id(args_cli.task, args_cli.robot)
+    env_cfg, agent_cfg = register_task_to_hydra(args_cli.gym_env_id, "default_cfg")
 
-    specialised_cfg = load_cfg_from_registry(args_cli.task, args_cli.agent_cfg)
+    specialised_cfg = load_cfg_from_registry(args_cli.gym_env_id, args_cli.agent_cfg)
     agent_cfg = update_dict(agent_cfg, specialised_cfg)
 
     dtype = torch.float32

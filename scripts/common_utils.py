@@ -18,7 +18,34 @@ from multimodal_rl.wrappers.frame_stack import FrameStack
 from multimodal_rl.wrappers.isaaclab_wrapper import IsaacLabWrapper
 
 # Import task modules to register environments
-from roto.tasks import franka, shadow, allegro, orca  # noqa: F401
+from roto.tasks import baoding, bounce, find  # noqa: F401
+from roto.tasks.robots import allegro, franka, orca, shadow  # noqa: F401
+
+
+def resolve_gym_env_id(task: str | None, robot: str | None) -> str:
+    """Map CLI ``--task`` and optional ``--robot`` to a registered gymnasium env id.
+
+    For ``Bounce`` and ``Baoding``, ``robot`` selects the hand (default ``shadow``).
+    For ``Find``, only ``franka`` is supported (default).
+    """
+    if task is None:
+        raise ValueError("task is required")
+    if task == "Find":
+        if robot is None or robot.strip().lower() in ("franka",):
+            return "Find"
+        raise ValueError("Task Find only supports robot franka.")
+    if task in ("Bounce", "Baoding"):
+        if robot is None or robot.strip().lower() in ("shadow",):
+            return task
+        r = robot.strip().lower()
+        if r == "orca":
+            return f"{task}_Orca"
+        if r == "allegro":
+            return f"{task}_Allegro"
+        raise ValueError(
+            f"Unknown robot {robot!r} for task {task}. Use one of: shadow, orca, allegro."
+        )
+    return task
 
 # Logging directory (change this to a custom path if desired)
 LOG_PATH = os.getcwd()
@@ -91,7 +118,8 @@ def make_env(agent_cfg, env_cfg, writer, args_cli):
         if "tactile_cfg" in obs_cfg:
             env_cfg.tactile_cfg = obs_cfg["tactile_cfg"]
 
-    env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
+    gym_id = getattr(args_cli, "gym_env_id", None) or args_cli.task
+    env = gym.make(gym_id, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
     obs, _ = env.reset()
 
     # Build observation space dictionary accounting for frame stacking

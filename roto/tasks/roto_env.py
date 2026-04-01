@@ -156,6 +156,10 @@ class RotoEnv(DirectRLEnv):
             )
             self._tiled_camera.set_world_poses_from_view(eyes=eyes, targets=targets)
         
+        # Current / previous-step tactile (contact) readings for tasks (bounce, logging, etc.).
+        self.tactile = torch.zeros((self.num_envs, 0), device=self.device)
+        self.last_tactile = torch.zeros((self.num_envs, 0), device=self.device)
+
         # Visualize evaluation environment markers (pink boxes)
         if self.cfg.num_eval_envs > 0 and hasattr(self, "eval_markers"):
             # Position markers at evaluation environment origins (first num_eval_envs)
@@ -353,9 +357,9 @@ class RotoEnv(DirectRLEnv):
         # Convert to binary activations based on threshold if binary_tactile is True
         if self.tactile_cfg is not None and self.tactile_cfg["binary_tactile"]:
             norm = (norm > self.binary_threshold).float()
-            return norm
-        else:
-            return norm
+        self.last_tactile = self.tactile
+        self.tactile = norm
+        return norm
 
     def _reset_robot(self, env_ids, joint_pos_noise=0.125):
         """Reset the robot joint positions and velocities.

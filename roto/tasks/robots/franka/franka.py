@@ -1,0 +1,230 @@
+# Copyright (c) 2022-2024, The Isaac Lab Project Developers.
+# All rights reserved.
+#
+# SPDX-License-Identifier: BSD-3-Clause
+
+"""
+Author: Elle Miller 2025
+
+Shared Franka parent environment for IsaacLab RL tasks.
+
+This module provides a configurable RL environment for the Franka Panda robot,
+including simulation setup, sensors, and reward utilities.
+"""
+
+from __future__ import annotations
+
+import numpy as np
+import torch
+
+import isaaclab.sim as sim_utils
+from isaaclab.assets import Articulation, ArticulationCfg
+from isaaclab.sensors import (
+    ContactSensor,
+    ContactSensorCfg,
+    FrameTransformer,
+    FrameTransformerCfg,
+    OffsetCfg,
+)
+from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
+from isaaclab.utils import configclass
+from isaaclab.utils.math import (
+    quat_from_angle_axis,
+    quat_mul,
+)
+
+from roto.tasks.roto_env import RotoEnv, RotoEnvCfg
+
+from isaaclab.markers.config import FRAME_MARKER_CFG  # isort: skip
+
+from roto.assets.franka import FRANKA_PANDA_CFG  # isort: skip
+
+
+@configclass
+class FrankaEnvCfg(RotoEnvCfg):
+    """
+    Configuration class for Franka RL environments.
+    Defines simulation parameters, robot configs, sensors, and scene setup.
+    """
+
+    num_actions = 9  # Number of actions for Franka Panda
+    action_space = num_actions
+
+    # Robot configuration
+    robot_cfg: ArticulationCfg = FRANKA_PANDA_CFG.replace(prim_path="/World/envs/env_.*/Robot")
+
+    # Contact sensor marker configuration
+    marker_cfg = FRAME_MARKER_CFG.copy()
+    marker_cfg.markers["frame"].scale = (0.1, 0.1, 0.1)
+    marker_cfg.prim_path = "/Visuals/ContactCfg"
+
+    # Contact sensor configuration: I created additional links in the custom Franka USD file called "left_contact_sensor" and "right_contact_sensor"
+    robot_contact_sensor_cfg = ContactSensorCfg(
+        prim_path=f"/World/envs/env_.*/Robot/(left|right)_contact_sensor",
+        update_period=0.0,
+        history_length=1,
+        debug_vis=False,
+        visualizer_cfg=marker_cfg,
+    )
+    
+
+    # Actuated joint names for Franka Panda
+    actuated_joint_names = [
+        "panda_joint1",
+        "panda_joint2",
+        "panda_joint3",
+        "panda_joint4",
+        "panda_joint5",
+        "panda_joint6",
+        "panda_joint7",
+        "panda_finger_joint1",
+        "panda_finger_joint2",
+    ]
+
+    # End-effector frame transformer configuration
+    marker_cfg = FRAME_MARKER_CFG.copy()
+    marker_cfg.markers["frame"].scale = (0.01, 0.01, 0.01)
+    marker_cfg.prim_path = "/Visuals/EndEffectorFrameTransformer"
+    ee_config: FrameTransformerCfg = FrameTransformerCfg(
+        prim_path="/World/envs/env_.*/Robot/panda_link0",
+        debug_vis=False,
+        target_frames=[
+            FrameTransformerCfg.FrameCfg(
+                prim_path="/World/envs/env_.*/Robot/panda_hand",
+                name="end_effector",
+                offset=OffsetCfg(
+                    pos=[0.0, 0.0, 0.1034],
+                ),
+            ),
+        ],
+    )
+
+
+class FrankaEnv(RotoEnv):
+    """
+    RL environment for the Franka Panda robot.
+
+    Handles simulation setup, action application, observation collection, and resets.
+    """
+
+    cfg: FrankaEnvCfg
+
+    def __init__(self, cfg: FrankaEnvCfg, render_mode: str | None = None, **kwargs):
+        """
+        Initialize the Franka RL environment.
+
+        Args:
+            cfg (FrankaEnvCfg): Environment configuration.
+            render_mode (str, optional): Rendering mode.
+            **kwargs: Additional arguments.
+        """
+        super().__init__(cfg, render_mode, **kwargs)
+
+        # End-effector state (tactile buffers live on RotoEnv)
+        self.aperture = torch.zeros((self.num_envs,), device=self.device)
+        self.ee_pos = torch.zeros((self.num_envs, 3), device=self.device)
+        self.ee_rot = torch.zeros((self.num_envs, 4), device=self.device)
+
+        # Logging and counters for diagnostics
+        self.extras["log"] = {
+            "tactile": None,
+            "aperture": None,
+        }
+        self.extras["counters"] = {}
+
+
+    def _setup_scene(self):
+        """
+        Set up the simulation scene, including robot, sensors, and lighting.
+        """
+        super()._setup_scene()
+        
+        self.robot = Articulation(self.cfg.robot_cfg)
+
+        # Frame transformers for end-effector and contact sensors
+        self.ee_frame = FrameTransformer(self.cfg.ee_config)
+        self.ee_frame.set_debug_vis(False)
+
+        # Add ground plane
+        spawn_ground_plane(prim_path="/World/ground", cfg=GroundPlaneCfg(size=(10000, 10000)))
+
+        # Clone and replicate environments
+        self.scene.clone_environments(copy_from_source=False)
+
+        # Register components to scene
+        self.scene.articulations["robot"] = self.robot
+        self.scene.sensors["ee_frame"] = self.ee_frame
+
+        # Add lighting
+        yellow = (1.0, 0.96, 0.0)
+        orange = (1.0, 0.5, 0.0)
+        light_cfg = sim_utils.DomeLightCfg(intensity=1000.0, color=(0.75, 0.75, 0.75))
+        light_cfg.func("/World/Light", light_cfg)
+        light_cfg_1 = sim_utils.SphereLightCfg(intensity=10000.0, color=yellow)
+        light_cfg_1.func("/World/ds", light_cfg_1, translation=(1, 0, 1))
+        light_cfg_2 = sim_utils.SphereLightCfg(intensity=10000.0, color=orange)
+        light_cfg_2.func("/World/disk", light_cfg_2, translation=(-1, 0, 1))
+
+
+    def _get_proprioception(self):
+        """
+        Get proprioceptive observations (joint positions, velocities, etc.).
+
+        Returns:
+            torch.Tensor: Proprioceptive observation vector.
+        """
+        control_errors = self.joint_pos_cmd - self.joint_pos
+        prop = torch.cat(
+            (
+                self.normalised_joint_pos,
+                self.normalised_joint_vel,
+                self.aperture.unsqueeze(1),
+                self.ee_pos,
+                self.ee_rot,
+                self.actions,
+                # control_errors,
+                # self.episode_length_buf.unsqueeze(1),
+            ),
+            dim=-1,
+        )
+        return prop
+
+
+
+    def _compute_intermediate_values(self, env_ids: torch.Tensor | None = None):
+        """
+        Compute intermediate values for observations and rewards.
+
+        Args:
+            env_ids (torch.Tensor | None): Environment indices to update.
+        """
+        if env_ids is None:
+            env_ids = self.robot._ALL_INDICES
+        super()._compute_intermediate_values(env_ids)
+
+        # Update end-effector pose
+        self.ee_pos[env_ids] = self.ee_frame.data.target_pos_source[..., 0, :][env_ids]
+        self.ee_rot[env_ids] = self.ee_frame.data.target_quat_source[..., 0, :][env_ids]
+
+        # Compute aperture (normalized gripper opening)
+        max_aperture = 0.08
+        self.aperture = (self.joint_pos[:, 7] + self.joint_pos[:, 8]) / max_aperture
+
+
+@torch.jit.script
+def randomize_rotation(rand0, rand1, x_unit_tensor, y_unit_tensor):
+    """
+    Generate a randomized rotation quaternion.
+
+    Args:
+        rand0 (Tensor): Random values for X rotation.
+        rand1 (Tensor): Random values for Y rotation.
+        x_unit_tensor (Tensor): X unit vector.
+        y_unit_tensor (Tensor): Y unit vector.
+
+    Returns:
+        Tensor: Quaternion representing rotation.
+    """
+    return quat_mul(
+        quat_from_angle_axis(rand0 * np.pi, x_unit_tensor), quat_from_angle_axis(rand1 * np.pi, y_unit_tensor)
+    )
