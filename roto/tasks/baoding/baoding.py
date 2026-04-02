@@ -107,6 +107,7 @@ _OBJ = _make_baoding_object_cfgs()
 class BaodingTaskCfg:
     """Shared baoding parameters (same for every robot)."""
 
+    episode_length_s = 10.0
     act_moving_average = 1
     ball_mass_g = 55
     ball_mass_kg = 0.001 * ball_mass_g
@@ -132,17 +133,17 @@ class BaodingTaskCfg:
 
 
 @configclass
-class BaodingCfg(ShadowEnvCfg, BaodingTaskCfg):
+class BaodingCfg(BaodingTaskCfg, ShadowEnvCfg):
     """Baoding on the Shadow hand (registered env ``Baoding``)."""
 
 
 @configclass
-class BaodingOrcaCfg(OrcaEnvCfg, BaodingTaskCfg):
+class BaodingOrcaCfg(BaodingTaskCfg, OrcaEnvCfg):
     """Baoding on the Orca hand."""
 
 
 @configclass
-class BaodingAllegroCfg(AllegroEnvCfg, BaodingTaskCfg):
+class BaodingAllegroCfg(BaodingTaskCfg, AllegroEnvCfg):
     """Baoding on the Allegro hand."""
 
 
@@ -215,8 +216,6 @@ class BaodingMixin:
                 self.ball_2_pos,
                 self.ball_1.data.root_lin_vel_w,
                 self.ball_2.data.root_lin_vel_w,
-                self.ball_1.data.root_ang_vel_w,
-                self.ball_2.data.root_ang_vel_w,
                 self.ball_dist.unsqueeze(1),
             ),
             dim=-1,
