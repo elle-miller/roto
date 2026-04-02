@@ -278,7 +278,7 @@ if __name__ == "__main__":
         agent_cfg["trainer"]["max_global_timesteps_M"] = max_sweep_timesteps_M
 
         study_name = args_cli.study
-        total_trials = 30
+        total_trials = 20
         n_startup_trials = 5
         interval_steps = 1
 
