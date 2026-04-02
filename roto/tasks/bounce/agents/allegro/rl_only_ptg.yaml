@@ -33,7 +33,7 @@ agent:
     apply_to_all: true
 
 experiment:
-  experiment_name: allegro_bounce_rl_only_ptg
+  experiment_name: rl_only_ptg
   wandb: 1
   wandb_kwargs:
     group: allegro_bounce_rl_only_ptg

@@ -109,23 +109,17 @@ class AllegroEnvCfg(RotoEnvCfg):
     # num actions has to correspond with the number of actuated joints
     num_actions = len(actuated_joint_names)
 
-    fingertip_body_names = [
-        "index_link_3",
-        "middle_biotac_tip",
-        "ring_biotac_tip",
-        "thumb_biotac_tip",
-    ]
-
     marker_cfg = FRAME_MARKER_CFG.copy()
     marker_cfg.markers["frame"].scale = (0.05, 0.05, 0.05)
     marker_cfg.prim_path = "/Visuals/ContactCfg"
 
-    # Update this to match the Allegro hand
+    # Updated to match the Allegro hand
     robot_contact_sensor_cfg = ContactSensorCfg(
-        # prim_path="/World/envs/env_.*/Robot",
-        prim_path="/World/envs/env_.*/Robot/.*",   
+        # Captures palm_link, any finger link_0-3, and any biotac_tip
+        prim_path="/World/envs/env_.*/Robot/(palm_link|.*_link_.*|.*_biotac_tip)",
         update_period=0.0,
         history_length=1,
+        debug_vis=True, 
     )
 
 
@@ -140,27 +134,9 @@ class AllegroEnv(RotoEnv):
 
         print("NUM JOINTS:", len(self.robot.joint_names))
         print("JOINT NAMES:", self.robot.joint_names)
+        print("BODY NAMES:", self.robot.body_names)
+        print("NUM TACTILE SENSORS:", len(self.robot_contact_sensor.body_names))
 
-        self.extras["log"] = {
-            "tactile_penalty": None,
-            "success_reward": None,
-            "action_penalty": None,
-            "fall_penalty": None,
-            "object_height": None,
-            "object_z_linvel": None,
-            "object_z_angvel": None,
-            "sum_forces": None,
-            "total_rotations": None,
-            "cumulative_rotations": None,
-            "ball_1_vel": None,
-            "ball_2_vel": None,
-            "ball_dist": None,
-            "dist_penalty": None,
-            "tactile_reward": None,
-            "transition_reward": None,
-            "bounce_reward": None,
-            "air_reward": None,
-        }
 
     def _level_palm_to_world_up(self, env_ids = None): 
         if env_ids is None:
@@ -209,19 +185,6 @@ class AllegroEnv(RotoEnv):
 
         light_cfg = sim_utils.DomeLightCfg(intensity=200.0, color=(0.75, 0.75, 0.75))
         light_cfg.func("/World/Light", light_cfg)
-
-        # Additional sphere lights (currently disabled)
-        pink = (0.9882352941176471, 0.011764705882352941, 0.7098039215686275)
-        aqua = (0.0, 1.0, 1.0)
-        disco_intensity = 20000
-        light_cfg_1 = sim_utils.SphereLightCfg(intensity=disco_intensity, color=pink)
-        light_cfg_1.func("/World/ds", light_cfg_1, translation=(1, 1, 2))
-        light_cfg_2 = sim_utils.SphereLightCfg(intensity=disco_intensity, color=aqua)
-        light_cfg_2.func("/World/disk", light_cfg_2, translation=(-1, 1, 2))
-        light_cfg_3 = sim_utils.SphereLightCfg(intensity=disco_intensity, color=pink)
-        light_cfg_3.func("/World/ds1", light_cfg_3, translation=(-1, -1, 2))
-        light_cfg_4 = sim_utils.SphereLightCfg(intensity=disco_intensity, color=aqua)
-        light_cfg_4.func("/World/disk2", light_cfg_4, translation=(1, -1, 2))
 
         self.robot_contact_sensor = ContactSensor(self.cfg.robot_contact_sensor_cfg)
         self.scene.sensors["robot_contact_sensor"] = self.robot_contact_sensor
