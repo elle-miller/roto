@@ -53,5 +53,5 @@ trainer:
 
 sweeper:
   storage: sqlite:///roto_bounce.db
-  warmup_timesteps_M: 75
+  warmup_timesteps_M: 50
   max_sweep_timesteps_M: 100

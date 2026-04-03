@@ -80,7 +80,7 @@ class OptimisationRunner:
             n_warmup_steps: Number of warmup steps for the pruner.
             interval_steps: Interval steps for the pruner.
         """
-        self.sampler = optuna.samplers.TPESampler(n_startup_trials=n_startup_trials)
+        self.sampler = optuna.samplers.TPESampler(n_startup_trials=n_startup_trials, multivariate=True)
 
         self.pruner = optuna.pruners.MedianPruner(
             n_startup_trials=n_startup_trials, n_warmup_steps=n_warmup_steps, interval_steps=interval_steps
@@ -152,22 +152,19 @@ class OptimisationRunner:
         set_seed(agent_cfg["seed"])
 
         # Suggest PPO hyperparameters
-        # Note: Memory issues can occur with large rollouts + aux tasks
-        if "ssl_task" in agent_cfg:
-            if agent_cfg["ssl_task"]["type"] == "forward_dynamics":
-                rollouts = trial.suggest_categorical("rollouts", [16, 32])
-            else:
-                rollouts = trial.suggest_categorical("rollouts", [16, 32, 64, 96])
+        # Note: Memory issues can occur with large rollouts + aux tasks     
+        if "ssl_task" in agent_cfg and agent_cfg["ssl_task"]["type"] == "forward_dynamics":
+            max_rollouts_pow = 5
         else:
-            rollouts = trial.suggest_categorical("rollouts", [16, 32, 64, 96])
+            max_rollouts_pow = 6
+
+        rollouts = 2 ** trial.suggest_int("rollouts_pow", 4, max_rollouts_pow) # 16, 32, 64
         mini_batches = trial.suggest_categorical("mini_batches", [4, 8, 16, 32])
-        learning_epochs = trial.suggest_int("learning_epochs", low=5, high=20, step=1)
-        learning_rate = trial.suggest_float("learning_rate", low=1e-6, high=0.003, log=True)
-        entropy_loss_scale = trial.suggest_float("entropy_loss_scale", low=0, high=0.5)
-        value_loss_scale = trial.suggest_float("value_loss_scale", low=0.05, high=1.0)
-        value_clip = trial.suggest_float("value_clip", low=0.05, high=0.3)
-        ratio_clip = trial.suggest_float("ratio_clip", low=0.05, high=0.3)
-        gae_lambda = trial.suggest_float("gae_lambda", low=0.9, high=0.99)
+        learning_epochs = trial.suggest_int("learning_epochs", low=4, high=10, step=1)
+        learning_rate = trial.suggest_float("learning_rate", low=1e-5, high=5e-4, log=True)
+        entropy_loss_scale = trial.suggest_float("entropy_loss_scale", 1e-4, 0.01, log=True)
+        value_loss_scale = trial.suggest_float("value_loss_scale", low=0.1, high=1.0, log=True)
+        ratio_clip = trial.suggest_float("ratio_clip", low=0.1, high=0.2)
 
         agent_cfg["agent"]["rollouts"] = rollouts
         agent_cfg["agent"]["mini_batches"] = mini_batches
@@ -175,24 +172,18 @@ class OptimisationRunner:
         agent_cfg["agent"]["learning_rate"] = learning_rate
         agent_cfg["agent"]["entropy_loss_scale"] = entropy_loss_scale
         agent_cfg["agent"]["value_loss_scale"] = value_loss_scale
-        agent_cfg["agent"]["value_clip"] = value_clip
         agent_cfg["agent"]["ratio_clip"] = ratio_clip
-        agent_cfg["agent"]["lambda"] = gae_lambda
 
         # Suggest SSL task hyperparameters if applicable
         if "ssl_task" in agent_cfg:
-            learning_rate_aux = trial.suggest_float("learning_rate_aux", low=1e-5, high=1e-3, log=True)
-            loss_weight_aux = trial.suggest_float("loss_weight_aux", low=1e-3, high=10, log=True)
-            learning_epochs_ratio = trial.suggest_categorical("learning_epochs_ratio", [0.25, 0.5, 0.75, 1.0])
+            learning_rate_aux = trial.suggest_float("learning_rate_aux", low=1e-5, high=5e-4, log=True)
+            loss_weight_aux = trial.suggest_float("loss_weight_aux", low=1e-3, high=1, log=True)
 
             agent_cfg["ssl_task"]["learning_rate"] = learning_rate_aux
             agent_cfg["ssl_task"]["loss_weight"] = loss_weight_aux
-            agent_cfg["ssl_task"]["learning_epochs_ratio"] = learning_epochs_ratio
 
             if agent_cfg["ssl_task"]["type"] == "forward_dynamics":
-                # Cap sequence length to avoid long training times
-                seq_length = trial.suggest_int("seq_length", low=2, high=8, step=1)
-                seq_length = min(seq_length, 7)
+                seq_length = trial.suggest_int("seq_length", low=2, high=10, step=1)
                 agent_cfg["ssl_task"]["seq_length"] = seq_length
 
         # Setup models
@@ -278,8 +269,8 @@ if __name__ == "__main__":
         agent_cfg["trainer"]["max_global_timesteps_M"] = max_sweep_timesteps_M
 
         study_name = args_cli.study
-        total_trials = 20
-        n_startup_trials = 5
+        total_trials = 40
+        n_startup_trials = 8
         interval_steps = 1
 
         writer = Writer(agent_cfg, delay_wandb_startup=True)
@@ -296,20 +287,17 @@ if __name__ == "__main__":
         writer.close_wandb()
 
         # Apply best trial hyperparameters
-        agent_cfg["agent"]["rollouts"] = best_trial.params["rollouts"]
+        agent_cfg["agent"]["rollouts"] = 2 ** best_trial.params["rollouts_pow"]
         agent_cfg["agent"]["mini_batches"] = best_trial.params["mini_batches"]
         agent_cfg["agent"]["learning_epochs"] = best_trial.params["learning_epochs"]
         agent_cfg["agent"]["learning_rate"] = best_trial.params["learning_rate"]
         agent_cfg["agent"]["entropy_loss_scale"] = best_trial.params["entropy_loss_scale"]
         agent_cfg["agent"]["value_loss_scale"] = best_trial.params["value_loss_scale"]
-        agent_cfg["agent"]["value_clip"] = best_trial.params["value_clip"]
         agent_cfg["agent"]["ratio_clip"] = best_trial.params["ratio_clip"]
-        agent_cfg["agent"]["lambda"] = best_trial.params["gae_lambda"]
 
         if "ssl_task" in agent_cfg:
             agent_cfg["ssl_task"]["learning_rate"] = best_trial.params["learning_rate_aux"]
             agent_cfg["ssl_task"]["loss_weight"] = best_trial.params["loss_weight_aux"]
-            agent_cfg["ssl_task"]["learning_epochs_ratio"] = best_trial.params["learning_epochs_ratio"]
 
             if agent_cfg["ssl_task"]["type"] == "forward_dynamics":
                 agent_cfg["ssl_task"]["seq_length"] = best_trial.params["seq_length"]

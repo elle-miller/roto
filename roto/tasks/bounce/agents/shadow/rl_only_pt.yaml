@@ -31,7 +31,7 @@ agent:
     apply_to_all: true
 
 experiment:
-  experiment_name: shadow_bounce_rl_only_pt
+  experiment_name: rl_only_pt
   wandb: 1
   wandb_kwargs:
     group: shadow_bounce_new
