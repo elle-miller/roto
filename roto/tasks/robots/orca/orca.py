@@ -116,21 +116,19 @@ class OrcaEnvCfg(RotoEnvCfg):
     # num actions has to correspond with the number of actuated joints
     num_actions = len(actuated_joint_names)
 
-    # fingertip_body_names = [
-    #     "index_link_3",
-    #     "middle_biotac_tip",
-    #     "ring_biotac_tip",
-    #     "thumb_biotac_tip",
-    # ]
-
     marker_cfg = FRAME_MARKER_CFG.copy()
     marker_cfg.markers["frame"].scale = (0.05, 0.05, 0.05)
     marker_cfg.prim_path = "/Visuals/ContactCfg"
 
     # Update this to match the Orca hand
+    # ['right_palm', 'right_index_mp', 'right_index_pp','right_index_ip', 
+    # 'right_middle_mp', 'right_middle_pp', 'right_middle_ip', 'right_pinky_mp', 
+    # 'right_pinky_pp','right_pinky_ip', 'right_ring_mp', 'right_ring_pp', 
+    # 'right_ring_ip', 'right_thumb_mp', 'right_thumb_pp', 'right_thumb_ip', 'right_thumb_dp']
     robot_contact_sensor_cfg = ContactSensorCfg(
         # prim_path="/World/envs/env_.*/Robot",
-        prim_path="/World/envs/env_.*/Robot/.*",   
+        # prim_path="/World/envs/env_.*/Robot/(right_palm|.*_link_.*|.*_biotac_tip)",   
+        prim_path="/World/envs/env_.*/Robot/(?!(.*jointbody))(right_(palm|index_.*|middle_.*|pinky_.*|ring_.*|thumb_.*))",
         update_period=0.0,
         history_length=1,
     )
@@ -147,6 +145,9 @@ class OrcaEnv(RotoEnv):
 
         print("NUM JOINTS:", len(self.robot.joint_names))
         print("JOINT NAMES:", self.robot.joint_names)
+        print("BODY NAMES:", self.robot.body_names)
+        print("TACTILE SENSORS:", self.robot_contact_sensor.body_names)
+        print("TOTAL:", len(self.robot_contact_sensor.body_names))
 
         self.extras["log"] = {
             "tactile_penalty": None,

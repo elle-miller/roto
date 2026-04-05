@@ -1,5 +1,13 @@
 # Shadow Bounce config: forward_dynamics
-
+observations:
+  obs_list:
+  - prop
+  - tactile
+  obs_stack: 4
+  tactile_cfg:
+    binary_tactile: true
+    binary_threshold: 0.01
+  
 agent:
   rollouts: 32
   learning_epochs: 4

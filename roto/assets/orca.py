@@ -58,13 +58,20 @@ ORCA_HAND_CFG = ArticulationCfg(
    actuators={
         "wrist": ImplicitActuatorCfg(
             joint_names_expr=["right_wrist"],
-            stiffness=400.0,
-            damping=40.0,
+            stiffness=100.0,
+            damping=10,
         ),
-        "fingers": ImplicitActuatorCfg(
-            joint_names_expr=["right_.*_(mcp|pip|dip|abd|ip)"], 
+        # Base joints: abduction and proximal phalanx (MJCF kp=1 or 2)
+        "finger_base": ImplicitActuatorCfg(
+            joint_names_expr=["right_.*_(abd|mcp)"], 
+            stiffness=2.0,
+            damping=0.1, # Lower damping to match MJCF 0.05-0.1
+        ),
+        # Distal joints: These are tendon-linked and need higher stiffness (MJCF kp=4)
+        "finger_distal": ImplicitActuatorCfg(
+            joint_names_expr=["right_.*_(pip|dip|ip)"], 
             stiffness=4.0,
-            damping=0.4,
+            damping=0.2,
         ),
     },
     

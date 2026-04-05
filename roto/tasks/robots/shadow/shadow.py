@@ -79,6 +79,12 @@ class ShadowEnv(RotoEnv):
 
         super().__init__(cfg, render_mode, **kwargs)
 
+        print("NUM JOINTS:", len(self.robot.joint_names))
+        print("JOINT NAMES:", self.robot.joint_names)
+        print("BODY NAMES:", self.robot.body_names)
+        print("TACTILE SENSORS:", self.robot_contact_sensor.body_names)
+        print("TOTAL:", len(self.robot_contact_sensor.body_names))
+
 
     def _setup_scene(self):
         """Register the Shadow hand, contact sensors, and lighting."""

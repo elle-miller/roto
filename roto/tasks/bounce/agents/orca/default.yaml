@@ -2,27 +2,17 @@
 
 seed: 42
 
-observations:
-  obs_list:
-  - prop
-  - tactile
-  obs_stack: 4
-  tactile_cfg:
-    binary_tactile: true
-    binary_threshold: 0.0
 
 encoder:
   method: early
   hiddens:
-  - 1024
   - 512
   - 256
   activations:
   - elu
   - elu
-  - elu
   layernorm: true
-  state_preprocessor: null
+  state_preprocessor: True
 
 policy:
   clip_log_std: true
@@ -47,14 +37,14 @@ value:
   - identity
 
 experiment:
-  directory: bounce
+  directory: orca_bounce
   debug: 0
   upload_videos: 0
   save_checkpoints: 1
   tb_log: 1
   wandb: 1
   wandb_kwargs:
-    project: orca_bounce
+    project: roto_bounce
     entity: my-phd
 
 trainer:
@@ -63,6 +53,6 @@ trainer:
   environment_info: log
 
 sweeper:
-  storage: sqlite:///shadow_bounce.db
-  warmup_timesteps_M: 75
+  storage: sqlite:///roto_bounce.db
+  warmup_timesteps_M: 50
   max_sweep_timesteps_M: 100

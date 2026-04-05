@@ -135,7 +135,8 @@ class AllegroEnv(RotoEnv):
         print("NUM JOINTS:", len(self.robot.joint_names))
         print("JOINT NAMES:", self.robot.joint_names)
         print("BODY NAMES:", self.robot.body_names)
-        print("NUM TACTILE SENSORS:", len(self.robot_contact_sensor.body_names))
+        print("TACTILE SENSORS:", self.robot_contact_sensor.body_names)
+        print("TOTAL:", len(self.robot_contact_sensor.body_names))
 
 
     def _level_palm_to_world_up(self, env_ids = None): 
