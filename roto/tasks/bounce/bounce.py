@@ -88,7 +88,6 @@ class BounceCfg(BounceTaskCfg, ShadowEnvCfg):
 class BounceOrcaCfg(BounceTaskCfg, OrcaEnvCfg):
     """Orca hand: override only what differs from :class:`BounceTaskCfg`."""
 
-    air_reward_coeff = 0.0
     fall_height = 0.3
     object_y_pos = 0.1
     object_z_pos = 0.6
@@ -107,7 +106,6 @@ class BounceAllegroCfg(BounceTaskCfg, AllegroEnvCfg):
         default_joint_pos=ALLEGRO_DEFAULT_JOINT_POS,
     )
 
-    air_reward_coeff = 0.0
     fall_height = 0.3
     object_y_pos = 0.0
     object_z_pos = 0.55

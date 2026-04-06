@@ -3,7 +3,7 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Central baoding task: shared logic and robot-specific reset behavior."""
+"""Central baoding task: shared logic."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from isaaclab.assets import ArticulationCfg, RigidObject, RigidObjectCfg
 from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
 from isaaclab.sim.schemas.schemas_cfg import CollisionPropertiesCfg
 from isaaclab.utils import configclass
-from isaaclab.utils.math import quat_apply, sample_uniform
+from isaaclab.utils.math import sample_uniform
 
 from roto.tasks.robots.allegro.allegro import (
     ALLEGRO_BAODING_ROOT_ROT_WXYZ,
@@ -87,7 +87,7 @@ def make_baoding_object_cfgs(
         prim_path="/Visuals/target_1",
         markers={
             "target_1": sim_utils.SphereCfg(
-                radius=ball_radius_m * 0.1,
+                radius=ball_radius_m * 1,
                 visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=colour_1),
             ),
         },
@@ -96,7 +96,7 @@ def make_baoding_object_cfgs(
         prim_path="/Visuals/target_2",
         markers={
             "target_2": sim_utils.SphereCfg(
-                radius=ball_radius_m * 0.1,
+                radius=ball_radius_m * 1,
                 visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=colour_2),
             ),
         },
@@ -184,6 +184,29 @@ class BaodingCfg(BaodingTaskCfg, ShadowEnvCfg):
 class BaodingOrcaCfg(BaodingTaskCfg, OrcaEnvCfg):
     """Baoding on the Orca hand."""
 
+    ball_reset_height = 0.6
+
+    # ball size
+    ball_diameter_inches = 1.5
+    ball_radius_m = (ball_diameter_inches / 2) * 2.54 / 100
+    ball_diameter_m = ball_radius_m * 2
+
+    # initial ball positions
+    ball_1_init_x = 0.21
+    ball_1_init_y = 0.08
+    ball_2_init_x = 0.26
+    ball_2_init_y = 0.08
+
+    # target positions 
+    palm_target_x = 0.25
+    palm_target_y = 0.07
+    palm_target_z = 0.5
+
+    target_offset = ball_diameter_m / 1.73205080757 + 0.001
+    diagonal_target_x = palm_target_x - target_offset
+    diagonal_target_y = palm_target_y + target_offset
+    diagonal_target_z = palm_target_z + target_offset
+
 
 @configclass
 class BaodingAllegroCfg(BaodingTaskCfg, AllegroEnvCfg):
@@ -217,7 +240,7 @@ class BaodingAllegroCfg(BaodingTaskCfg, AllegroEnvCfg):
 
 
 class BaodingMixin:
-    """Two-ball baoding task logic; subclasses implement :meth:`_baoding_reset_balls`."""
+    """Two-ball baoding task logic."""
 
     cfg: BaodingTaskCfg
 
@@ -343,9 +366,12 @@ class BaodingMixin:
         self._compute_intermediate_values()
 
         out_of_reach = self.ball_dist >= self.cfg.ball_dist_terminate
+        ball_1_fall = self.ball_1_pos[:, 2] < 0.3
+        ball_2_fall = self.ball_2_pos[:, 2] < 0.3
+        termination = out_of_reach | ball_1_fall | ball_2_fall
         time_out = self.episode_length_buf >= self.max_episode_length - 1
 
-        return out_of_reach, time_out
+        return termination, time_out
 
     def _reset_idx(self, env_ids: Sequence[int] | None):
         if env_ids is None:
@@ -385,17 +411,6 @@ class BaodingMixin:
             self.goal_pos2,
         )
 
-
-class BaodingShadowEnv(BaodingMixin, ShadowEnv):
-    """Baoding on the Shadow hand; balls reset from default spawn with noise."""
-
-    cfg: BaodingCfg
-
-    def __init__(self, cfg: BaodingCfg, render_mode: str | None = None, **kwargs):
-        apply_baoding_object_cfgs_from_scalars(cfg)
-        super().__init__(cfg, render_mode, **kwargs)
-        self._init_baoding_state()
-
     def _baoding_reset_balls(self, env_ids: Sequence[int]) -> None:
         ball_1_default_state = self.ball_1.data.default_root_state.clone()[env_ids]
         ball_2_default_state = self.ball_2.data.default_root_state.clone()[env_ids]
@@ -413,49 +428,18 @@ class BaodingShadowEnv(BaodingMixin, ShadowEnv):
         self.ball_2.write_root_velocity_to_sim(ball_2_default_state[:, 7:], env_ids)
 
 
-class BaodingPalmResetMixin:
-    """Palm-relative ball placement (Orca / Allegro)."""
+class BaodingShadowEnv(BaodingMixin, ShadowEnv):
+    """Baoding on the Shadow hand."""
 
-    palm_idx: int
+    cfg: BaodingCfg
 
-    def _baoding_reset_balls(self, env_ids: Sequence[int]) -> None:
-        palm_pos_w = self.robot.data.body_pos_w[env_ids, self.palm_idx, :]
-        palm_quat_w = self.robot.data.body_quat_w[env_ids, self.palm_idx, :]
-
-        x_fwd = 0.04
-        y_side = 0.04
-        off1_local = torch.tensor([x_fwd, y_side, 0.0], device=self.device).repeat(len(env_ids), 1)
-        off2_local = torch.tensor([x_fwd, -y_side, 0.0], device=self.device).repeat(len(env_ids), 1)
-
-        off1_w = quat_apply(palm_quat_w, off1_local)
-        off2_w = quat_apply(palm_quat_w, off2_local)
-
-        pos_noise = sample_uniform(-0.005, 0.005, (len(env_ids), 3), device=self.device)
-
-        ball1_pos_w = palm_pos_w + off1_w + pos_noise
-        ball2_pos_w = palm_pos_w + off2_w + pos_noise
-
-        env_o = self.scene.env_origins[env_ids]
-        ball1_env = ball1_pos_w - env_o
-        ball2_env = ball2_pos_w - env_o
-        ball1_env[:, 2] = self.cfg.ball_reset_height
-        ball2_env[:, 2] = self.cfg.ball_reset_height
-        ball1_pos_w = ball1_env + env_o
-        ball2_pos_w = ball2_env + env_o
-
-        quat_w = torch.tensor([1.0, 0.0, 0.0, 0.0], device=self.device).repeat(len(env_ids), 1)
-        ball1_pose = torch.cat([ball1_pos_w, quat_w], dim=-1)
-        ball2_pose = torch.cat([ball2_pos_w, quat_w], dim=-1)
-
-        self.ball_1.write_root_pose_to_sim(ball1_pose, env_ids)
-        self.ball_2.write_root_pose_to_sim(ball2_pose, env_ids)
-
-        zeros6 = torch.zeros((len(env_ids), 6), device=self.device)
-        self.ball_1.write_root_velocity_to_sim(zeros6, env_ids)
-        self.ball_2.write_root_velocity_to_sim(zeros6, env_ids)
+    def __init__(self, cfg: BaodingCfg, render_mode: str | None = None, **kwargs):
+        apply_baoding_object_cfgs_from_scalars(cfg)
+        super().__init__(cfg, render_mode, **kwargs)
+        self._init_baoding_state()
 
 
-class BaodingOrcaEnv(BaodingMixin, BaodingPalmResetMixin, OrcaEnv):
+class BaodingOrcaEnv(BaodingMixin, OrcaEnv):
     """Baoding on the Orca hand."""
 
     cfg: BaodingOrcaCfg
@@ -463,11 +447,10 @@ class BaodingOrcaEnv(BaodingMixin, BaodingPalmResetMixin, OrcaEnv):
     def __init__(self, cfg: BaodingOrcaCfg, render_mode: str | None = None, **kwargs):
         apply_baoding_object_cfgs_from_scalars(cfg)
         super().__init__(cfg, render_mode, **kwargs)
-        self.palm_idx = self.robot.body_names.index("palm_link")
         self._init_baoding_state()
 
 
-class BaodingAllegroEnv(BaodingMixin, BaodingPalmResetMixin, AllegroEnv):
+class BaodingAllegroEnv(BaodingMixin, AllegroEnv):
     """Baoding on the Allegro hand."""
 
     cfg: BaodingAllegroCfg
@@ -475,7 +458,6 @@ class BaodingAllegroEnv(BaodingMixin, BaodingPalmResetMixin, AllegroEnv):
     def __init__(self, cfg: BaodingAllegroCfg, render_mode: str | None = None, **kwargs):
         apply_baoding_object_cfgs_from_scalars(cfg)
         super().__init__(cfg, render_mode, **kwargs)
-        self.palm_idx = self.robot.body_names.index("palm_link")
         self._init_baoding_state()
 
 
