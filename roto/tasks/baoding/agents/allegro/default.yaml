@@ -43,7 +43,7 @@ experiment:
   tb_log: true
   wandb: 1
   wandb_kwargs:
-    project: neurips_baoding
+    project: roto_baoding
     entity: my-phd
 
 trainer:

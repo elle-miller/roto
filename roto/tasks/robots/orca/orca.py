@@ -68,10 +68,9 @@ class OrcaEnvCfg(RotoEnvCfg):
         num_envs=4096, env_spacing=0.7, replicate_physics=True
     )
 
-    eye = (4, -4, 2.1)
-    lookat = (2, -2, 0.5)
+    eye = (-0.6, -1.4, 0.6)
+    lookat = (0.5, 0.4, 0.7)
     viewer: ViewerCfg = ViewerCfg(eye=eye, lookat=lookat, resolution=(1920, 1080))
-
 
     episode_length_s = 10.0
     num_actions = 16
@@ -90,15 +89,6 @@ class OrcaEnvCfg(RotoEnvCfg):
             rot = (0.5, 0.5, 0.5, 0.5),
             # palm up: 0.270598, -0.653283, -0.270598, 0.65328
             #  palm side: (0.0, -0.9239, -0.3827, 0.0)
-            # rot = (0.0, 0.3827, -0.9239, 0.0), # (0.63742, -0.33667, 0.59201, -0.36038) ,   # -90 about Y
-            # # joint_pos=ALLEGRO_HAND_CFG.init_state.joint_pos,  # keep thumb_joint_0=0.28 etc.
-            # # start with curled pos
-            # joint_pos={
-            #     "index_joint_1": 0.6, "index_joint_2": 0.6, "index_joint_3": 0.6,
-            #     "middle_joint_1": 0.6, "middle_joint_2": 0.6, "middle_joint_3": 0.6,
-            #     "ring_joint_1": 0.6, "ring_joint_2": 0.6, "ring_joint_3": 0.6,
-            #     "thumb_joint_0": 0.5, "thumb_joint_1": 0.6, "thumb_joint_2": 0.6, "thumb_joint_3": 0.6,
-            #     }
         )
     )
 
@@ -149,88 +139,13 @@ class OrcaEnv(RotoEnv):
         print("TACTILE SENSORS:", self.robot_contact_sensor.body_names)
         print("TOTAL:", len(self.robot_contact_sensor.body_names))
 
-        self.extras["log"] = {
-            "tactile_penalty": None,
-            "success_reward": None,
-            "action_penalty": None,
-            "fall_penalty": None,
-            "object_height": None,
-            "object_z_linvel": None,
-            "object_z_angvel": None,
-            "sum_forces": None,
-            "total_rotations": None,
-            "cumulative_rotations": None,
-            "ball_1_vel": None,
-            "ball_2_vel": None,
-            "ball_dist": None,
-            "dist_penalty": None,
-            "tactile_reward": None,
-            "transition_reward": None,
-            "bounce_reward": None,
-            "air_reward": None,
-        }
-
-    def _level_palm_to_world_up(self, env_ids = None): 
-        if env_ids is None:
-            env_ids = self.robot._ALL_INDICES
-
-        palm_idx = self.robot.body_names.index("palm_link")
-
-        # pick a candidate local normal axis of the palm link (try +Z first)
-        palm_local_normal = torch.tensor([0.0, 0.0, 1.0], device=self.device).repeat(len(env_ids), 1)
-        world_up = torch.tensor([0.0, 0.0, 1.0], device=self.device).repeat(len(env_ids), 1)
-
-        # env 0: palm orientation in world
-        palm_quat_w = self.robot.data.body_quat_w[env_ids, palm_idx, :]  # (w,x,y,z)
-        palm_normal_w = quat_apply(palm_quat_w, palm_local_normal)   # (N, 3) --> normal direction of the palm
-        # print("before palm_normal_w[0]:", palm_normal_w[0].tolist())
-        
-        q_delta = quat_from_two_vectors(palm_normal_w, world_up)          # (N,4)
-
-        # Current root pose
-        root_state = self.robot.data.root_state_w[env_ids].clone()        # (N,13): pos(3), quat(4), linvel(3), angvel(3)
-        root_pos = root_state[:, 0:3]
-        root_quat = root_state[:, 3:7]
-
-        # Apply delta to root orientation: q_new = q_delta ⊗ q_root
-        root_quat_new = quat_mul(q_delta, root_quat)
-
-        # Write back (zero velocities so it doesn't kick)
-        self.robot.write_root_pose_to_sim(torch.cat([root_pos, root_quat_new], dim=-1), env_ids)
-        self.robot.write_root_velocity_to_sim(torch.zeros((len(env_ids), 6), device=self.device), env_ids)
-
-        # step once (or otherwise refresh robot.data) before re-reading body_quat_w
-        self.sim.step(render=False)
-
-        palm_quat_w2 = self.robot.data.body_quat_w[env_ids, palm_idx, :]
-        palm_normal_w2 = quat_apply(palm_quat_w2, palm_local_normal)
-        # print("after  palm_normal_w[0]:", palm_normal_w2[0].tolist())
-
     def _setup_scene(self):
         """Register the Orca hand, contact sensors, and lighting."""
         super()._setup_scene()
 
         self.robot = Articulation(self.cfg.robot_cfg)
-        spawn_ground_plane(prim_path="/World/ground", cfg=GroundPlaneCfg())
         self.scene.clone_environments(copy_from_source=False)
         self.scene.articulations["robot"] = self.robot
-
-        light_cfg = sim_utils.DomeLightCfg(intensity=200.0, color=(0.75, 0.75, 0.75))
-        light_cfg.func("/World/Light", light_cfg)
-
-        # Additional sphere lights (currently disabled)
-        pink = (0.9882352941176471, 0.011764705882352941, 0.7098039215686275)
-        aqua = (0.0, 1.0, 1.0)
-        disco_intensity = 20000
-        light_cfg_1 = sim_utils.SphereLightCfg(intensity=disco_intensity, color=pink)
-        light_cfg_1.func("/World/ds", light_cfg_1, translation=(1, 1, 2))
-        light_cfg_2 = sim_utils.SphereLightCfg(intensity=disco_intensity, color=aqua)
-        light_cfg_2.func("/World/disk", light_cfg_2, translation=(-1, 1, 2))
-        light_cfg_3 = sim_utils.SphereLightCfg(intensity=disco_intensity, color=pink)
-        light_cfg_3.func("/World/ds1", light_cfg_3, translation=(-1, -1, 2))
-        light_cfg_4 = sim_utils.SphereLightCfg(intensity=disco_intensity, color=aqua)
-        light_cfg_4.func("/World/disk2", light_cfg_4, translation=(1, -1, 2))
-
         self.robot_contact_sensor = ContactSensor(self.cfg.robot_contact_sensor_cfg)
         self.scene.sensors["robot_contact_sensor"] = self.robot_contact_sensor
 
@@ -246,9 +161,6 @@ class OrcaEnv(RotoEnv):
 
         # Reset articulation and rigid body attributes
         super()._reset_idx(env_ids)
-
-        # make palm horizontal
-        # self._level_palm_to_world_up(env_ids)
 
         # Reset hand with noise
         self._reset_robot(env_ids, joint_pos_noise=self.cfg.reset_joint_pos_noise)

@@ -3,7 +3,7 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Central bounce task registration (all robots)."""
+"""Central bounce task registration (all robots share the ``Bounce`` gym id)."""
 
 import os
 
@@ -26,30 +26,31 @@ _SHADOW_VARIANT_FILES = {
     "tac_dynamics": "tac_dynamics.yaml",
 }
 
-_ORCA_ALLEGRO_VARIANT_FILES = {
-    "default_cfg": "default.yaml",
-    "rl_only_pt": "rl_only_pt.yaml",
-    "rl_only_ptg": "rl_only_ptg.yaml",
-    "forward_dynamics": "forward_dynamics.yaml",
-}
-
 
 def _variant_paths(robot_subdir: str, variant_files: dict[str, str]) -> dict[str, str]:
     base = os.path.join(_AGENTS_DIR, robot_subdir)
     return {key: os.path.join(base, filename) for key, filename in variant_files.items()}
 
 
-def _register(gym_id: str, env_cls, cfg_cls, variant_files: dict[str, str], robot_subdir: str) -> None:
-    kwargs = {"env_cfg_entry_point": cfg_cls}
-    kwargs.update(_variant_paths(robot_subdir, variant_files))
-    gym.register(
-        id=gym_id,
-        entry_point=f"{env_cls.__module__}:{env_cls.__name__}",
-        disable_env_checker=True,
-        kwargs=kwargs,
-    )
+def bounce_make_env(cfg, render_mode: str | None = None, **kwargs):
+    """Instantiate the correct env class from the config type (set from ``--robot`` in training scripts)."""
+    reg_keys = set(_SHADOW_VARIANT_FILES) | {"env_cfg_entry_point"}
+    for k in reg_keys:
+        kwargs.pop(k, None)
+    if isinstance(cfg, BounceOrcaCfg):
+        return BounceOrcaEnv(cfg=cfg, render_mode=render_mode, **kwargs)
+    if isinstance(cfg, BounceAllegroCfg):
+        return BounceAllegroEnv(cfg=cfg, render_mode=render_mode, **kwargs)
+    return BounceShadowEnv(cfg=cfg, render_mode=render_mode, **kwargs)
 
 
-_register("Bounce", BounceShadowEnv, BounceCfg, _SHADOW_VARIANT_FILES, "shadow")
-_register("Bounce_Orca", BounceOrcaEnv, BounceOrcaCfg, _ORCA_ALLEGRO_VARIANT_FILES, "orca")
-_register("Bounce_Allegro", BounceAllegroEnv, BounceAllegroCfg, _ORCA_ALLEGRO_VARIANT_FILES, "allegro")
+# Default registry kwargs use Shadow paths; training scripts load Orca/Allegro via ``register_hand_task_to_hydra``.
+gym.register(
+    id="Bounce",
+    entry_point=bounce_make_env,
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": BounceCfg,
+        **_variant_paths("shadow", _SHADOW_VARIANT_FILES),
+    },
+)
