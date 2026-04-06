@@ -29,7 +29,7 @@ from roto.tasks.physics import (
 from roto.tasks.robots.shadow.shadow import ShadowEnv, ShadowEnvCfg
 
 _BOUNCE_HDR = Path(__file__).resolve().parent.parent.parent / "assets/rooms/stierberg_sunrise_4k.hdr"
-
+# _BOUNCE_HDR = Path(__file__).resolve().parent.parent.parent / "assets/rooms/qwantani_dusk_2_4k.hdr"
 
 _BOUNCE_BALL_COLOUR = (0.7294117647058823, 0.3176470588235294, 0.7137254901960784)
 _SIMPLE_SPHERE_RADIUS_M = 0.035
@@ -261,6 +261,28 @@ class BounceOrcaEnv(BounceMixin, OrcaEnv):
         super()._setup_scene()
         self._bounce_spawn_object_and_hdr()
 
+    # the ORCA hand would cheat by trapping it at the wrist, so have added
+    # a check to make sure the ball has some distance from the wrist
+    def _get_rewards(self) -> torch.Tensor:
+
+        valid_bounces = self.new_bounces.clone()
+        ball_x_pos = self.object_pos[:, 0]
+        valid_bounces[ball_x_pos < 0.17] = 0.0
+        
+        total_reward, bounce_reward = compute_rewards_orca(valid_bounces)
+
+        self.extras["log"] = {
+            "object_z_linvel": torch.abs(self.object_linvel[:, 2]).clone(),
+            "sum_forces": torch.sum(self.tactile, dim=1).clone(),
+            "bounce_reward": bounce_reward.float().clone(),
+        }
+
+        self.extras["counters"] = {
+            "num_bounces": self.num_bounces.float().clone(),
+        }
+
+        return total_reward
+
 
 class BounceAllegroEnv(BounceMixin, AllegroEnv):
     """Bounce a sphere using the Allegro hand and binary tactile signals."""
@@ -278,6 +300,12 @@ class BounceAllegroEnv(BounceMixin, AllegroEnv):
 
 @torch.jit.script
 def compute_rewards(new_bounces: torch.Tensor):
+    bounce_reward = new_bounces * 10
+    total_reward = bounce_reward
+    return total_reward, bounce_reward
+
+@torch.jit.script
+def compute_rewards_orca(new_bounces: torch.Tensor):
     bounce_reward = new_bounces * 10
     total_reward = bounce_reward
     return total_reward, bounce_reward
