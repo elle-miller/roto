@@ -15,7 +15,7 @@ ORCA_HAND_CFG = ArticulationCfg(
         # jayaram's path (don't delete)
         # usd_dir=f"/home/jayaram/research_threads/NUS_RA/roto/roto/assets/orca/orca.usd",
         # elle's path (don't delete)
-        usd_path=f"/home/elle/code/debug/roto/roto/assets/orca/orcahand_right.usd",
+        usd_path=f"/home/emil/code/external/roto/roto/assets/orca/orcahand_right.usd",
         articulation_props=sim_utils.ArticulationRootPropertiesCfg(
             enabled_self_collisions=False,
             solver_position_iteration_count=32,
