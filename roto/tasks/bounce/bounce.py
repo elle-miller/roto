@@ -13,11 +13,18 @@ import torch
 from collections.abc import Sequence
 
 import isaaclab.sim as sim_utils
-from isaaclab.assets import RigidObject, RigidObjectCfg
+from isaaclab.assets import ArticulationCfg, RigidObject, RigidObjectCfg
 from isaaclab.utils import configclass
 from isaaclab.utils.math import sample_uniform
 
-from roto.tasks.robots.allegro.allegro import AllegroEnv, AllegroEnvCfg
+from roto.tasks.robots.allegro.allegro import (
+    ALLEGRO_BOUNCE_ROOT_ROT_WXYZ,
+    ALLEGRO_DEFAULT_JOINT_POS,
+    ALLEGRO_HAND_HEIGHT_M,
+    AllegroEnv,
+    AllegroEnvCfg,
+    build_allegro_robot_cfg,
+)
 from roto.tasks.robots.orca.orca import OrcaEnv, OrcaEnvCfg
 from roto.tasks.physics import (
     bounce_ball_material,
@@ -92,6 +99,13 @@ class BounceOrcaCfg(BounceTaskCfg, OrcaEnvCfg):
 @configclass
 class BounceAllegroCfg(BounceTaskCfg, AllegroEnvCfg):
     """Allegro hand: override only what differs from :class:`BounceTaskCfg`."""
+
+    initial_root_rot = ALLEGRO_BOUNCE_ROOT_ROT_WXYZ
+    robot_cfg: ArticulationCfg = build_allegro_robot_cfg(
+        initial_root_rot=initial_root_rot,
+        hand_height=ALLEGRO_HAND_HEIGHT_M,
+        default_joint_pos=ALLEGRO_DEFAULT_JOINT_POS,
+    )
 
     air_reward_coeff = 0.0
     fall_height = 0.3

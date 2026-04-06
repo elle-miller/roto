@@ -43,7 +43,7 @@ experiment:
   tb_log: true
   wandb: 1
   wandb_kwargs:
-    project: neurips_baoding
+    project: roto_baoding
     entity: my-phd
 
 trainer:
@@ -51,6 +51,6 @@ trainer:
   max_global_timesteps_M: 250
 
 sweeper:
-  storage: sqlite:///shadow_baoding.db
+  storage: sqlite:///roto_baoding.db
   warmup_timesteps_M: 100
   max_sweep_timesteps_M: 150

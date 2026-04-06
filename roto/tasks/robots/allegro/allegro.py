@@ -30,6 +30,45 @@ from roto.tasks.roto_env import RotoEnv, RotoEnvCfg
 
 from isaaclab.markers.config import FRAME_MARKER_CFG  # isort: skip
 
+# Root orientation (w, x, y, z) for :meth:`build_allegro_robot_cfg` — used on Bounce/Baoding Allegro cfgs.
+ALLEGRO_BOUNCE_ROOT_ROT_WXYZ = (0.0, 0.3827, -0.9239, 0.0)
+ALLEGRO_BAODING_ROOT_ROT_WXYZ = (-0.3536, 0.3536, -0.8536, 0.1464)
+
+# Shared spawn defaults (``@configclass`` does not expose fields on the class object for ``AllegroEnvCfg.hand_height``-style access).
+ALLEGRO_HAND_HEIGHT_M = 0.5
+ALLEGRO_DEFAULT_JOINT_POS: dict[str, float] = {
+    "index_joint_1": 0.6,
+    "index_joint_2": 0.6,
+    "index_joint_3": 0.6,
+    "middle_joint_1": 0.6,
+    "middle_joint_2": 0.6,
+    "middle_joint_3": 0.6,
+    "ring_joint_1": 0.6,
+    "ring_joint_2": 0.6,
+    "ring_joint_3": 0.6,
+    "thumb_joint_0": 0.5,
+    "thumb_joint_1": 0.6,
+    "thumb_joint_2": 0.6,
+    "thumb_joint_3": 0.6,
+}
+
+
+def build_allegro_robot_cfg(
+    *,
+    initial_root_rot: tuple[float, float, float, float],
+    hand_height: float,
+    default_joint_pos: dict[str, float],
+) -> ArticulationCfg:
+    """Articulation spawn pose for Allegro; override ``initial_root_rot`` per task (Bounce vs Baoding)."""
+    return ALLEGRO_HAND_CFG.replace(prim_path="/World/envs/env_.*/Robot").replace(
+        init_state=ArticulationCfg.InitialStateCfg(
+            pos=(0.0, 0.0, hand_height),
+            rot=initial_root_rot,
+            joint_pos=default_joint_pos,
+        )
+    )
+
+
 def quat_normalize(q: torch.Tensor, eps: float = 1e-8) -> torch.Tensor:
     return q / (torch.norm(q, dim=-1, keepdim=True) + eps)
 
@@ -68,8 +107,9 @@ class AllegroEnvCfg(RotoEnvCfg):
         num_envs=4096, env_spacing=0.7, replicate_physics=True
     )
 
-    eye = (4, -4, 2.1)
-    lookat = (2, -2, 0.5)
+    eye = (1.1, -0.8, 0.5)
+    eye = (1.1, -0.8, 0.6)
+    lookat = (-0.6, 0.6, 0.6)
     viewer: ViewerCfg = ViewerCfg(eye=eye, lookat=lookat, resolution=(1920, 1080))
 
     episode_length_s = 10.0
@@ -79,24 +119,14 @@ class AllegroEnvCfg(RotoEnvCfg):
     reset_joint_pos_noise = 0.2
     reset_joint_vel_noise = 0.0
 
-    hand_height = 0.5
-    robot_cfg: ArticulationCfg = ALLEGRO_HAND_CFG.replace(
-        prim_path="/World/envs/env_.*/Robot"
-    ).replace(
-        init_state=ArticulationCfg.InitialStateCfg(
-            pos=(0.0, 0.0, hand_height),
-            # palm up: 0.270598, -0.653283, -0.270598, 0.65328
-            #  palm side: (0.0, -0.9239, -0.3827, 0.0)
-            rot = (0.0, 0.3827, -0.9239, 0.0), # (0.63742, -0.33667, 0.59201, -0.36038) ,   # -90 about Y
-            # joint_pos=ALLEGRO_HAND_CFG.init_state.joint_pos,  # keep thumb_joint_0=0.28 etc.
-            # start with curled pos
-            joint_pos={
-                "index_joint_1": 0.6, "index_joint_2": 0.6, "index_joint_3": 0.6,
-                "middle_joint_1": 0.6, "middle_joint_2": 0.6, "middle_joint_3": 0.6,
-                "ring_joint_1": 0.6, "ring_joint_2": 0.6, "ring_joint_3": 0.6,
-                "thumb_joint_0": 0.5, "thumb_joint_1": 0.6, "thumb_joint_2": 0.6, "thumb_joint_3": 0.6,
-                }
-        )
+    default_joint_pos = ALLEGRO_DEFAULT_JOINT_POS
+    hand_height = ALLEGRO_HAND_HEIGHT_M
+    # (w, x, y, z). Bounce/Baoding Allegro cfgs override this and rebuild :attr:`robot_cfg`.
+    initial_root_rot = (0.270598, -0.653283, -0.270598, 0.65328)
+    robot_cfg: ArticulationCfg = build_allegro_robot_cfg(
+        initial_root_rot=initial_root_rot,
+        hand_height=hand_height,
+        default_joint_pos=default_joint_pos,
     )
 
     actuated_joint_names = [
@@ -171,22 +201,14 @@ class AllegroEnv(RotoEnv):
         # step once (or otherwise refresh robot.data) before re-reading body_quat_w
         self.sim.step(render=False)
 
-        palm_quat_w2 = self.robot.data.body_quat_w[env_ids, palm_idx, :]
-        palm_normal_w2 = quat_apply(palm_quat_w2, palm_local_normal)
-        # print("after  palm_normal_w[0]:", palm_normal_w2[0].tolist())
 
     def _setup_scene(self):
         """Register the Allegro hand, contact sensors, and lighting."""
         super()._setup_scene()
 
         self.robot = Articulation(self.cfg.robot_cfg)
-        spawn_ground_plane(prim_path="/World/ground", cfg=GroundPlaneCfg())
         self.scene.clone_environments(copy_from_source=False)
         self.scene.articulations["robot"] = self.robot
-
-        light_cfg = sim_utils.DomeLightCfg(intensity=200.0, color=(0.75, 0.75, 0.75))
-        light_cfg.func("/World/Light", light_cfg)
-
         self.robot_contact_sensor = ContactSensor(self.cfg.robot_contact_sensor_cfg)
         self.scene.sensors["robot_contact_sensor"] = self.robot_contact_sensor
 

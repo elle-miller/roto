@@ -1,10 +1,12 @@
 """Utility helpers shared between the RoTO training / inference scripts."""
 
-import gymnasium as gym
-import numpy as np
 import os
 import random
+
+import gymnasium as gym
+import numpy as np
 import torch
+import yaml
 
 from multimodal_rl.models.encoder import Encoder
 from multimodal_rl.models.running_standard_scaler import RunningStandardScaler
@@ -25,7 +27,9 @@ from roto.tasks.robots import allegro, franka, orca, shadow  # noqa: F401
 def resolve_gym_env_id(task: str | None, robot: str | None) -> str:
     """Map CLI ``--task`` and optional ``--robot`` to a registered gymnasium env id.
 
-    For ``Bounce`` and ``Baoding``, ``robot`` selects the hand (default ``shadow``).
+    For ``Bounce`` and ``Baoding``, the id is always ``Bounce`` / ``Baoding``; the hand is
+    selected via ``--robot`` (see :func:`normalize_hand_robot` and
+    :func:`register_hand_task_to_hydra`).
     For ``Find``, only ``franka`` is supported (default).
     """
     if task is None:
@@ -35,17 +39,120 @@ def resolve_gym_env_id(task: str | None, robot: str | None) -> str:
             return "Find"
         raise ValueError("Task Find only supports robot franka.")
     if task in ("Bounce", "Baoding"):
-        if robot is None or robot.strip().lower() in ("shadow",):
-            return task
-        r = robot.strip().lower()
-        if r == "orca":
-            return f"{task}_Orca"
-        if r == "allegro":
-            return f"{task}_Allegro"
-        raise ValueError(
-            f"Unknown robot {robot!r} for task {task}. Use one of: shadow, orca, allegro."
-        )
+        normalize_hand_robot(robot)
+        return task
     return task
+
+
+def normalize_hand_robot(robot: str | None) -> str:
+    """Return ``shadow``, ``orca``, or ``allegro`` (default ``shadow``)."""
+    r = (robot or "shadow").strip().lower()
+    if r not in ("shadow", "orca", "allegro"):
+        raise ValueError(f"Unknown robot {robot!r}. Use one of: shadow, orca, allegro.")
+    return r
+
+
+# Agent YAML filenames per robot (paths: ``tasks/<task>/agents/<robot>/<file>``).
+_BOUNCE_SHADOW_AGENT_FILES = {
+    "default_cfg": "default.yaml",
+    "rl_only_pt": "rl_only_pt.yaml",
+    "rl_only_ptd": "rl_only_ptd.yaml",
+    "rl_only_ptg": "rl_only_ptg.yaml",
+    "tac_recon": "tac_recon.yaml",
+    "full_recon": "full_recon.yaml",
+    "forward_dynamics": "forward_dynamics.yaml",
+    "forward_dynamics_memory": "forward_dynamics_memory.yaml",
+    "tac_dynamics": "tac_dynamics.yaml",
+}
+_BAODING_SHADOW_AGENT_FILES = {
+    "default_cfg": "default.yaml",
+    "rl_only_pt": "rl_only_pt.yaml",
+    "rl_only_ptd": "rl_only_ptd.yaml",
+    "rl_only_ptg": "rl_only_ptg.yaml",
+    "tac_recon": "tac_recon.yaml",
+    "full_recon": "full_recon.yaml",
+    "forward_dynamics": "forward_dynamics.yaml",
+    "forward_dynamics_memory": "forward_dynamics_memory.yaml",
+    "tac_dynamics": "tac_dynamics.yaml",
+}
+_ORCA_ALLEGRO_AGENT_FILES = {
+    "default_cfg": "default.yaml",
+    "rl_only_pt": "rl_only_pt.yaml",
+    "rl_only_ptg": "rl_only_ptg.yaml",
+    "forward_dynamics": "forward_dynamics.yaml",
+}
+
+
+def _hand_agent_files(task_name: str, robot: str) -> dict[str, str]:
+    if robot in ("orca", "allegro"):
+        return _ORCA_ALLEGRO_AGENT_FILES
+    if task_name == "Bounce":
+        return _BOUNCE_SHADOW_AGENT_FILES
+    if task_name == "Baoding":
+        return _BAODING_SHADOW_AGENT_FILES
+    raise ValueError(task_name)
+
+
+def _hand_agent_yaml_path(task_name: str, robot: str, entry_point_key: str) -> str:
+    from roto.tasks.baoding import agents as baoding_agents
+    from roto.tasks.bounce import agents as bounce_agents
+
+    files = _hand_agent_files(task_name, robot)
+    if entry_point_key not in files:
+        raise ValueError(
+            f"Agent config key {entry_point_key!r} is not available for task {task_name!r} "
+            f"with robot {robot!r}. Available keys: {sorted(files)}."
+        )
+    base = os.path.dirname(bounce_agents.__file__ if task_name == "Bounce" else baoding_agents.__file__)
+    return os.path.join(base, robot, files[entry_point_key])
+
+
+def register_hand_task_to_hydra(
+    task_name: str, robot: str | None, agent_cfg_entry_point: str
+):
+    """Like ``register_task_to_hydra`` but resolves env cfg + agent yaml from ``--robot`` for Bounce/Baoding."""
+    from hydra.core.config_store import ConfigStore
+
+    from isaaclab.envs.utils.spaces import replace_env_cfg_spaces_with_strings
+    from isaaclab.utils import replace_slices_with_strings
+
+    r = normalize_hand_robot(robot)
+    if task_name == "Bounce":
+        from roto.tasks.bounce.bounce import BounceAllegroCfg, BounceCfg, BounceOrcaCfg
+
+        env_cfg_cls = {"shadow": BounceCfg, "orca": BounceOrcaCfg, "allegro": BounceAllegroCfg}[r]
+    elif task_name == "Baoding":
+        from roto.tasks.baoding.baoding import BaodingAllegroCfg, BaodingCfg, BaodingOrcaCfg
+
+        env_cfg_cls = {"shadow": BaodingCfg, "orca": BaodingOrcaCfg, "allegro": BaodingAllegroCfg}[r]
+    else:
+        raise ValueError(f"register_hand_task_to_hydra only supports Bounce/Baoding, got {task_name!r}")
+
+    env_cfg = env_cfg_cls()
+    if task_name == "Baoding":
+        from roto.tasks.baoding.baoding import apply_baoding_object_cfgs_from_scalars
+
+        apply_baoding_object_cfgs_from_scalars(env_cfg)
+    agent_yaml = _hand_agent_yaml_path(task_name, r, agent_cfg_entry_point)
+    with open(agent_yaml, encoding="utf-8") as f:
+        agent_cfg = yaml.full_load(f)
+
+    env_cfg = replace_env_cfg_spaces_with_strings(env_cfg)
+    env_cfg_dict = env_cfg.to_dict()
+    agent_cfg_dict = agent_cfg
+    cfg_dict = {"env": env_cfg_dict, "agent": agent_cfg_dict}
+    cfg_dict = replace_slices_with_strings(cfg_dict)
+    ConfigStore.instance().store(name=task_name, node=cfg_dict)
+    return env_cfg, agent_cfg
+
+
+def load_hand_task_agent_cfg(task_name: str, robot: str | None, entry_point_key: str):
+    """Load an agent YAML for Bounce/Baoding from the correct ``agents/<robot>/`` directory."""
+    r = normalize_hand_robot(robot)
+    path = _hand_agent_yaml_path(task_name, r, entry_point_key)
+    print(f"[INFO]: Parsing configuration from: {path}")
+    with open(path, encoding="utf-8") as f:
+        return yaml.full_load(f)
 
 # Logging directory (change this to a custom path if desired)
 LOG_PATH = os.getcwd()

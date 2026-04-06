@@ -38,6 +38,13 @@ class ShadowEnvCfg(RotoEnvCfg):
         num_envs=4096, env_spacing=0.7, replicate_physics=True
     )
 
+    # BOUNCE
+    eye = (-0.6, -1.4, 0.6)
+    # BOADING
+    eye = (-0.8, -1.3, 0.6)
+    lookat = (0.5, 0.4, 0.7)
+    viewer: ViewerCfg = ViewerCfg(eye=eye, lookat=lookat, resolution=(1920, 1080))
+
     num_actions = 20
     action_space = num_actions
 

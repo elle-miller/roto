@@ -46,7 +46,15 @@ app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
 import isaaclab_tasks  # noqa: F401
-from common_utils import LOG_PATH, make_env, resolve_gym_env_id, train_one_seed, update_env_cfg
+from common_utils import (
+    LOG_PATH,
+    load_hand_task_agent_cfg,
+    make_env,
+    register_hand_task_to_hydra,
+    resolve_gym_env_id,
+    train_one_seed,
+    update_env_cfg,
+)
 from isaaclab.utils import update_dict
 from isaaclab_tasks.utils.hydra import register_task_to_hydra
 from isaaclab_tasks.utils.parse_cfg import load_cfg_from_registry
@@ -56,8 +64,12 @@ from multimodal_rl.tools.writer import Writer
 def main() -> None:
     """Train a RoTO policy using the selected Isaac Lab task and agent config."""
     args_cli.gym_env_id = resolve_gym_env_id(args_cli.task, args_cli.robot)
-    env_cfg, agent_cfg = register_task_to_hydra(args_cli.gym_env_id, "default_cfg")
-    specialised_cfg = load_cfg_from_registry(args_cli.gym_env_id, args_cli.agent_cfg)
+    if args_cli.task in ("Bounce", "Baoding"):
+        env_cfg, agent_cfg = register_hand_task_to_hydra(args_cli.task, args_cli.robot, "default_cfg")
+        specialised_cfg = load_hand_task_agent_cfg(args_cli.task, args_cli.robot, args_cli.agent_cfg)
+    else:
+        env_cfg, agent_cfg = register_task_to_hydra(args_cli.gym_env_id, "default_cfg")
+        specialised_cfg = load_cfg_from_registry(args_cli.gym_env_id, args_cli.agent_cfg)
     agent_cfg = update_dict(agent_cfg, specialised_cfg)
 
     seed = args_cli.seed if args_cli.seed is not None else agent_cfg["seed"]

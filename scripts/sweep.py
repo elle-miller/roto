@@ -65,11 +65,13 @@ import isaaclab_tasks  # noqa: F401
 import optuna
 from common_utils import (
     LOG_PATH,
+    load_hand_task_agent_cfg,
     make_aux,
     make_env,
     make_memory,
     make_models,
     make_trainer,
+    register_hand_task_to_hydra,
     resolve_gym_env_id,
     set_seed,
     train_one_seed,
@@ -278,9 +280,12 @@ if __name__ == "__main__":
 
     # Parse configuration
     args_cli.gym_env_id = resolve_gym_env_id(args_cli.task, args_cli.robot)
-    env_cfg, agent_cfg = register_task_to_hydra(args_cli.gym_env_id, "default_cfg")
-
-    specialised_cfg = load_cfg_from_registry(args_cli.gym_env_id, args_cli.agent_cfg)
+    if args_cli.task in ("Bounce", "Baoding"):
+        env_cfg, agent_cfg = register_hand_task_to_hydra(args_cli.task, args_cli.robot, "default_cfg")
+        specialised_cfg = load_hand_task_agent_cfg(args_cli.task, args_cli.robot, args_cli.agent_cfg)
+    else:
+        env_cfg, agent_cfg = register_task_to_hydra(args_cli.gym_env_id, "default_cfg")
+        specialised_cfg = load_cfg_from_registry(args_cli.gym_env_id, args_cli.agent_cfg)
     agent_cfg = update_dict(agent_cfg, specialised_cfg)
 
     dtype = torch.float32
