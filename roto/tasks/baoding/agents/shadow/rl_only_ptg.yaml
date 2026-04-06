@@ -34,7 +34,7 @@ agent:
 
 experiment:
   experiment_name: rl_only_pt
-  wandb: 0
+  wandb: 1
   wandb_kwargs:
     group: rl_only_pt
     name: '1'
