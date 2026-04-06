@@ -87,7 +87,7 @@ def make_baoding_object_cfgs(
         prim_path="/Visuals/target_1",
         markers={
             "target_1": sim_utils.SphereCfg(
-                radius=ball_radius_m * 0.98,
+                radius=ball_radius_m * 0.1,
                 visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=colour_1),
             ),
         },
@@ -96,7 +96,7 @@ def make_baoding_object_cfgs(
         prim_path="/Visuals/target_2",
         markers={
             "target_2": sim_utils.SphereCfg(
-                radius=ball_radius_m * 0.98,
+                radius=ball_radius_m * 0.1,
                 visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=colour_2),
             ),
         },

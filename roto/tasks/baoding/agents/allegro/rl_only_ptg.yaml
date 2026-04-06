@@ -24,10 +24,10 @@ agent:
   kl_threshold: 0
 
 experiment:
-  experiment_name: rl_only_pt
+  experiment_name: rl_only_ptg
   wandb: 1
   wandb_kwargs:
-    group: rl_only_pt
+    group: rl_only_ptg
     name: first go allegro
 
 
