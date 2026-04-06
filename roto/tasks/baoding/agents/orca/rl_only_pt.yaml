@@ -24,11 +24,11 @@ agent:
 
 experiment:
   experiment_name: rl_only_pt
-  wandb: 0
+  wandb: 1
   wandb_kwargs:
     group: rl_only_pt
     name: '1'
 
 trainer:
-  num_eval_envs: 1
-  max_global_timesteps_M: 250
+  num_eval_envs: 100
+  max_global_timesteps_M: 200

@@ -25,6 +25,12 @@ ORCA_HAND_CFG = ArticulationCfg(
         activate_contact_sensors=True,
         joint_drive_props=sim_utils.JointDrivePropertiesCfg(drive_type="force"),
         fixed_tendons_props=sim_utils.FixedTendonPropertiesCfg(limit_stiffness=30.0, damping=0.1),
+        visual_material=sim_utils.PreviewSurfaceCfg(
+            diffuse_color=(0.0, 0.0, 0.0),
+            opacity=0.3,
+            metallic=0.0,
+            roughness=1.0,
+        ),
     ),
 
     # spawn=sim_utils.UrdfFileCfg(

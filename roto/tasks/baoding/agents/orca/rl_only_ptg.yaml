@@ -20,12 +20,12 @@ agent:
   ratio_clip: 0.2
   value_clip: 0.2
   value_loss_scale: 1.0
-  entropy_loss_scale: 0.05
+  entropy_loss_scale: 0.0
   kl_threshold: 0
 
 experiment:
-  experiment_name: rl_only_pt
-  wandb: 0
+  experiment_name: orca_rl_only_ptg
+  wandb: 1
   wandb_kwargs:
-    group: rl_only_pt
+    group: orca_rl_only_ptg
     name: '1'
