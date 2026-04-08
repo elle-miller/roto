@@ -86,7 +86,7 @@ def get_min_length(readers, tag):
 
 
 def main():
-    exp_dict = plot_dicts.icra_workshop_shadow_bounce
+    exp_dict = plot_dicts.icra_workshop_bounce
 
     # TensorBoard global_step is raw env steps; x_max/x_min in plot_dicts are in millions.
     step_divisor = exp_dict.get("step_divisor", 1e6)
@@ -147,7 +147,7 @@ def main():
                 print(run_rewards)
                 if plot_raw:
                     label = None if j > 0 else exp_dict["legend_names"][i]
-                    plt.plot(step, run_rewards, alpha=1-j*0.1, color=exp_dict["color"][i], label=label, linestyle=exp_dict["linestyle"][i])
+                    plt.plot(step, run_rewards, alpha=1-j*0.1, label=label, linestyle=exp_dict["linestyle"][i])
 
         
         if "bar_chart" in exp_dict.keys():
@@ -189,7 +189,7 @@ def main():
             std_dev = np.std(mean_rewards, axis=0)
             plt.plot(step, mean, label=exp_dict["legend_names"][i], color=exp_dict["color"][i], linestyle=exp_dict["linestyle"][i])
             print(exp_dict["legend_names"][i])
-            plt.fill_between(step, mean - std_dev, mean + std_dev, alpha=0.2, color=exp_dict["color"][i])
+            plt.fill_between(step, mean - std_dev, mean + std_dev, alpha=0.1, color=exp_dict["color"][i])
 
     
 
@@ -220,7 +220,7 @@ def main():
     # plt.tight_layout()
     # plt.ylim([0, 350])
     # plt.xlim([0,5e6])
-    # plt.ylabel(exp_dict["y_label"])
+    plt.ylabel(exp_dict["y_label"])
     plt.legend(loc=exp_dict["legend_loc"])
     plt.title(exp_dict["title"])
     plt.grid(True, alpha=0.5)  # Reduced grid opacity to 30%

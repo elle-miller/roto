@@ -24,7 +24,7 @@ agent:
 
 experiment:
   experiment_name: rl_only_pt
-  wandb: 1
+  wandb: 0
   wandb_kwargs:
     group: orca_bounce_rl_only_pt
     name: RL_ONLY_PT

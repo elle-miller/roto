@@ -29,3 +29,8 @@ experiment:
   wandb_kwargs:
     group: orca_bounce_rl_only_ptg
     name: PGT
+
+sweeper:
+  storage: sqlite:///roto_bounce_orca.db
+  warmup_timesteps_M: 50
+  max_sweep_timesteps_M: 100
