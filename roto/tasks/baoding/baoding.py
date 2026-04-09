@@ -30,6 +30,7 @@ from roto.tasks.robots.shadow.shadow import ShadowEnv, ShadowEnvCfg
 from pathlib import Path
 _BAODING_HDR = Path(__file__).resolve().parent.parent.parent / "assets/rooms/stierberg_sunrise_4k.hdr"
 # _BAODING_HDR = Path(__file__).resolve().parent.parent.parent / "assets/rooms/qwantani_dusk_2_4k.hdr"
+# _BAODING_HDR = Path(__file__).resolve().parent.parent.parent / "assets/rooms/kloppenheim_02_puresky_4k.hdr"
 
 def make_baoding_object_cfgs(
     *,
@@ -87,7 +88,7 @@ def make_baoding_object_cfgs(
         prim_path="/Visuals/target_1",
         markers={
             "target_1": sim_utils.SphereCfg(
-                radius=ball_radius_m * 1,
+                radius=ball_radius_m * 0.01,
                 visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=colour_1),
             ),
         },
@@ -96,7 +97,7 @@ def make_baoding_object_cfgs(
         prim_path="/Visuals/target_2",
         markers={
             "target_2": sim_utils.SphereCfg(
-                radius=ball_radius_m * 1,
+                radius=ball_radius_m * 0.01,
                 visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=colour_2),
             ),
         },
@@ -219,7 +220,13 @@ class BaodingAllegroCfg(BaodingTaskCfg, AllegroEnvCfg):
         default_joint_pos=ALLEGRO_DEFAULT_JOINT_POS,
     )
 
-    ball_reset_height = 0.48
+    # initial ball positions
+    ball_1_init_x = 0.14
+    ball_1_init_y = 0.0
+    ball_2_init_x = 0.19
+    ball_2_init_y = 0.0
+
+    ball_reset_height = 0.50
     ball_dist_terminate = 0.15
 
     ball_diameter_inches = 2
@@ -302,6 +309,12 @@ class BaodingMixin:
             texture_format="latlong",
         )
         light.func("/World/bglight", light)
+
+        # light = sim_utils.SphereLightCfg(
+        #     intensity=1000.0,
+        #     color=(1.0, 1.0, 1.0),
+        # )
+        # light.func("/World/spotlight_1", light, translation=(0.4, -0.4, 1.1))
 
         self.target1 = VisualizationMarkers(self.cfg.target1_cfg)
         self.target2 = VisualizationMarkers(self.cfg.target2_cfg)
