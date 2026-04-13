@@ -7,8 +7,10 @@
 
 from __future__ import annotations
 
-import torch
 from collections.abc import Sequence
+from pathlib import Path
+
+import torch
 
 import isaaclab.sim as sim_utils
 from isaaclab.assets import ArticulationCfg, RigidObject, RigidObjectCfg
@@ -27,9 +29,10 @@ from roto.tasks.robots.allegro.allegro import (
 )
 from roto.tasks.robots.orca.orca import OrcaEnv, OrcaEnvCfg
 from roto.tasks.robots.shadow.shadow import ShadowEnv, ShadowEnvCfg
-from pathlib import Path
+from roto.tasks.robots.shadowlite.shadowlite import ShadowLiteEnv, ShadowLiteEnvCfg
+
 _BAODING_HDR = Path(__file__).resolve().parent.parent.parent / "assets/rooms/stierberg_sunrise_4k.hdr"
-# _BAODING_HDR = Path(__file__).resolve().parent.parent.parent / "assets/rooms/qwantani_dusk_2_4k.hdr"
+_BAODING_HDR = Path(__file__).resolve().parent.parent.parent / "assets/rooms/qwantani_dusk_2_4k.hdr"
 # _BAODING_HDR = Path(__file__).resolve().parent.parent.parent / "assets/rooms/kloppenheim_02_puresky_4k.hdr"
 
 def make_baoding_object_cfgs(
@@ -180,6 +183,33 @@ def apply_baoding_object_cfgs_from_scalars(cfg: BaodingTaskCfg) -> None:
 class BaodingCfg(BaodingTaskCfg, ShadowEnvCfg):
     """Baoding on the Shadow hand (registered env ``Baoding``)."""
 
+@configclass
+class BaodingShadowLiteCfg(BaodingTaskCfg, ShadowLiteEnvCfg):
+    """Baoding on the ShadowLite hand."""
+
+    ball_reset_height = 0.46
+
+    # ball size
+    ball_diameter_inches = 1.2
+    ball_radius_m = (ball_diameter_inches / 2) * 2.54 / 100
+    ball_diameter_m = ball_radius_m * 2
+
+    # initial ball positions
+    ball_1_init_x = -0.03
+    ball_1_init_y = -.2
+    ball_2_init_x = -0.01
+    ball_2_init_y = -0.24
+
+    # target positions
+    palm_target_x = 0
+    palm_target_y = -0.25
+    palm_target_z = 0.39
+
+    target_offset = ball_diameter_m / 1.73205080757 + 0.001
+    diagonal_target_x = palm_target_x - target_offset
+    diagonal_target_y = palm_target_y + target_offset
+    diagonal_target_z = palm_target_z + target_offset
+
 
 @configclass
 class BaodingOrcaCfg(BaodingTaskCfg, OrcaEnvCfg):
@@ -221,11 +251,15 @@ class BaodingAllegroCfg(BaodingTaskCfg, AllegroEnvCfg):
     )
 
     # initial ball positions
-    ball_1_init_x = 0.14
-    ball_1_init_y = 0.0
-    ball_2_init_x = 0.19
-    ball_2_init_y = 0.0
+    # ball_1_init_x = 0.14
+    # ball_1_init_y = 0.0
+    # ball_2_init_x = 0.19
+    # ball_2_init_y = 0.0
 
+    ball_1_init_x = 0.14
+    ball_1_init_y = -0.03
+    ball_2_init_x = 0.14
+    ball_2_init_y = 0.03
     ball_reset_height = 0.50
     ball_dist_terminate = 0.15
 
@@ -303,7 +337,7 @@ class BaodingMixin:
         self.scene.rigid_objects["ball_2"] = self.ball_2
 
         light = sim_utils.DomeLightCfg(
-            color=(1.0, 1.0, 1.0),
+            color=(0.81,0.86,1.28),
             intensity=1000.0,
             texture_file=str(_BAODING_HDR),
             texture_format="latlong",
@@ -447,6 +481,17 @@ class BaodingShadowEnv(BaodingMixin, ShadowEnv):
     cfg: BaodingCfg
 
     def __init__(self, cfg: BaodingCfg, render_mode: str | None = None, **kwargs):
+        apply_baoding_object_cfgs_from_scalars(cfg)
+        super().__init__(cfg, render_mode, **kwargs)
+        self._init_baoding_state()
+
+
+class BaodingShadowLiteEnv(BaodingMixin, ShadowLiteEnv):
+    """Baoding on the Shadow Lite hand."""
+
+    cfg: BaodingShadowLiteCfg
+
+    def __init__(self, cfg: BaodingShadowLiteCfg, render_mode: str | None = None, **kwargs):
         apply_baoding_object_cfgs_from_scalars(cfg)
         super().__init__(cfg, render_mode, **kwargs)
         self._init_baoding_state()

@@ -34,6 +34,7 @@ from roto.tasks.physics import (
     contact_props,
 )
 from roto.tasks.robots.shadow.shadow import ShadowEnv, ShadowEnvCfg
+from roto.tasks.robots.shadowlite.shadowlite import ShadowLiteEnv, ShadowLiteEnvCfg
 
 _BOUNCE_HDR = Path(__file__).resolve().parent.parent.parent / "assets/rooms/stierberg_sunrise_4k.hdr"
 # _BOUNCE_HDR = Path(__file__).resolve().parent.parent.parent / "assets/rooms/qwantani_dusk_2_4k.hdr"
@@ -77,6 +78,16 @@ class BounceTaskCfg:
 
 
 @configclass
+class BounceShadowLiteCfg(BounceTaskCfg, ShadowLiteEnvCfg):
+    
+    fall_height = 0.3          
+    object_y_pos = -0.28    
+    object_z_pos = 0.6
+    default_object_pos = (0., -0.265, 0.6)  # is this affecting the ball position at all? cuz this is not changing anything in the viewer
+    object_cfg: RigidObjectCfg = _make_bouncy_ball_cfg((0., -0.265, 0.6)  )
+
+
+@configclass
 class BounceCfg(BounceTaskCfg, ShadowEnvCfg):
     """Bounce task on the Shadow hand (default registered env ``Bounce``)."""
 
@@ -115,6 +126,7 @@ class BounceAllegroCfg(BounceTaskCfg, AllegroEnvCfg):
 
 # --- Shared logic ------------------------------------------------------------
 
+_BAODING_HDR = Path(__file__).resolve().parent.parent.parent / "assets/rooms/kloppenheim_02_puresky_4k.hdr"
 
 class BounceMixin:
     """Object tracking, bounce detection, and rewards shared by all robots."""
@@ -132,6 +144,19 @@ class BounceMixin:
             texture_format="latlong",
         )
         light.func("/World/bglight", light)
+        # light = sim_utils.DomeLightCfg(
+        #     color=(0.81,0.86,1.28),
+        #     intensity=1000.0,
+        #     texture_file=str(_BAODING_HDR),
+        #     texture_format="latlong",
+        # )
+        # light.func("/World/bglight", light)
+
+        # light = sim_utils.SphereLightCfg(
+        #     intensity=1000.0,
+        #     color=(1.0, 1.0, 1.0),
+        # )
+        # light.func("/World/spotlight_1", light, translation=(0.4, -0.4, 1.1))
 
     def _get_gt(self):
         """Ground-truth features for auxiliary heads / logging (shared across robots)."""
@@ -252,6 +277,20 @@ class BounceShadowEnv(BounceMixin, ShadowEnv):
     cfg: BounceCfg
 
     def __init__(self, cfg: BounceCfg, render_mode: str | None = None, **kwargs):
+        super().__init__(cfg, render_mode, **kwargs)
+        self._init_bounce_tracking()
+
+    def _setup_scene(self):
+        super()._setup_scene()
+        self._bounce_spawn_object_and_hdr()
+
+
+class BounceShadowLiteEnv(BounceMixin, ShadowLiteEnv):
+    """Bounce a sphere using the Shadow Lite hand and binary tactile signals."""
+
+    cfg: BounceShadowLiteCfg
+
+    def __init__(self, cfg: BounceShadowLiteCfg, render_mode: str | None = None, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
         self._init_bounce_tracking()
 

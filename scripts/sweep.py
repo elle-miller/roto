@@ -28,7 +28,7 @@ parser.add_argument(
     "--robot",
     type=str,
     default=None,
-    help="Robot: Bounce/Baoding → shadow|orca|allegro; Find → franka. Defaults: shadow or franka.",
+    help="Robot: Bounce/Baoding → shadow|shadowlite|orca|allegro; Find → franka. Defaults: shadow or franka.",
 )
 parser.add_argument("--agent_cfg", type=str, default=None, help="Name of the config.")
 parser.add_argument("--seed", type=int, default=None, help="Seed used for the environment")

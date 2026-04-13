@@ -28,7 +28,7 @@ parser.add_argument(
     "--robot",
     type=str,
     default=None,
-    help="Robot: Bounce/Baoding → shadow|orca|allegro; Find → franka. Defaults: shadow or franka.",
+    help="Robot: Bounce/Baoding → shadow|shadowlite|orca|allegro; Find → franka. Defaults: shadow or franka.",
 )
 parser.add_argument("--checkpoint", type=str, default=None, help="Path to model checkpoint.")
 parser.add_argument("--video_dir", type=str, default=None, help="Directory to save recorded videos.")
@@ -151,7 +151,6 @@ def main():
 
             # Environment stepping
             states, rewards, terminated, truncated, infos = env.step(actions)
-
             # Compute evaluation rewards
             mask_update = 1 - torch.logical_or(terminated, truncated).float()
 

@@ -3,4 +3,4 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Robot-specific base environments (Shadow, Orca, Allegro, Franka)."""
+"""Robot-specific base environments (Shadow, Shadow Lite, Orca, Allegro, Franka)."""

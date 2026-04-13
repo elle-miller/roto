@@ -10,7 +10,16 @@ import os
 import gymnasium as gym
 
 from . import agents
-from .baoding import BaodingAllegroCfg, BaodingAllegroEnv, BaodingCfg, BaodingOrcaCfg, BaodingOrcaEnv, BaodingShadowEnv
+from .baoding import (
+    BaodingAllegroCfg,
+    BaodingAllegroEnv,
+    BaodingCfg,
+    BaodingOrcaCfg,
+    BaodingOrcaEnv,
+    BaodingShadowEnv,
+    BaodingShadowLiteCfg,
+    BaodingShadowLiteEnv,
+)
 
 _AGENTS_DIR = os.path.dirname(agents.__file__)
 
@@ -41,6 +50,8 @@ def baoding_make_env(cfg, render_mode: str | None = None, **kwargs):
         return BaodingOrcaEnv(cfg=cfg, render_mode=render_mode, **kwargs)
     if isinstance(cfg, BaodingAllegroCfg):
         return BaodingAllegroEnv(cfg=cfg, render_mode=render_mode, **kwargs)
+    if isinstance(cfg, BaodingShadowLiteCfg):
+        return BaodingShadowLiteEnv(cfg=cfg, render_mode=render_mode, **kwargs)
     return BaodingShadowEnv(cfg=cfg, render_mode=render_mode, **kwargs)
 
 

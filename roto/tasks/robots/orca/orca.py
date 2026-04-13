@@ -68,8 +68,8 @@ class OrcaEnvCfg(RotoEnvCfg):
         num_envs=4096, env_spacing=0.7, replicate_physics=True
     )
 
-    eye = (1.1, 1.1, 0.8)
-    lookat = (0.4, 0.4, 0.6)
+    eye = (1.1, 1.1, 0.6)
+    lookat = (0.4, 0.4, 0.5)
     viewer: ViewerCfg = ViewerCfg(eye=eye, lookat=lookat, resolution=(1920, 1080))
 
     episode_length_s = 10.0

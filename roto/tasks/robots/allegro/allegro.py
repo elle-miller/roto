@@ -108,7 +108,6 @@ class AllegroEnvCfg(RotoEnvCfg):
     )
 
     eye = (1.1, -0.8, 0.5)
-    eye = (1.1, -0.8, 0.6)
     lookat = (-0.6, 0.6, 0.6)
     viewer: ViewerCfg = ViewerCfg(eye=eye, lookat=lookat, resolution=(1920, 1080))
 

@@ -10,7 +10,16 @@ import os
 import gymnasium as gym
 
 from . import agents
-from .bounce import BounceAllegroCfg, BounceAllegroEnv, BounceCfg, BounceOrcaCfg, BounceOrcaEnv, BounceShadowEnv
+from .bounce import (
+    BounceAllegroCfg,
+    BounceAllegroEnv,
+    BounceCfg,
+    BounceOrcaCfg,
+    BounceOrcaEnv,
+    BounceShadowEnv,
+    BounceShadowLiteCfg,
+    BounceShadowLiteEnv,
+)
 
 _AGENTS_DIR = os.path.dirname(agents.__file__)
 
@@ -41,6 +50,8 @@ def bounce_make_env(cfg, render_mode: str | None = None, **kwargs):
         return BounceOrcaEnv(cfg=cfg, render_mode=render_mode, **kwargs)
     if isinstance(cfg, BounceAllegroCfg):
         return BounceAllegroEnv(cfg=cfg, render_mode=render_mode, **kwargs)
+    if isinstance(cfg, BounceShadowLiteCfg):
+        return BounceShadowLiteEnv(cfg=cfg, render_mode=render_mode, **kwargs)
     return BounceShadowEnv(cfg=cfg, render_mode=render_mode, **kwargs)
 
 

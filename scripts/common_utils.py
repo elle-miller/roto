@@ -21,7 +21,7 @@ from multimodal_rl.wrappers.isaaclab_wrapper import IsaacLabWrapper
 
 # Import task modules to register environments
 from roto.tasks import baoding, bounce, find  # noqa: F401
-from roto.tasks.robots import allegro, franka, orca, shadow  # noqa: F401
+from roto.tasks.robots import allegro, franka, orca, shadow, shadowlite  # noqa: F401
 
 
 def resolve_gym_env_id(task: str | None, robot: str | None) -> str:
@@ -45,10 +45,12 @@ def resolve_gym_env_id(task: str | None, robot: str | None) -> str:
 
 
 def normalize_hand_robot(robot: str | None) -> str:
-    """Return ``shadow``, ``orca``, or ``allegro`` (default ``shadow``)."""
+    """Return ``shadow``, ``shadowlite``, ``orca``, or ``allegro`` (default ``shadow``)."""
     r = (robot or "shadow").strip().lower()
-    if r not in ("shadow", "orca", "allegro"):
-        raise ValueError(f"Unknown robot {robot!r}. Use one of: shadow, orca, allegro.")
+    if r not in ("shadow", "shadowlite", "orca", "allegro"):
+        raise ValueError(
+            f"Unknown robot {robot!r}. Use one of: shadow, shadowlite, orca, allegro."
+        )
     return r
 
 
@@ -118,13 +120,33 @@ def register_hand_task_to_hydra(
 
     r = normalize_hand_robot(robot)
     if task_name == "Bounce":
-        from roto.tasks.bounce.bounce import BounceAllegroCfg, BounceCfg, BounceOrcaCfg
+        from roto.tasks.bounce.bounce import (
+            BounceAllegroCfg,
+            BounceCfg,
+            BounceOrcaCfg,
+            BounceShadowLiteCfg,
+        )
 
-        env_cfg_cls = {"shadow": BounceCfg, "orca": BounceOrcaCfg, "allegro": BounceAllegroCfg}[r]
+        env_cfg_cls = {
+            "shadow": BounceCfg,
+            "shadowlite": BounceShadowLiteCfg,
+            "orca": BounceOrcaCfg,
+            "allegro": BounceAllegroCfg,
+        }[r]
     elif task_name == "Baoding":
-        from roto.tasks.baoding.baoding import BaodingAllegroCfg, BaodingCfg, BaodingOrcaCfg
+        from roto.tasks.baoding.baoding import (
+            BaodingAllegroCfg,
+            BaodingCfg,
+            BaodingOrcaCfg,
+            BaodingShadowLiteCfg,
+        )
 
-        env_cfg_cls = {"shadow": BaodingCfg, "orca": BaodingOrcaCfg, "allegro": BaodingAllegroCfg}[r]
+        env_cfg_cls = {
+            "shadow": BaodingCfg,
+            "shadowlite": BaodingShadowLiteCfg,
+            "orca": BaodingOrcaCfg,
+            "allegro": BaodingAllegroCfg,
+        }[r]
     else:
         raise ValueError(f"register_hand_task_to_hydra only supports Bounce/Baoding, got {task_name!r}")
 
