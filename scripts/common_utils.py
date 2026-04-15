@@ -20,7 +20,7 @@ from multimodal_rl.wrappers.frame_stack import FrameStack
 from multimodal_rl.wrappers.isaaclab_wrapper import IsaacLabWrapper
 
 # Import task modules to register environments
-from roto.tasks import baoding, bounce, find  # noqa: F401
+from roto.tasks import baoding, bounce, find, peace  # noqa: F401
 from roto.tasks.robots import allegro, franka, orca, shadow, shadowlite  # noqa: F401
 
 
@@ -38,8 +38,14 @@ def resolve_gym_env_id(task: str | None, robot: str | None) -> str:
         if robot is None or robot.strip().lower() in ("franka",):
             return "Find"
         raise ValueError("Task Find only supports robot franka.")
-    if task in ("Bounce", "Baoding"):
-        normalize_hand_robot(robot)
+    if task in ("Bounce", "Baoding", "PeaceSign"):
+        r = normalize_hand_robot(robot)
+        if r == "shadowlite":
+            return f"{task}_Shadowlite"
+        if r == "orca":
+            return f"{task}_Orca"
+        if r == "allegro":
+            return f"{task}_Allegro"
         return task
     return task
 
@@ -84,14 +90,30 @@ _ORCA_ALLEGRO_AGENT_FILES = {
     "forward_dynamics": "forward_dynamics.yaml",
 }
 
+_PEACE_SHADOWLITE_VARIANT_FILES = {
+    "default_cfg": "default.yaml",
+    "rl_only_pt": "rl_only_pt.yaml",
+    "rl_only_ptd": "rl_only_ptd.yaml",
+    "rl_only_ptg": "rl_only_ptg.yaml",
+    "tac_recon": "tac_recon.yaml",
+    "full_recon": "full_recon.yaml",
+
+    "forward_dynamics": "forward_dynamics.yaml",
+    "forward_dynamics_memory": "forward_dynamics_memory.yaml",
+    "tac_dynamics": "tac_dynamics.yaml",
+    
+}
+
 
 def _hand_agent_files(task_name: str, robot: str) -> dict[str, str]:
-    if robot in ("orca", "allegro"):
+    if robot in ("orca", "allegro", "shadowlite"):
         return _ORCA_ALLEGRO_AGENT_FILES
     if task_name == "Bounce":
         return _BOUNCE_SHADOW_AGENT_FILES
     if task_name == "Baoding":
         return _BAODING_SHADOW_AGENT_FILES
+    if task_name == "PeaceSign":
+        return _PEACE_SHADOWLITE_VARIANT_FILES
     raise ValueError(task_name)
 
 
@@ -147,14 +169,23 @@ def register_hand_task_to_hydra(
             "orca": BaodingOrcaCfg,
             "allegro": BaodingAllegroCfg,
         }[r]
+
+    elif task_name == "Peace":
+        from roto.tasks.peace.peace import PeaceSignCfg
+
+        env_cfg_cls = {
+            "shadowlite": PeaceSignCfg,
+        }[r]
     else:
-        raise ValueError(f"register_hand_task_to_hydra only supports Bounce/Baoding, got {task_name!r}")
+        raise ValueError(f"register_hand_task_to_hydra only supports Bounce/Baoding/Peace, got {task_name!r}")
 
     env_cfg = env_cfg_cls()
     if task_name == "Baoding":
         from roto.tasks.baoding.baoding import apply_baoding_object_cfgs_from_scalars
 
         apply_baoding_object_cfgs_from_scalars(env_cfg)
+
+    
     agent_yaml = _hand_agent_yaml_path(task_name, r, agent_cfg_entry_point)
     with open(agent_yaml, encoding="utf-8") as f:
         agent_cfg = yaml.full_load(f)
