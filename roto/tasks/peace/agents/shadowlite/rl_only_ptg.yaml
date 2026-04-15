@@ -1,0 +1,35 @@
+observations:
+  obs_list:
+  - prop
+  - tactile
+  - gt
+  obs_stack: 4
+  tactile_cfg:
+    binary_tactile: true
+    binary_threshold: 0.01
+    
+agent:
+  rollouts: 32
+  learning_epochs: 8
+  mini_batches: 4
+  discount_factor: 0.99
+  lambda: 0.95
+  learning_rate: 2.02e-04
+  grad_norm_clip: 1.0
+  ratio_clip: 0.2
+  value_clip: 0.2
+  value_loss_scale: 1.0
+  entropy_loss_scale: 0.05
+  kl_threshold: 0
+
+experiment:
+  experiment_name: rl_only_ptg
+  wandb: 1
+  wandb_kwargs:
+    group: rl_only_ptg
+    name: shadowlite for the peace
+
+
+trainer:
+  num_eval_envs: 100
+  max_global_timesteps_M: 250
