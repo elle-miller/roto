@@ -38,8 +38,10 @@ class ShadowLiteEnvCfg(RotoEnvCfg):
         num_envs=4096, env_spacing=0.7, replicate_physics=True
     )
 
-    eye = (0, 0, 2)
-    lookat = (0, 0.3, 0.5)
+    # eye = (0, 0, 2)
+    # lookat = (0, 0.3, 0.5)
+    eye = (-1, -1.8, 0.7)
+    lookat = (0.5, 0.4, 0.7)
     viewer: ViewerCfg = ViewerCfg(eye=eye, lookat=lookat, resolution=(1920, 1080))
 
     episode_length_s = 10.0
@@ -53,7 +55,8 @@ class ShadowLiteEnvCfg(RotoEnvCfg):
         init_state=ArticulationCfg.InitialStateCfg(
             pos=(0.0, 0.0, hand_height),
             #rot=(0.0, 0.0, -0.7071, 0.7071),
-            rot=(0.0, 0.0, -0.7933, 0.6087), 
+            rot=(-0.7071, 0, 0.0, 0.7071), #upright pos 
+            #rot=(0.0, 0.0, -0.7933, 0.6087), 15 degree tilt forward facing up
             joint_pos={".*": 0.0},
 
         #     joint_pos = {

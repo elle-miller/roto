@@ -9,7 +9,11 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+from pathlib import Path
 import torch
+
+import isaaclab.sim as sim_utils
+
 
 from isaaclab.utils import configclass
 
@@ -47,7 +51,7 @@ _PEACE_SIGN_JOINT_POS = {
             "rh_RFJ1":  1.2,    # DIP curl (coupled, will follow J2)
 
             # ── Thumb (TH) — tucked toward palm center ────────────────────────────
-            "rh_THJ5": 0.4,    # rotate thumb inward
+            "rh_THJ5": 0.3,    # rotate thumb inward
             "rh_THJ4":  1.2,    # abduct thumb across palm
             "rh_THJ2":  0.5,    # slight flex
             "rh_THJ1":  1.5,    # distal curl
@@ -55,6 +59,7 @@ _PEACE_SIGN_JOINT_POS = {
 # fmt: on
 
 
+_BOUNCE_HDR = Path(__file__).resolve().parent.parent.parent / "/home/ayush/Desktop/icra/roto/roto/assets/rooms/stierberg_sunrise_4k.hdr"
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
@@ -70,6 +75,7 @@ class PeaceSignCfg(ShadowLiteEnvCfg):
     # Reward shaping
     pose_reward_scale: float = 5.0    # scale on the exp(-error) shaped reward
     pose_error_sigma: float = 0.3     # controls how sharply reward peaks at target
+    velocity_penalty_scale: float = 0.01
     success_threshold: float = 0.05   # mean joint error (rad) counted as success
 
 
@@ -95,6 +101,14 @@ class PeaceSignEnv(ShadowLiteEnv):
 
     def _setup_scene(self):
         super()._setup_scene()   # robot + ground only
+
+        light = sim_utils.DomeLightCfg(
+            color=(1.0, 1.0, 1.0),
+            intensity=1000.0,
+            texture_file=str(_BOUNCE_HDR),
+            texture_format="latlong",
+        )
+        light.func("/World/bglight", light)
 
     # ------------------------------------------------------------------
     # Helpers
@@ -124,6 +138,9 @@ class PeaceSignEnv(ShadowLiteEnv):
 
         # Shaped reward: 1 when perfect, decays with error
         pose_reward = torch.exp(-error / self.cfg.pose_error_sigma)
+        joint_vel = self.robot.data.joint_vel  # (num_envs, num_joints)
+        vel_penalty = torch.mean(torch.square(joint_vel), dim=-1)
+
         total_reward = self.cfg.pose_reward_scale * pose_reward
 
         success = (error < self.cfg.success_threshold).float()

@@ -38,7 +38,7 @@ TARGET_JOINT_POS = {
             "rh_RFJ1":  1.2,    # DIP curl (coupled, will follow J2)
 
             # ── Thumb (TH) — tucked toward palm center ────────────────────────────
-            "rh_THJ5": 0.4,    # rotate thumb inward
+            "rh_THJ5": 0.3,    # rotate thumb inward
             "rh_THJ4":  1.2,    # abduct thumb across palm
             "rh_THJ2":  0.5,    # slight flex
             "rh_THJ1":  1.5,    # distal curl
