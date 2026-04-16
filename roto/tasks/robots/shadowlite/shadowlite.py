@@ -38,7 +38,7 @@ class ShadowLiteEnvCfg(RotoEnvCfg):
         num_envs=4096, env_spacing=0.7, replicate_physics=True
     )
 
-    eye = (1, 1, 0.6)
+    eye = (0, 0, 2)
     lookat = (0, 0.3, 0.5)
     viewer: ViewerCfg = ViewerCfg(eye=eye, lookat=lookat, resolution=(1920, 1080))
 
@@ -55,6 +55,32 @@ class ShadowLiteEnvCfg(RotoEnvCfg):
             #rot=(0.0, 0.0, -0.7071, 0.7071),
             rot=(0.0, 0.0, -0.7933, 0.6087), 
             joint_pos={".*": 0.0},
+
+        #     joint_pos = {
+        #     # ── Index finger (FF) — EXTENDED and spread outward ──────────────────
+        #     "rh_FFJ4": -0.33,   # abduct index away from middle (toward thumb side)
+        #     "rh_FFJ3":  0.0,    # MCP straight
+        #     "rh_FFJ2":  0.0,    # PIP straight
+        #     "rh_FFJ1":  0.0,    # DIP straight (coupled)
+
+        #     # ── Middle finger (MF) — EXTENDED and spread outward ─────────────────
+        #     "rh_MFJ4":  0.33,   # abduct middle away from index
+        #     "rh_MFJ3":  0.0,
+        #     "rh_MFJ2":  0.0,
+        #     "rh_MFJ1":  0.0,
+
+        #     # ── Ring finger (RF) — CURLED ─────────────────────────────────────────
+        #     "rh_RFJ4":  0.0,    # no abduction
+        #     "rh_RFJ3":  1.55,    # MCP curl
+        #     "rh_RFJ2":  1.55,    # PIP curl
+        #     "rh_RFJ1":  1.2,    # DIP curl (coupled, will follow J2)
+
+        #     # ── Thumb (TH) — tucked toward palm center ────────────────────────────
+        #     "rh_THJ5": 0.8,    # rotate thumb inward
+        #     "rh_THJ4":  1.22,    # abduct thumb across palm
+        #     "rh_THJ2":  0.,    # slight flex
+        #     "rh_THJ1":  0.,    # distal curl
+        # }
         )
     )
 

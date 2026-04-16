@@ -11,7 +11,7 @@ import os
 import gymnasium as gym
 
 from . import agents
-from .peace import PeaceSignCfg, PeaceSignEnv
+from .peace_sign import PeaceSignCfg, PeaceSignEnv
 
 _AGENTS_DIR = os.path.dirname(agents.__file__)
 

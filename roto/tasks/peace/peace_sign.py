@@ -28,17 +28,30 @@ from roto.tasks.robots.shadowlite.shadowlite import ShadowLiteEnv, ShadowLiteEnv
 
 # fmt: off
 _PEACE_SIGN_JOINT_POS = {
-    # Index finger — EXTENDED
-    "FFJ4": 0.0,   "FFJ3": 0.0,   "FFJ2": 0.0,   "FFJ1": 0.0,
-    # Middle finger — EXTENDED
-    "MFJ4": 0.0,   "MFJ3": 0.0,   "MFJ2": 0.0,   "MFJ1": 0.0,
-    # Ring finger — CURLED
-    "RFJ4": 0.0,   "RFJ3": 1.4,   "RFJ2": 1.4,   "RFJ1": 1.2,
-    # Little finger — CURLED
-    "LFJ5": 0.0,   "LFJ4": 0.0,   "LFJ3": 1.4,   "LFJ2": 1.4,   "LFJ1": 1.2,
-    # Thumb — tucked
-    "THJ5": -0.5,  "THJ4": 1.0,   "THJ3": 0.2,   "THJ2": 0.3,   "THJ1": 0.3,
-}
+            # ── Index finger (FF) — EXTENDED and spread outward ──────────────────
+            "rh_FFJ4": -0.25,   # abduct index away from middle (toward thumb side)
+            "rh_FFJ3":  0.0,    # MCP straight
+            "rh_FFJ2":  0.0,    # PIP straight
+            "rh_FFJ1":  0.0,    # DIP straight (coupled)
+
+            # ── Middle finger (MF) — EXTENDED and spread outward ─────────────────
+            "rh_MFJ4":  0.25,   # abduct middle away from index
+            "rh_MFJ3":  0.0,
+            "rh_MFJ2":  0.0,
+            "rh_MFJ1":  0.0,
+
+            # ── Ring finger (RF) — CURLED ─────────────────────────────────────────
+            "rh_RFJ4":  0.0,    # no abduction
+            "rh_RFJ3":  1.55,    # MCP curl
+            "rh_RFJ2":  1.55,    # PIP curl
+            "rh_RFJ1":  1.2,    # DIP curl (coupled, will follow J2)
+
+            # ── Thumb (TH) — tucked toward palm center ────────────────────────────
+            "rh_THJ5": 0.4,    # rotate thumb inward
+            "rh_THJ4":  1.2,    # abduct thumb across palm
+            "rh_THJ2":  0.5,    # slight flex
+            "rh_THJ1":  1.5,    # distal curl
+        }
 # fmt: on
 
 
@@ -133,3 +146,4 @@ class PeaceSignEnv(ShadowLiteEnv):
             env_ids = self.robot._ALL_INDICES
         super()._reset_idx(env_ids)
         # Nothing extra to reset — no object state
+
