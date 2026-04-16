@@ -28,8 +28,8 @@ from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
 
 SHADOW_HAND_LITE_CFG = ArticulationCfg(
     spawn=sim_utils.UrdfFileCfg(
-        asset_path=f"/home/ayush/Desktop/icra/roto/roto/assets/shadow_lite/sr_hand.urdf", #change path
-        usd_dir=f"/home/ayush/Desktop/icra/roto/roto/assets/shadow_lite",
+        asset_path=f"/home/ayush/icra/roto/roto/assets/shadow_lite/sr_hand.urdf", #change path
+        usd_dir=f"/home/ayush/icra/roto/roto/assets/shadow_lite",
         usd_file_name="sr_hand_new.usd",
         scale=(1.0, 1.0, 1.0),
         fix_base=True,

@@ -75,7 +75,7 @@ class PeaceSignCfg(ShadowLiteEnvCfg):
     # Reward shaping
     pose_reward_scale: float = 5.0    # scale on the exp(-error) shaped reward
     pose_error_sigma: float = 0.3     # controls how sharply reward peaks at target
-    velocity_penalty_scale: float = 0.01
+    velocity_penalty_scale: float = 0.8
     success_threshold: float = 0.05   # mean joint error (rad) counted as success
 
 
@@ -141,7 +141,11 @@ class PeaceSignEnv(ShadowLiteEnv):
         joint_vel = self.robot.data.joint_vel  # (num_envs, num_joints)
         vel_penalty = torch.mean(torch.square(joint_vel), dim=-1)
 
-        total_reward = self.cfg.pose_reward_scale * pose_reward
+        total_reward = (
+        self.cfg.pose_reward_scale * pose_reward
+        - self.cfg.velocity_penalty_scale * vel_penalty
+    )
+
 
         success = (error < self.cfg.success_threshold).float()
 
