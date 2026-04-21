@@ -6,7 +6,7 @@
 import rospy
 import actionlib
 import numpy as np
-from trajectory_msgs.msg import JointTrajectoryPoint, JointTrajectory
+from trajectory_msgs.msg import JointTrajectoryPoint, JointTrajectory 
 import rospy
 from std_msgs.msg import Float64MultiArray
 from torobo_sensor_msgs.msg import ToroboState
@@ -369,7 +369,7 @@ def get_proprioception(cur_targets, prev_targets):
 
 def rl_policy_loop():
 
-    TOPIC_NAME = ''
+    TOPIC_NAME = ''# topic list - 
 
     torch.set_default_dtype(torch.float32)
 
