@@ -348,7 +348,7 @@ rostopic pub /sh_rh_ffj3_position_controller/command std_msgs/Float64 "data: 0.5
 * [x] `rostopic echo /rh/palm_extras` → IMU confirmed present ✅
 * [ ] `rostopic list | grep -i tactile` → Touch Lab topic not found yet
 * [x] `rosrun tf tf_echo rh_palm rh_fftip` → confirm TF frames
-* [ ] Confirm policy joint ordering from IsaacLab training config
+* [x] Confirm policy joint ordering from IsaacLab training config
 * [ ] Build and verify reshuffle map
 * [ ] Test single joint via `rostopic pub` before running policy
 * [ ] Confirm `num_prop` matches trained policy input size

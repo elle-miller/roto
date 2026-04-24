@@ -282,6 +282,18 @@ def make_env(agent_cfg, env_cfg, writer, args_cli):
     env = gym.make(gym_id, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
     obs, _ = env.reset()
 
+    # Debug: print articulation joint names
+    try:
+        robot = env.unwrapped.scene["robot"]
+        print("\n===== ROBOT JOINT NAMES =====")
+        for i, name in enumerate(robot.joint_names):
+            print(i, name)
+        print("=============================\n")
+        print(env_cfg.num_actions, '======================================')
+        #print(env.action_space.shape, '======================================')
+    except Exception as e:
+        print(f"[WARN] Could not access robot joint_names: {e}")
+
     # Build observation space dictionary accounting for frame stacking
     gym_dict = {}
     for k, v in obs["policy"].items():

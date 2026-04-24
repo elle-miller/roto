@@ -26,6 +26,7 @@ from apriltag_ros.msg import AprilTagDetectionArray
 from cv_bridge import CvBridge
 
 from sensor_msgs.msg import JointState
+from std_msgs.msg import Float64
 
 # import rospy
 import tf2_ros
@@ -87,16 +88,9 @@ oki="/best_run_peace/checkpoints/best_agent.pt"
 CHECKPOINT_PATH = os.path.join("/home/ayush/icra/roto/logs/shadowlite_peace/rl_only_pt/best_run_peace/", oki) #change this to the path of the checkpoint you want to load
 
 # t1,t2,t3,h1,l1,r1,h2...
-default_joint_pos_policy_order = np.array([-0.3491,  0.6981,0, #replce with shadow hand default. what is diff between this and default knee/pelvis pos in subscriber order? also need to make sure the order of joints in the policy output matches the order expected by the robot
-                                           -0.1222, 0.2269,  1.5708,
-                                           0.1745, -1.7453, -1.0472, 
-                                           0, 0.0000, -0.2618, 
-                                           0.6981,  1.2217, 
-                                           1.3963,  0.8727, 
-                                           -0.3491, -0.3491, 
-                                           0.2094,  0.2094,])
+default_joint_pos_policy_order = np.zeros(16)
 
-actuated_dof = range(13)#changed to 13 for shadow hand lite#the dof and actuated joint count is diff
+actuated_dof = range(16)#changed to 13 for shadow hand lite#the dof and actuated joint count is diff
 
 # HEAD_JOINT_1_KNEE_TARGET = -7
 # HEAD_JOINT_1_BACK_TARGET = 34
@@ -106,17 +100,26 @@ actuated_dof = range(13)#changed to 13 for shadow hand lite#the dof and actuated
 # policy order - t1,t2,t3,h1,l1,r1
 
 #these are accoring to policy order right?
-LOWER_LIMITS = np.array([-0.7854, -0.8727, -1.7453, -1.5708, -1.2217, -1.2217, -0.8727, -2.1817,
-        -2.1817, -0.6981, -2.0944, -2.0944, -0.1745, -0.1745, -2.9671, -2.9671,
-        -1.5708, -1.5708, -0.1745, -0.1745]) #need to change for shadowlite with 16 values (total 16 joints)
+LOWER_LIMITS = np.array([
+    -0.3491, -0.3491, -0.3491, -1.0472,   # FFJ4, MFJ4, RFJ4, THJ5
+    -0.2618, -0.2618, -0.2618,  0.0,       # FFJ3, MFJ3, RFJ3, THJ4
+     0.0,     0.0,     0.0,    -0.6981,    # FFJ2, MFJ2, RFJ2, THJ2
+     0.0,     0.0,     0.0,    -0.2618,    # FFJ1, MFJ1, RFJ1, THJ1
+])
 
-UPPER_LIMITS = np.array([0.7854, 1.8326, 1.7453, 1.5708, 4.1888, 4.1888, 0.8727, 0.3491, 0.3491,
-        0.6981, 2.0944, 2.0944, 2.4435, 2.4435, 2.9671, 2.9671, 1.5708, 1.5708,
-        1.5708, 1.5708])
-#need to change for shadowlite with 16 values (total 16 joints)
-VEL_LIMITS = OVERRIDE_VEL_SCALE * np.array([0.8727, 1.5708, 1.5708, 5.5851, 2.6180, 2.6180, 4.7124, 2.6180, 2.6180,
-         3.8397, 3.3161, 3.3161, 3.3161, 3.3161, 4.0143, 4.0143, 4.0143, 4.0143,
-         4.0143, 4.0143])
+UPPER_LIMITS = np.array([
+    0.3491,  0.3491,  0.3491,  1.0472,    # FFJ4, MFJ4, RFJ4, THJ5
+    1.5708,  1.5708,  1.5708,  1.2217,    # FFJ3, MFJ3, RFJ3, THJ4
+    1.5708,  1.5708,  1.5708,  0.6981,    # FFJ2, MFJ2, RFJ2, THJ2
+    1.5708,  1.5708,  1.5708,  1.5708,    # FFJ1, MFJ1, RFJ1, THJ1
+])
+
+VEL_LIMITS = OVERRIDE_VEL_SCALE * np.array([
+    2.0, 2.0, 2.0, 4.0,    # FFJ4, MFJ4, RFJ4, THJ5
+    2.0, 2.0, 2.0, 4.0,    # FFJ3, MFJ3, RFJ3, THJ4
+    2.0, 2.0, 2.0, 2.0,    # FFJ2, MFJ2, RFJ2, THJ2
+    2.0, 2.0, 2.0, 4.0,    # FFJ1, MFJ1, RFJ1, THJ1
+])
 #need to check hwat velocity limits should be for shadowlite with 16 values (total 16 joints)
 # subscriber message index params
 # HEAD_START_IDX = 7
@@ -212,7 +215,41 @@ VEL_LIMITS = OVERRIDE_VEL_SCALE * np.array([0.8727, 1.5708, 1.5708, 5.5851, 2.61
 # ]
 
 
+# Confirmed from rostopic echo /joint_states
+SUBSCRIBER_JOINT_ORDER = [
+    "rh_FFJ1", "rh_FFJ2", "rh_FFJ3", "rh_FFJ4",   # indices 0-3
+    "rh_MFJ1", "rh_MFJ2", "rh_MFJ3", "rh_MFJ4",   # indices 4-7
+    "rh_RFJ1", "rh_RFJ2", "rh_RFJ3", "rh_RFJ4",   # indices 8-11
+    "rh_THJ1", "rh_THJ2", "rh_THJ4", "rh_THJ5",   # indices 12-15
+]
 
+# Confirmed from inspect_shadowlite / IsaacLab training config
+policy_joint_order = [
+    "rh_FFJ4", "rh_MFJ4", "rh_RFJ4", "rh_THJ5",   # indices 0-3
+    "rh_FFJ3", "rh_MFJ3", "rh_RFJ3", "rh_THJ4",   # indices 4-7
+    "rh_FFJ2", "rh_MFJ2", "rh_RFJ2", "rh_THJ2",   # indices 8-11
+    "rh_FFJ1", "rh_MFJ1", "rh_RFJ1", "rh_THJ1",   # indices 12-15
+]
+
+# Maps subscriber index → policy index
+index_reshuffle_map = {
+    0:  12,   # FFJ1: sub[0]  → policy[12]
+    1:   8,   # FFJ2: sub[1]  → policy[8]
+    2:   4,   # FFJ3: sub[2]  → policy[4]
+    3:   0,   # FFJ4: sub[3]  → policy[0]
+    4:  13,   # MFJ1: sub[4]  → policy[13]
+    5:   9,   # MFJ2: sub[5]  → policy[9]
+    6:   5,   # MFJ3: sub[6]  → policy[5]
+    7:   1,   # MFJ4: sub[7]  → policy[1]
+    8:  14,   # RFJ1: sub[8]  → policy[14]
+    9:  10,   # RFJ2: sub[9]  → policy[10]
+    10:  6,   # RFJ3: sub[10] → policy[6]
+    11:  2,   # RFJ4: sub[11] → policy[2]
+    12: 15,   # THJ1: sub[12] → policy[15]
+    13: 11,   # THJ2: sub[13] → policy[11]
+    14:  7,   # THJ4: sub[14] → policy[7]
+    15:  3,   # THJ5: sub[15] → policy[3]
+}
 
 ### FUNCTIONS
 #same for shadowlite
@@ -316,8 +353,8 @@ def prop_callback(data):
     global joint_pos_norm
 
     with data_lock:
-        joint_pos = np.array(reshuffle_data(data.link_position, index_reshuffle_map))
-        joint_vel = np.array(reshuffle_data(data.link_velocity, index_reshuffle_map))
+        joint_pos = np.array(reshuffle_data(data.position, index_reshuffle_map))
+        joint_vel = np.array(reshuffle_data(data.velocity, index_reshuffle_map))
         joint_pos_norm = normalise(joint_pos, LOWER_LIMITS, UPPER_LIMITS)
         joint_vel_norm = normalise(joint_vel, -VEL_LIMITS, VEL_LIMITS)
 
@@ -480,7 +517,7 @@ def rl_policy_loop():
 
 
     # rospy.init_node('listener', anonymous=True)
-    rospy.Subscriber("/rh/joint_states", JointState, prop_callback)
+    rospy.Subscriber("/joint_states", JointState, prop_callback)
 
 
     # Wait until the first message has been received and data is available

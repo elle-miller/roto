@@ -44,7 +44,7 @@ experiment:
   wandb: 1
   wandb_kwargs:
     project: roto_bounce
-    entity: my-phd 
+    entity: in60seconds-shorts-the-university-of-edinburgh
 
 trainer:
   num_eval_envs: 100
