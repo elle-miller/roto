@@ -120,7 +120,20 @@ class ShadowLiteEnvCfg(RotoEnvCfg):
     # default_object_pos = (0., -0.265, 0.6)  # is this affecting the ball position at all? cuz this is not changing anything in the viewer
     # object_cfg: RigidObjectCfg = _make_bouncy_ball_cfg((0., -0.265, 0.6)  )
 
-    actuated_joint_names = ['rh_FFJ4', 'rh_MFJ4', 'rh_RFJ4', 'rh_THJ5', 'rh_FFJ3', 'rh_MFJ3', 'rh_RFJ3', 'rh_THJ4', 'rh_FFJ2', 'rh_MFJ2', 'rh_RFJ2', 'rh_FFJ1', 'rh_MFJ1', 'rh_RFJ1', 'rh_THJ2', 'rh_THJ1']
+    actuated_joint_names = [
+        # Finger Knuckles (Abduction/Adduction)
+        'rh_FFJ4', 'rh_MFJ4', 'rh_RFJ4', 
+        # Finger MCP (Proximal)
+        'rh_FFJ3', 'rh_MFJ3', 'rh_RFJ3', 
+        # Finger PIP (Middle) - J1 will mimic these
+        'rh_FFJ2', 'rh_MFJ2', 'rh_RFJ2', 
+        # Thumb joints (Complete chain)
+        'rh_THJ5', 'rh_THJ4', 'rh_THJ2', 'rh_THJ1'
+    ]
+
+    #actuated_joint_names = ['rh_FFJ4', 'rh_MFJ4', 'rh_RFJ4', 'rh_THJ5', 'rh_FFJ3', 'rh_MFJ3', 'rh_RFJ3', 'rh_THJ4', 'rh_FFJ2', 'rh_MFJ2', 'rh_RFJ2', 'rh_FFJ1', 'rh_MFJ1', 'rh_RFJ1', 'rh_THJ2', 'rh_THJ1']
+
+
     num_actions = len(actuated_joint_names)
     action_space = num_actions
 
@@ -148,6 +161,7 @@ class ShadowLiteEnv(RotoEnv):
         self.num_tactile_observations = 0
         self.tactile = torch.zeros((self.num_envs, 0), device=self.device)
         self.last_tactile = torch.zeros((self.num_envs, 0), device=self.device)
+
 
 
     def _setup_scene(self):
