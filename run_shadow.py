@@ -1,5 +1,5 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
+#!/usr/bin/env python3
+
 """
 run_RL_shadowlite.py
 ====================
@@ -25,7 +25,10 @@ Author : (your name)
 # Standard Python libraries — nothing ROS-specific here
 import os
 import numpy as np
-from threading import Lock          # protects shared data between threads
+from threading import Lock
+import sys
+import rospy
+rospy.loginfo(sys.executable)          # protects shared data between threads
 from copy import deepcopy
  
 # PyTorch — runs the neural network policy
@@ -75,9 +78,10 @@ EPISODE_TIMESTEPS = 100
  
 # Path to the saved neural network weights from IsaacLab training.
 CHECKPOINT_PATH = os.path.join(
-    "/home/ayush/Desktop/icra/roto/logs/shadowlite_peace/rl_only_pt/coupled_new_pt",
-    "coupled_new_pt/checkpoints/best_agent.pt"
+    "/root/shadow_docker_ws/src/my_shadow_control/scripts",
+    "awesome.pt"
 )
+
 
 PALM_LINK = 'rh_palm'    # fixed base of the hand
 FF_TIP    = 'rh_fftip'   # first finger tip
@@ -209,7 +213,7 @@ OVERRIDE_VEL_SCALE = 0.1   # keep this, use in controller if needed
 # Safe default pose — all joints at zero = fully open hand.
 # Change this if you want a different starting position.
 DEFAULT_JOINT_POS = np.zeros(13)
-prev_actions = np.zeros(13)   # raw policy output, [-1, 1] space
+ 
 # =============================================================================
 # SECTION 7: SHARED GLOBAL STATE
 # =============================================================================
@@ -248,7 +252,7 @@ def reshuffle_data(data_list, index_mapping_dict):
         if 0 <= old_idx < len(data_list):
             reshuffled[new_idx] = data_list[old_idx]
         else:
-            rospy.logwarn(f"reshuffle_data: index {old_idx} out of bounds")
+            rospy.logwarn("reshuffle_data: index {} out of bounds".format(old_idx))
  
     return reshuffled
 
@@ -302,7 +306,7 @@ def prop_callback(data):
         # FIX: use raw URDF vel limits for normalisation, not scaled ones
         joint_vel_norm = normalise(joint_vel, -VEL_LIMITS_NORM, VEL_LIMITS_NORM)
  
- def get_proprioception(cur_targets_radians, prev_actions_raw):
+def get_proprioception(cur_targets_radians, prev_actions_raw):
     """
     Builds the 52-element observation vector matching sim exactly.
 
@@ -336,7 +340,6 @@ def prop_callback(data):
     ))
     return prop   # shape: (52,)
 
-
 def create_hand_publishers():
     """
     Creates one ROS publisher per Shadow Hand controller.
@@ -369,14 +372,53 @@ def create_hand_publishers():
  
     publishers = {}
     for name in controller_names:
-        topic = f"/sh_rh_{name}_position_controller/command"
-        publishers[name] = rospy.Publisher(topic, Float64, queue_size=1)
-        rospy.loginfo(f"Created publisher: {topic}")
+        topic = "/sh_rh_{}_position_controller/command".format(name)
+        pub = rospy.Publisher(topic, Float64, queue_size=1)
+        publishers[name] = pub
+        rospy.loginfo("Created publisher: {}".format(topic))
  
     return publishers
+
+
+def check_publishers_connected(publishers, timeout_secs=5.0):
+    """
+    Verifies that publishers have subscribers (i.e., controllers are listening).
+    Waits up to timeout_secs for at least one subscriber per publisher.
+    
+    Args:
+        publishers   : dict from create_hand_publishers()
+        timeout_secs : max time to wait for connections
+    
+    Returns:
+        True if all publishers have at least one subscriber, False otherwise
+    """
+    start_time = rospy.get_time()
+    
+    while rospy.get_time() - start_time < timeout_secs:
+        all_connected = True
+        for name, pub in publishers.items():
+            if pub.get_num_connections() == 0:
+                all_connected = False
+                break
+        
+        if all_connected:
+            rospy.loginfo("✓ All publishers connected to controllers!")
+            return True
+        
+        rospy.loginfo("Waiting for controllers to connect... ({} subscribers seen)".format(
+            sum(pub.get_num_connections() for pub in publishers.values())
+        ))
+        rospy.sleep(0.5)
+    
+    rospy.logwarn("⚠ Timeout waiting for publishers to connect.")
+    rospy.logwarn("Controller connections:")
+    for name, pub in publishers.items():
+        rospy.logwarn("  {}: {} subscriber(s)".format(name, pub.get_num_connections()))
+    
+    return False
  
 
- def publish_to_hand(publishers, actions_policy_order):
+def publish_to_hand(publishers, actions_policy_order):
     """
     Sends joint position commands to all 13 Shadow Hand controllers.
  
@@ -424,23 +466,41 @@ def create_hand_publishers():
         publishers[name].publish(msg)
  
  
-def publish_default_pose(publishers):
+def publish_default_pose(publishers, duration_secs=3.0, rate_hz=10):
     """
-    Sends all joints to the open-hand default position.
-    Used at episode start before the policy takes over.
+    Sends all joints to the open-hand default position, repeatedly.
+    ROS messages are fire-and-forget, so we must republish many times to
+    ensure the hardware controller actually receives the command.
+    
+    Args:
+        publishers   : dict from create_hand_publishers()
+        duration_secs: how long to keep publishing (default 3 seconds)
+        rate_hz      : how often to publish per second (default 10 Hz)
     """
-    rospy.loginfo("Moving to default open-hand pose...")
-    for name in publishers:
-        msg = Float64()
-        msg.data = 0.0   # zero = fully open for all joints
-        publishers[name].publish(msg)
+    rospy.loginfo("Moving to default open-hand pose (publishing for {} seconds)...".format(duration_secs))
+    
+    # Calculate how many times to publish
+    num_publishes = int(duration_secs * rate_hz)
+    publish_rate = rospy.Rate(hz=rate_hz)
+    
+    for i in range(num_publishes):
+        for name in publishers:
+            msg = Float64()
+            msg.data = 0.0   # zero = fully open for all joints
+            publishers[name].publish(msg)
+        
+        publish_rate.sleep()
+        
+        if i % 10 == 0:
+            rospy.loginfo("  Publishing default pose... ({}/{})".format(i, num_publishes))
+    
+    rospy.loginfo("Default pose publishing complete.")
 
 
 # =============================================================================
 # SECTION 13: MAIN POLICY LOOP
 # =============================================================================
 
-prev_actions_raw = np.zeros(13)
 def rl_policy_loop():
     """
     Main function. Does everything in this order:
@@ -475,11 +535,16 @@ def rl_policy_loop():
     # The policy takes z and outputs joint position targets.
  
     encoder_cfg = {
-        "layernorm":         True,
+    "encoder": {
+        "method":             "early",   # no vision, so early fusion = simple concatenation
+        "layernorm":          True,
         "state_preprocessor": None,
-        "hiddens":           [1024, 512, 256],
-        "activations":       ["elu", "elu", "elu"]
-    }
+        "hiddens":            [1024, 512, 256],
+        "activations":        ["elu", "elu", "elu"],
+        #"latent_state_dim":   64,        # only used for intermediate, but avoids KeyError
+    },
+    
+}
  
     policy_cfg = {
         "clip_log_std":   True,
@@ -492,6 +557,8 @@ def rl_policy_loop():
  
     encoder = Encoder(
         observation_space,
+    action_space,
+    {},
         encoder_cfg,
         device=device
     )
@@ -500,22 +567,22 @@ def rl_policy_loop():
         observation_space=observation_space,
         action_space=action_space,
         device=device,
-        **policy_cfg,
+        **policy_cfg
     )
  
-    rospy.loginfo(f"Encoder architecture:\n{encoder}")
-    rospy.loginfo(f"Policy architecture:\n{policy}")
+    rospy.loginfo("Encoder architecture:\n{}".format(encoder))
+    rospy.loginfo("Policy architecture:\n{}".format(policy))
  
     # ------------------------------------------------------------------
     # 13.3 LOAD TRAINED WEIGHTS
     # ------------------------------------------------------------------
     # torch.load reads the .pt checkpoint file saved by IsaacLab trainer.
     # map_location="cpu" ensures it works even without a GPU.
-    rospy.loginfo(f"Loading checkpoint from: {CHECKPOINT_PATH}")
+    rospy.loginfo("Loading checkpoint from: {}".format(CHECKPOINT_PATH))
     modules = torch.load(CHECKPOINT_PATH, map_location=device)
  
     if isinstance(modules, dict):
-        rospy.loginfo(f"Checkpoint keys: {list(modules.keys())}")
+        rospy.loginfo("Checkpoint keys: {}".format(list(modules.keys())))
  
     encoder.load_state_dict(modules["encoder"])
     encoder = encoder.to(device)
@@ -532,143 +599,4 @@ def rl_policy_loop():
     # This MUST come before any Publisher or Subscriber creation.
     # It registers this Python process with the ROS Master as a named node.
     # anonymous=True appends a random suffix so you can run multiple copies.
-    rospy.init_node('rl_policy_node', anonymous=True)
- 
-    # rospy.Rate controls loop timing — sleep() will pause until next 10Hz tick
-    rate = rospy.Rate(hz=RL_HZ)
- 
-    # ------------------------------------------------------------------
-    # 13.5 CREATE PUBLISHERS — one per Shadow Hand controller
-    # ------------------------------------------------------------------
-    publishers = create_hand_publishers()
- 
-    # Give publishers time to connect to subscribers on the other end
-    rospy.loginfo("Waiting for publishers to connect...")
-    rospy.sleep(1.0)
- 
-    # ------------------------------------------------------------------
-    # 13.6 CREATE SUBSCRIBER — reads joint state from the real hand
-    # ------------------------------------------------------------------
-    # rospy.Subscriber(topic, message_type, callback_function)
-    # Every time a JointState message arrives on /joint_states,
-    # ROS calls prop_callback in a background thread automatically.
-    rospy.Subscriber("/joint_states", JointState, prop_callback)
-    rospy.loginfo("Subscribed to /joint_states")
- 
-    # ------------------------------------------------------------------
-    # 13.7 WAIT FOR FIRST SENSOR DATA
-    # ------------------------------------------------------------------
-    # The subscriber is registered but the first message hasn't arrived yet.
-    # Trying to build an observation from None would crash immediately.
-    # This loop waits until prop_callback has run at least once.
-    rospy.loginfo("Waiting for first joint state message...")
-    while not rospy.is_shutdown():
-        with data_lock:
-            if joint_pos_norm is not None:
-                break
-        rospy.loginfo("  ... still waiting")
-        rate.sleep()
- 
-    rospy.loginfo("First joint state received. Ready to run policy.")
- 
-    # ------------------------------------------------------------------
-    # 13.8 INITIALISE TARGETS
-    # ------------------------------------------------------------------
-    # Both cur and prev start at the default open pose.
-    # These are in POLICY space (radians, not normalised).
-    cur_targets  = deepcopy(DEFAULT_JOINT_POS)
-    prev_targets = deepcopy(DEFAULT_JOINT_POS)
- 
-    # ------------------------------------------------------------------
-    # 13.9 MAIN EPISODE LOOP
-    # ------------------------------------------------------------------
-    while not rospy.is_shutdown():
- 
-        # --- Move to safe default pose before each episode ---
-        publish_default_pose(publishers)
-        rospy.loginfo("Moved to default pose. Sleeping 5 seconds...")
-        rospy.sleep(5.0)
- 
-        # --- Wait for user confirmation before running policy ---
-        user_input = input("Press y to run peace sign policy, n to exit: ")
-        if user_input.strip().lower() != "y":
-            rospy.loginfo("Exiting.")
-            break
- 
-        rospy.loginfo(f"Running episode for {EPISODE_TIMESTEPS} steps at {RL_HZ} Hz...")
- 
-        # --- Run one episode ---
-        for t in range(EPISODE_TIMESTEPS):
- 
-            # Step 1: Read latest sensor data (written by callback thread)
-            # The lock ensures we get a consistent snapshot, not a half-update.
-            with data_lock:
-                pos_norm = joint_pos_norm.copy()
-                vel_norm = joint_vel_norm.copy()
- 
-            # Step 2: Build observation vector
-            obs = {
-                    "prop": get_proprioception(cur_targets, prev_actions_raw).to(torch.float32)
-                }
- 
-            # Step 3: Run neural network — encoder compresses obs, policy outputs action
-            with torch.no_grad():   # no_grad = don't compute gradients (saves memory)
-                z = encoder(obs).T
-                # deterministic=True uses the mean action, not a random sample
-                actions = policy.act(z, deterministic=True)[0][0]
-                actions = actions.detach().cpu().numpy()
- 
-            # Step 4: Scale from [-1, 1] back to joint angle space (radians)
-            cur_targets = scale(actions, LOWER_LIMITS, UPPER_LIMITS)
- 
-            # Step 5: Smooth — blend new target with previous target
-            # This prevents sudden jumps even if the policy output changes sharply.
-            cur_targets = (
-                ACTION_TAU * cur_targets
-                + (1.0 - ACTION_TAU) * prev_targets
-            )
- 
-            # Step 6: Hard safety clip — cannot exceed URDF joint limits
-            cur_targets = np.clip(cur_targets, LOWER_LIMITS, UPPER_LIMITS)
- 
-            # Step 7: Send to real hardware
-            # This is where the J0 × 2 scaling happens inside publish_to_hand.
-            publish_to_hand(publishers, cur_targets)
- 
-            # Step 8: Sleep until next 10Hz tick
-            rate.sleep()
- 
-            # Step 9: Remember what we just commanded
-            prev_targets = cur_targets.copy()
-
-            prev_actions_raw = actions.copy()
- 
-            if t % 10 == 0:
-                rospy.loginfo(f"  Step {t}/{EPISODE_TIMESTEPS}")
- 
-        rospy.loginfo("Episode complete.")
- 
-        # --- Hold position at end of episode ---
-        # Send current targets again so hand stays still rather than going limp.
-        publish_to_hand(publishers, cur_targets)
- 
-        # --- Ask whether to run again ---
-        again = input("Run again? (y/n): ")
-        if again.strip().lower() != "y":
-            break
- 
-    rospy.loginfo("RL Policy Node shutting down.")
- 
- 
-# =============================================================================
-# SECTION 14: ENTRY POINT
-# =============================================================================
-if __name__ == '__main__':
-    try:
-        rl_policy_loop()
-    except rospy.ROSInterruptException:
-        # Raised when Ctrl+C is pressed — clean shutdown
-        rospy.loginfo("Interrupted. Shutting down.")
-    except Exception as e:
-        rospy.logerr(f"Unexpected error: {e}")
-        raise
+    rospy.init_node('rl_policy_node', anonymous
