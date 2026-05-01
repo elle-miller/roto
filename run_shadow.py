@@ -44,6 +44,9 @@ from sensor_msgs.msg import JointState        # joint name + position + velocity
 # Neural network classes from your training codebase
 from multimodal_rl.rl.policy_value import GaussianPolicy
 from multimodal_rl.models.encoder import Encoder
+
+from collections import deque           # for obs stack circular buffer
+from std_msgs.msg import Float32MultiArray  # ⚠️ VERIFY: tactile message type
  
 import warnings
 warnings.filterwarnings("ignore")
@@ -63,7 +66,7 @@ torch.set_default_dtype(torch.float32)
  
 # How many times per second the policy runs and sends a command.
 # Must match the Hz the policy was trained at in simulation.
-RL_HZ = 10
+RL_HZ = 60
  
 # Low-pass filter on actions — prevents jerky motion.
 # New command = 1% new + 99% old. Small = very smooth but slow to respond.
@@ -74,13 +77,36 @@ ACTION_TAU = 0.01
 OVERRIDE_VEL_SCALE = 0.1
  
 # How many policy steps to run per episode (10 Hz × 100 steps = 10 seconds).
-EPISODE_TIMESTEPS = 100
+EPISODE_TIMESTEPS = 600
  
 # Path to the saved neural network weights from IsaacLab training.
 CHECKPOINT_PATH = os.path.join(
     "/root/shadow_docker_ws/src/my_shadow_control/scripts",
     "awesome.pt"
 )
+
+
+
+# =============================================================================
+# OBS STACK + TACTILE CONFIG
+# =============================================================================
+
+# Number of consecutive observations the policy sees at once.
+# Must match obs_stack in the training agent yaml (confirmed: 4).
+OBS_STACK = 4
+
+# Toggle tactile on/off without changing observation structure.
+# Set False to run without Touch Lab sensor connected.
+USE_TACTILE = True
+
+# Binary threshold — any force above this = 1, below = 0.
+# Matches training yaml: binary_tactile: true, binary_threshold: 0.0
+TACTILE_BINARY    = True
+TACTILE_THRESHOLD = 0.0
+
+# Number of tactile sensor values from /touchlab_driver/caliberated.
+# ⚠️ VERIFY: run `rostopic echo /touchlab_driver/caliberated -n 1` and count values.
+NUM_TACTILE = 16   # placeholder — update with real count
 
 
 PALM_LINK = 'rh_palm'    # fixed base of the hand
@@ -223,6 +249,22 @@ DEFAULT_JOINT_POS = np.zeros(13)
 joint_pos      = None   # raw joint positions in policy order (13 values)
 joint_pos_norm = None   # normalised to [-1, 1]
 joint_vel_norm = None   # normalised velocity
+
+
+# Raw tactile readings — updated by tactile_callback
+tactile_raw = None
+
+# Circular buffers holding the last OBS_STACK observations.
+# deque(maxlen=N) automatically drops the oldest when you append a new one.
+# Initialised with zeros — policy sees "no movement, no contact" at episode start.
+_prop_buffer    = deque(maxlen=OBS_STACK)
+_tactile_buffer = deque(maxlen=OBS_STACK)
+
+def _init_obs_buffers():
+    """Fill both buffers with zeros so we never read from an empty deque."""
+    for _ in range(OBS_STACK):
+        _prop_buffer.append(np.zeros(52))              # 52 = one prop frame
+        _tactile_buffer.append(np.zeros(NUM_TACTILE))  # one tactile frame
  
 # The Lock acts like a traffic warden — only one thread reads/writes at a time.
 data_lock = Lock()
@@ -305,40 +347,91 @@ def prop_callback(data):
 
         # FIX: use raw URDF vel limits for normalisation, not scaled ones
         joint_vel_norm = normalise(joint_vel, -VEL_LIMITS_NORM, VEL_LIMITS_NORM)
+
+
+def tactile_callback(data):
+    """
+    Called by ROS every time a new message arrives on /touchlab_driver/caliberated.
+    
+    Converts raw sensor readings to binary contact signals if TACTILE_BINARY is True.
+    Runs in a background thread — uses data_lock to protect shared state.
+    
+    Args:
+        data : Float32MultiArray (⚠️ verify message type)
+               data.data → flat list of sensor readings
+    """
+    global tactile_raw
+
+    # Extract sensor values as numpy array
+    raw = np.array(data.data, dtype=np.float32)
+
+    if TACTILE_BINARY:
+        # Any force above threshold = 1 (contact), below = 0 (no contact)
+        # Matches sim: binary_tactile: true, binary_threshold: 0.0
+        raw = (raw > TACTILE_THRESHOLD).astype(np.float32)
+
+    with data_lock:
+        tactile_raw = raw
  
 def get_proprioception(cur_targets_radians, prev_actions_raw):
     """
-    Builds the 52-element observation vector matching sim exactly.
+    Builds the stacked observation vector the policy expects.
+
+    Structure per frame (52 values):
+        normalised_joint_pos  (13)
+        normalised_joint_vel  (13)
+        joint_pos_error       (13)  ← cmd - actual, in radians
+        prev_actions_raw      (13)  ← raw policy output from last step [-1, 1]
+
+    With OBS_STACK=4, total prop = 52 × 4 = 208 values.
+    With tactile stacked: total tactile = NUM_TACTILE × 4 values.
+
+    The buffer always has OBS_STACK frames. At each step:
+        1. Build this frame from current sensor data
+        2. Append to buffer (oldest auto-dropped by deque)
+        3. Concatenate all frames → stacked obs
 
     Args:
-        cur_targets_radians : current joint position command in radians (13 values)
-                              Used to compute position error vs actual joint pos.
-        prev_actions_raw    : previous policy output (13 values)
-                              This is self.actions in the sim — raw network output
-                              BEFORE scaling to radians.
-
-    Observation structure (must match sim exactly):
-        [normalised_joint_pos (13),    ← where joints actually are, scaled to [-1,1]
-         normalised_joint_vel (13),    ← how fast joints are moving, scaled to [-1,1]
-         joint_pos_error (13),         ← command - actual, in radians (NOT normalised)
-         prev_actions_raw (13)]        ← last policy output
+        cur_targets_radians : 13-element array, current command in radians
+        prev_actions_raw    : 13-element array, last policy output in [-1, 1]
+    
+    Returns:
+        prop_stacked    : torch.Tensor shape (52 * OBS_STACK,)
+        tactile_stacked : torch.Tensor shape (NUM_TACTILE * OBS_STACK,)
+                          or zeros if USE_TACTILE is False
     """
+    # --- Read sensor data under lock ---
     with data_lock:
-        pos_norm = joint_pos_norm.copy()   # already normalised in callback
-        vel_norm = joint_vel_norm.copy()   # already normalised in callback
-        actual_pos = joint_pos.copy()      # raw radians
+        pos_norm   = joint_pos_norm.copy()
+        vel_norm   = joint_vel_norm.copy()
+        actual_pos = joint_pos.copy()
+        tac        = tactile_raw.copy() if (USE_TACTILE and tactile_raw is not None) \
+                     else np.zeros(NUM_TACTILE)
 
-    # joint_pos_error = commanded position - actual position (radians)
-    # Matches sim: self.joint_pos_error = self.joint_pos_cmd - self.joint_pos
-    joint_pos_error = cur_targets_radians - actual_pos
+    # --- Build current prop frame ---
+    joint_pos_error = cur_targets_radians - actual_pos   # cmd - actual (radians)
 
-    prop = torch.cat((
-        torch.tensor(pos_norm,          dtype=torch.float32),   # 13
-        torch.tensor(vel_norm,          dtype=torch.float32),   # 13
-        torch.tensor(joint_pos_error,   dtype=torch.float32),   # 13
-        torch.tensor(prev_actions_raw,  dtype=torch.float32),   # 13
-    ))
-    return prop   # shape: (52,)
+    current_prop_frame = np.concatenate([
+        pos_norm,           # 13: where joints are
+        vel_norm,           # 13: how fast moving
+        joint_pos_error,    # 13: tracking error
+        prev_actions_raw,   # 13: what policy output last step
+    ])   # shape: (52,)
+
+    # --- Push into circular buffers ---
+    _prop_buffer.append(current_prop_frame)
+    _tactile_buffer.append(tac)
+
+    # --- Stack all OBS_STACK frames ---
+    # deque preserves order: oldest first, newest last
+    # np.concatenate flattens them into one long vector
+    prop_stacked    = np.concatenate(list(_prop_buffer))       # (52 × OBS_STACK,)
+    tactile_stacked = np.concatenate(list(_tactile_buffer))    # (NUM_TACTILE × OBS_STACK,)
+
+    return (
+        torch.tensor(prop_stacked,    dtype=torch.float32),
+        torch.tensor(tactile_stacked, dtype=torch.float32),
+    )
 
 def create_hand_publishers():
     """
@@ -518,13 +611,15 @@ def rl_policy_loop():
     # 13.1 DEFINE OBSERVATION AND ACTION SPACES
     # ------------------------------------------------------------------
     # num_prop = 13 joints × 4 (pos, vel, cur_target, prev_target) = 52
-    num_prop    = 52
-    num_actions = 13   # one per ROS controller
- 
-    # These dicts tell the encoder and policy the shape of their inputs/outputs
+    num_prop         = 52 * OBS_STACK                          # 208 with stack=4
+    num_tactile      = NUM_TACTILE * OBS_STACK if USE_TACTILE else 0
+    num_actions      = 13
+
     observation_space = {
         "prop": np.zeros(num_prop),
     }
+    if USE_TACTILE:
+        observation_space["tactile"] = np.zeros(num_tactile)
     action_space = np.zeros(num_actions)
  
     # ------------------------------------------------------------------
@@ -557,8 +652,8 @@ def rl_policy_loop():
  
     encoder = Encoder(
         observation_space,
-    action_space,
-    {},
+	action_space,
+	{},
         encoder_cfg,
         device=device
     )
@@ -599,4 +694,200 @@ def rl_policy_loop():
     # This MUST come before any Publisher or Subscriber creation.
     # It registers this Python process with the ROS Master as a named node.
     # anonymous=True appends a random suffix so you can run multiple copies.
-    rospy.init_node('rl_policy_node', anonymous
+    rospy.init_node('rl_policy_node', anonymous=True)
+ 
+    # rospy.Rate controls loop timing — sleep() will pause until next 10Hz tick
+    rate = rospy.Rate(hz=RL_HZ)
+ 
+    # ------------------------------------------------------------------
+    # 13.5 CREATE PUBLISHERS — one per Shadow Hand controller
+    # ------------------------------------------------------------------
+    publishers = create_hand_publishers()
+ 
+    # Give publishers time to connect to subscribers (controllers) on the other end
+    # This is critical — without sufficient time, early messages are dropped.
+    rospy.loginfo("Waiting for publishers to fully connect to controllers (3 seconds)...")
+    for i in range(3):
+        rospy.sleep(1.0)
+        rospy.loginfo("  ... waiting ({}/3)".format(i + 1))
+    
+    # Verify connection before proceeding
+    if not check_publishers_connected(publishers, timeout_secs=10.0):
+        rospy.logwarn("Publishers may not be fully connected. Proceeding anyway...")
+    
+    rospy.loginfo("Publishers ready. Sleeping another 2 seconds before first command...")
+    rospy.sleep(2.0)
+ 
+    # ------------------------------------------------------------------
+    # 13.6 CREATE SUBSCRIBER — reads joint state from the real hand
+    # ------------------------------------------------------------------
+    # rospy.Subscriber(topic, message_type, callback_function)
+    # Every time a JointState message arrives on /joint_states,
+    # ROS calls prop_callback in a background thread automatically.
+    rospy.Subscriber("/joint_states", JointState, prop_callback)
+    rospy.loginfo("Subscribed to /joint_states")
+
+    rospy.Subscriber("/joint_states", JointState, prop_callback)
+
+# Tactile subscriber — only register if USE_TACTILE is enabled
+    if USE_TACTILE:
+        rospy.Subscriber(
+            "/touchlab_driver/calibrated",   
+            Float32MultiArray,                 
+            tactile_callback
+        )
+        rospy.loginfo("Subscribed to /touchlab_driver/calibrated")
+    else:
+        rospy.loginfo("Tactile disabled — skipping touchlab subscriber")
+
+
+    # Initialise obs buffers with zeros before episode starts
+    _init_obs_buffers()
+    rospy.loginfo("Obs buffers initialised ({} frames × {} prop + {} tactile)".format(
+        OBS_STACK, 52, NUM_TACTILE if USE_TACTILE else 0
+    ))
+    
+    # ------------------------------------------------------------------
+    # 13.7 WAIT FOR FIRST SENSOR DATA
+    # ------------------------------------------------------------------
+    # The subscriber is registered but the first message hasn't arrived yet.
+    # Trying to build an observation from None would crash immediately.
+    # This loop waits until prop_callback has run at least once.
+    rospy.loginfo("Waiting for first joint state message...")
+    while not rospy.is_shutdown():
+        with data_lock:
+            prop_ready    = joint_pos_norm is not None
+            tactile_ready = (tactile_raw is not None) if USE_TACTILE else True
+            if prop_ready and tactile_ready:
+                break
+        rospy.loginfo("Waiting for sensor data... prop={} tactile={}".format(
+            prop_ready, tactile_ready if USE_TACTILE else "N/A"
+        ))
+        rate.sleep()
+ 
+    rospy.loginfo("First joint state received. Ready to run policy.")
+ 
+    # ------------------------------------------------------------------
+    # 13.8 INITIALISE TARGETS
+    # ------------------------------------------------------------------
+    # Both cur and prev start at the default open pose.
+    # These are in POLICY space (radians, not normalised).
+    cur_targets  = deepcopy(DEFAULT_JOINT_POS)
+    prev_targets = deepcopy(DEFAULT_JOINT_POS)
+    
+    # Initialise action history for observation building
+    prev_actions_raw = np.zeros(13)   # raw policy output in [-1, 1] space
+ 
+    # ------------------------------------------------------------------
+    # 13.9 MAIN EPISODE LOOP
+    # ------------------------------------------------------------------
+    while not rospy.is_shutdown():
+ 
+        # --- Move to safe default pose before each episode ---
+        rospy.loginfo("="*60)
+        rospy.loginfo("EPISODE START: Moving to default safe pose")
+        rospy.loginfo("="*60)
+        publish_default_pose(publishers, duration_secs=5.0, rate_hz=10)
+        rospy.loginfo("Waiting for hand to settle (5 seconds)...")
+        rospy.sleep(5.0)
+
+        exit()
+ 
+        # --- Wait for user confirmation before running policy ---
+        user_input = input("Press y to run peace sign policy, n to exit: ")
+        if user_input.strip().lower() != "y":
+            rospy.loginfo("Exiting.")
+            break
+ 
+        rospy.loginfo("Running episode for {} steps at {} Hz...".format(EPISODE_TIMESTEPS, RL_HZ))
+ 
+        # --- Run one episode ---
+        for t in range(EPISODE_TIMESTEPS):
+ 
+            # Step 1: Read latest sensor data (written by callback thread)
+            # The lock ensures we get a consistent snapshot, not a half-update.
+            with data_lock:
+                pos_norm = joint_pos_norm.copy()
+                vel_norm = joint_vel_norm.copy()
+ 
+            # Step 2: Build observation vector
+            prop_tensor, tactile_tensor = get_proprioception(cur_targets, prev_actions_raw)
+            obs = {"prop": prop_tensor}
+            if USE_TACTILE:
+                obs["tactile"] = tactile_tensor
+ 
+            # Step 3: Run neural network — encoder compresses obs, policy outputs action
+            with torch.no_grad():   # no_grad = don't compute gradients (saves memory)
+                z = encoder(obs)#.T
+                # deterministic=True uses the mean action, not a random sample
+                actions = policy.act(z, deterministic=True)[0][0]
+                actions = actions.detach().cpu().numpy()
+ 
+            # Step 4: Scale from [-1, 1] back to joint angle space (radians)
+            cur_targets = scale(actions, LOWER_LIMITS, UPPER_LIMITS)
+ 
+            # Step 5: Smooth — blend new target with previous target
+            # This prevents sudden jumps even if the policy output changes sharply.
+            cur_targets = (
+                ACTION_TAU * cur_targets
+                + (1.0 - ACTION_TAU) * prev_targets
+            )
+ 
+            # Step 6: Hard safety clip — cannot exceed URDF joint limits
+            cur_targets = np.clip(cur_targets, LOWER_LIMITS, UPPER_LIMITS)
+ 
+            # Step 7: Send to real hardware
+            # This is where the J0 × 2 scaling happens inside publish_to_hand.
+            publish_to_hand(publishers, cur_targets)
+ 
+            # Step 8: Sleep until next 10Hz tick
+            rate.sleep()
+ 
+            # Step 9: Remember what we just commanded
+            prev_targets = cur_targets.copy()
+            prev_actions_raw = actions.copy()
+ 
+            if t % 10 == 0:
+                rospy.loginfo("  Step {}/{}".format(t, EPISODE_TIMESTEPS))
+ 
+        rospy.loginfo("Episode complete.")
+ 
+        # --- Hold position at end of episode ---
+        # Send current targets again so hand stays still rather than going limp.
+        publish_to_hand(publishers, cur_targets)
+
+        with data_lock:
+            final_pos = joint_pos.copy() if joint_pos is not None else None
+
+            if final_pos is not None:
+                rospy.loginfo("=" * 60)
+                rospy.loginfo("FINAL JOINT POSITIONS (actual hardware readings):")
+                rospy.loginfo("=" * 60)
+                for i, name in enumerate(POLICY_JOINT_ORDER):
+                    rospy.loginfo("  {:12s} : {:.4f} rad  ({:.2f} deg)".format(
+                        name, final_pos[i], np.degrees(final_pos[i])
+                    ))
+                rospy.loginfo("=" * 60)
+            else:
+                rospy.logwarn("No joint position data available to report.")
+ 
+        # --- Ask whether to run again ---
+        again = input("Run again? (y/n): ")
+        if again.strip().lower() != "y":
+            break
+ 
+    rospy.loginfo("RL Policy Node shutting down.")
+ 
+ 
+# =============================================================================
+# SECTION 14: ENTRY POINT
+# =============================================================================
+if __name__ == '__main__':
+    try:
+        rl_policy_loop()
+    except rospy.ROSInterruptException:
+        # Raised when Ctrl+C is pressed — clean shutdown
+        rospy.loginfo("Interrupted. Shutting down.")
+    except Exception as e:
+        rospy.logerr("Unexpected error: {}".format(e))
+        raise
