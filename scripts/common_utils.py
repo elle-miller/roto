@@ -25,20 +25,13 @@ from roto.tasks.robots import allegro, franka, orca, shadow, shadowlite  # noqa:
 
 
 def resolve_gym_env_id(task: str | None, robot: str | None) -> str:
-    """Map CLI ``--task`` and optional ``--robot`` to a registered gymnasium env id.
-
-    For ``Bounce`` and ``Baoding``, the id is always ``Bounce`` / ``Baoding``; the hand is
-    selected via ``--robot`` (see :func:`normalize_hand_robot` and
-    :func:`register_hand_task_to_hydra`).
-    For ``Find``, only ``franka`` is supported (default).
-    """
     if task is None:
         raise ValueError("task is required")
     if task == "Find":
         if robot is None or robot.strip().lower() in ("franka",):
             return "Find"
         raise ValueError("Task Find only supports robot franka.")
-    if task in ("Bounce", "Baoding", "PeaceSign"):
+    if task in ("Bounce", "Baoding"):
         r = normalize_hand_robot(robot)
         if r == "shadowlite":
             return f"{task}_Shadowlite"
@@ -46,7 +39,12 @@ def resolve_gym_env_id(task: str | None, robot: str | None) -> str:
             return f"{task}_Orca"
         if r == "allegro":
             return f"{task}_Allegro"
-        return task
+        return task  # shadow → "Bounce" / "Baoding"
+    if task == "PeaceSign":
+        r = normalize_hand_robot(robot)
+        if r != "shadowlite":
+            raise ValueError(f"Task PeaceSign only supports robot shadowlite, got {r!r}.")
+        return "PeaceSign_Shadowlite"
     return task
 
 
@@ -106,15 +104,17 @@ _PEACE_SHADOWLITE_VARIANT_FILES = {
 
 
 def _hand_agent_files(task_name: str, robot: str) -> dict[str, str]:
-    if robot in ("orca", "allegro", "shadowlite"):
+    if robot in ("orca", "allegro"):          # removed "shadowlite" from here
         return _ORCA_ALLEGRO_AGENT_FILES
     if task_name == "Bounce":
         return _BOUNCE_SHADOW_AGENT_FILES
     if task_name == "Baoding":
+        if robot == "shadowlite":
+            return _BAODING_SHADOW_AGENT_FILES  # or a dedicated _BAODING_SHADOWLITE_AGENT_FILES
         return _BAODING_SHADOW_AGENT_FILES
     if task_name == "PeaceSign":
         return _PEACE_SHADOWLITE_VARIANT_FILES
-    raise ValueError(task_name)
+    raise ValueError(f"Unsupported task/robot combo: {task_name!r} / {robot!r}")
 
 
 def _hand_agent_yaml_path(task_name: str, robot: str, entry_point_key: str) -> str:
@@ -289,8 +289,34 @@ def make_env(agent_cfg, env_cfg, writer, args_cli):
         for i, name in enumerate(robot.joint_names):
             print(i, name)
         print("=============================\n")
-        print(env_cfg.num_actions, '======================================')
+        print(env_cfg.num_actions, ' total actions======================================')
         #print(env.action_space.shape, '======================================')
+        # Print all attributes that contain the word 'space' or 'action'
+        # If vectorized (e.g., shape is [4096, 13])
+        # print(f"Action Space Shape: {env._action_space.shape}")
+
+        # # If you want the dimension of a single hand:
+        # if hasattr(env.action_space, 'n'):
+        #     print(f"Action Count (Discrete): {env.action_space.shape}")
+        # else:
+        #     # This is the most common way to check for continuous control
+        #     print(f"Action Count (Continuous): {env.action_space.shape[-1]}")
+
+        # First, see what is inside the observation dictionary
+        print(f"Observation Keys: {env.observation_space.keys()}")
+
+        # Check the policy observations specifically
+        policy_obs = env.observation_space['policy']
+        print(f"Policy Keys: {policy_obs.keys()}")
+
+        # Verify the joint position dimension (Expected: 16)
+        if 'joint_pos' in policy_obs.spaces:
+            joint_dim = policy_obs.spaces['joint_pos'].shape[-1]
+            print(f"Joint Observation Dimension: {joint_dim}")
+
+        # Add this around line 245
+        # Verify the dimensions before the wrapper takes over
+
     except Exception as e:
         print(f"[WARN] Could not access robot joint_names: {e}")
 

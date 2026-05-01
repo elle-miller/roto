@@ -64,3 +64,15 @@ gym.register(
         **_variant_paths("shadow", _SHADOW_VARIANT_FILES),
     },
 )
+
+# Register robot-specific variants
+gym.register(
+    id="Baoding_Shadowlite",
+    entry_point=baoding_make_env,
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": BaodingShadowLiteCfg,
+        **_variant_paths("shadowlite", _SHADOW_VARIANT_FILES),
+    },
+)
+

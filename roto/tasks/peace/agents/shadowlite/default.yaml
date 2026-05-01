@@ -5,11 +5,11 @@ seed: 42
 observations:
   obs_list:
   - prop
-  - tactile
-  obs_stack: 4
-  tactile_cfg:
-    binary_tactile: true
-    binary_threshold: 0.0
+  # - tactile
+  obs_stack: 1
+  # tactile_cfg:
+  #   binary_tactile: true
+  #   binary_threshold: 0.0
 
 encoder:
   method: early
