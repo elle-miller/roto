@@ -104,6 +104,7 @@ class RotoEnv(DirectRLEnv):
         self.tactile_cfg = getattr(cfg, "tactile_cfg", None)
         if self.tactile_cfg is not None:
             self.binary_threshold = self.tactile_cfg["binary_threshold"]
+            self.binary_tactile = self.tactile_cfg['binary_tactile']
         self.dtype = torch.float32
 
         super().__init__(cfg, render_mode, **kwargs)
