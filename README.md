@@ -1,10 +1,18 @@
 # RoTO: Robot Tactile Olympiad
-RoTO is a **reinforcement learning benchmark environment** designed to standardise and promote future research in tactile-based manipulation. It is introduced in detail in [Enhancing Tactile-based RL for Robotic Control](https://elle-miller.github.io/tactile_rl/) (NeurIPS 2025).  The environments are designed to cover a wide range of tactile interactions: sparse (Find), intermittent (Bounce), and sustained (Baoding). We will continue to add more environments and strongly welcome contributions 🤗
-
-<img src="readme_assets/images/roto.png" 
-     width="400" 
+<img src="readme_assets/images/roto2.png" 
+     width="800" 
      border="1"
      style="display: block; margin: 0 auto;"/>
+
+
+RoTO is a **reinforcement learning benchmark environment** designed to standardise and promote future research in tactile-based manipulation. The environments are designed to cover a wide range of tactile interactions: sparse (Find), intermittent (Bounce), and sustained (Baoding). We will continue to add more environments and strongly welcome contributions 🤗
+- `roto 1.0` included the Find (Franka), Bounce & Baoding (Shadow Hand) tasks. It was introduced in [Enhancing Tactile-based RL for Robotic Control](https://elle-miller.github.io/tactile_rl/) (NeurIPS 2025), which shows that blind superhuman dexterity is possible with sparse binary contacts + self-supervision.
+- `roto 2.0` is extended to include the Allegro, ORCA, and Shadow Dexterous Hand Lite robots for the Bounce & Baoding tasks. We swept hyperparameters for the full state & blind agents, and benchmarked the results in a 2-page writeup [here](). The checkpoints/logs are [here]().
+
+<!-- <img src="readme_assets/images/roto.png" 
+     width="400" 
+     border="1"
+     style="display: block; margin: 0 auto;"/> -->
 
 ## ✨ Overview
 
@@ -21,15 +29,15 @@ We split the paper code across two repositories. Imagine the typical RL loop: yo
 
 The agents are all joint position controlled. Franka has 9 joints, Shadow has 20 actuated joints.
 
-| Environment | Description | Observations | Rewards | Resets |
-| :---: | :--- | :--- | :--- | :--- |
-| <img src="readme_assets/images/find.png" alt="Find Environment" width="400px"> | The agent must locate a fixed ball on a plate as quickly as possible. | Proprioception + 2 binary contacts | Distance reward from end-effector to ball | Timestep limit |
-| <img src="readme_assets/images/bounce.png" alt="Bounce Environment" width="400px"> | The agent must bounce a ball as many times as possible within 10s. | Proprioception + 17 binary contacts | Small airtime reward + bounce bonus | Timestep limit, ball falls |
-| <img src="readme_assets/images/baoding.png" alt="Baoding Environment" width="400px"> | The agent must rotate two small balls around each other without letting them  drop. | Proprioception + 17 binary contacts | Small distance reward to ball target + successful rotation bonus | Timestep limit, ball falls |
+| Environment | Description | Rewards | Robots|
+| :---: | :--- | :--- |  :--- |
+| <img src="readme_assets/images/find.png" alt="Find Environment" width="400px"> | The agent must locate a fixed ball on a plate as quickly as possible. | Distance reward from end-effector to ball | Franka |
+| <img src="readme_assets/images/bounce.png" alt="Bounce Environment" width="400px"> | The agent must bounce a ball as many times as possible within 10s. | Sparse bounce bonus  | Shadow, ORCA, Allegro, Shadow Lite |
+| <img src="readme_assets/images/baoding.png" alt="Baoding Environment" width="400px"> | The agent must rotate two small balls around each other as many times as possible within 10s. |  Small distance reward to ball target + successful rotation bonus  | Shadow, ORCA, Allegro, Shadow Lite |
 
 ## Observations
 
-We use dictionary-style observations, and categorising into proprioception, tactile, rgb, depth, and gt (ground-truth). The proprioception & tactile methods should be defined in `RobotEnv`, but gt information is task-dependent. To specify which observations are used, add the keys to `obs_list` in the agent cfg..
+We use dictionary-style observations, and categorising into proprioception, tactile, rgb, depth, and gt (ground-truth). The proprioception & tactile methods should be defined in `{Robot}Env`, but gt information is task-dependent. To specify which observations are used, add the keys to `obs_list` in the agent cfg..
 ```
 observations:
   obs_list:
@@ -81,10 +89,13 @@ git clone git@github.com:elle-miller/roto.git
 cd roto
 pip install -e .
 ```
-4. Test the installation by playing a trained agent in the viewer or saving a video. Note that the viewer playback is much slower than real-time.
+4. Test the installation by playing a trained agent.
 ```
-python scripts/play.py --task Baoding --num_envs 512 --agent_cfg forward_dynamics_memory --checkpoint readme_assets/checkpoints/baoding_memory.pt
-python scripts/play.py --task Baoding --num_envs 512 --agent_cfg forward_dynamics_memory --video --video_length 1200 --headless --checkpoint readme_assets/checkpoints/baoding_memory.pt
+# play in isaac sim viewer
+python scripts/play.py --task Baoding --robot Shadow --num_envs 512 --agent_cfg forward_dynamics_memory --checkpoint readme_assets/checkpoints/baoding_memory.pt
+
+# save a video
+python scripts/play.py --task Baoding --robot Shadow --num_envs 512 --agent_cfg forward_dynamics_memory --video --video_length 1200 --headless --checkpoint readme_assets/checkpoints/baoding_memory.pt
 ```
 The video should pop up in a `./videos` folder and look like this:
 
@@ -136,10 +147,6 @@ python scripts/sweep.py --task Baoding --num_envs 4196 --headless --seed 1234 --
 See last step in installation.
 
 
-## 📊 Benchmark Results [in-progress]
-
-Please see the paper for now.
-
 ## 📁 Data
 
 The data in the paper (checkpoints, training logs, plot scripts) is available in the [roto_paper_results](https://github.com/elle-miller/roto_paper_results) repo.
@@ -159,10 +166,7 @@ This project is licensed under the BSD-3 License.
 This is our plan for future additions, but we highly welcome community contributions and PRs!
 
 - More environments
-- Observation augmentations (code exists just need to integrate)
 - Integrate TacSL for high-resolution touch sensing when it becomes released: https://github.com/isaac-sim/IsaacGymEnvs/issues/244
-- Provide transformer architectures
-- Action chunking
 
 ## 📄 Citation
 
@@ -176,3 +180,61 @@ If you use this benchmark environment in your academic or professional research,
   year      = {2025},
 }
 ```
+
+## Videos
+
+### Baoding: Shadow, Allegro, ORCA, Shadow Lite
+
+Videos are paired left-to-right: **States+Proprio+Binary Tactile** (vision) | **Proprio+Binary Tactile** (blind).
+
+**Shadow Hand**
+
+| Vision | Blind |
+| :---: | :---: |
+| <video src="readme_assets/roto2_videos/shadow_baoding_vision.mp4" controls width="400"></video> | <video src="readme_assets/roto2_videos/shadow_baoding_blind.mp4" controls width="400"></video> |
+
+**Allegro Hand**
+
+| Vision | Blind |
+| :---: | :---: |
+| <video src="readme_assets/roto2_videos/allegro_baoding_vision.mp4" controls width="400"></video> | <video src="readme_assets/roto2_videos/allegro_baoding_blind.mp4" controls width="400"></video> |
+
+**ORCA Hand**
+
+| Vision | Blind |
+| :---: | :---: |
+| <video src="readme_assets/roto2_videos/orca_baoding_vision.mp4" controls width="400"></video> | <video src="readme_assets/roto2_videos/orca_baoding_blind.mp4" controls width="400"></video> |
+
+**Shadow Dexterous Hand Lite**
+
+| Vision | Blind |
+| :---: | :---: |
+| <video src="readme_assets/roto2_videos/lite_baoding_vision.mp4" controls width="400"></video> | <video src="readme_assets/roto2_videos/lite_baoding_blind.mp4" controls width="400"></video> |
+
+### Bounce: Shadow, Allegro, ORCA, Shadow Lite
+
+Videos are paired left-to-right: **States+Proprio+Binary Tactile** (vision) | **Proprio+Binary Tactile** (blind).
+
+**Shadow Hand**
+
+| Vision | Blind |
+| :---: | :---: |
+| <video src="readme_assets/roto2_videos/shadow_bounce_vision.mp4" controls width="400"></video> | <video src="readme_assets/roto2_videos/shadow_bounce_blind.mp4" controls width="400"></video> |
+
+**Allegro Hand**
+
+| Vision | Blind |
+| :---: | :---: |
+| <video src="readme_assets/roto2_videos/allegro_bounce_vision.mp4" controls width="400"></video> | <video src="readme_assets/roto2_videos/allegro_bounce_blind.mp4" controls width="400"></video> |
+
+**ORCA Hand**
+
+| Vision | Blind |
+| :---: | :---: |
+| <video src="readme_assets/roto2_videos/orca_bounce_vision.mp4" controls width="400"></video> | <video src="readme_assets/roto2_videos/orca_bounce_blind.mp4" controls width="400"></video> |
+
+**Shadow Dexterous Hand Lite**
+
+| Vision | Blind |
+| :---: | :---: |
+| <video src="readme_assets/roto2_videos/lite_bounce_vision.mp4" controls width="400"></video> | <video src="readme_assets/roto2_videos/lite_bounce_blind.mp4" controls width="400"></video> |
