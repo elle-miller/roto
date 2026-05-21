@@ -1,0 +1,166 @@
+# Copyright (c) 2022-2024, The Isaac Lab Project Developers.
+# All rights reserved.
+#
+# SPDX-License-Identifier: BSD-3-Clause
+
+"""
+Author: Elle Miller 2025
+
+Shadow-hand base environment utilities shared across RoTO tasks.
+"""
+
+from __future__ import annotations
+
+import numpy as np
+import torch
+from collections.abc import Sequence
+
+import isaaclab.sim as sim_utils
+from isaaclab.assets import Articulation, ArticulationCfg
+from isaaclab.envs import ViewerCfg
+from isaaclab.scene import InteractiveSceneCfg
+from isaaclab.sensors import ContactSensor, ContactSensorCfg
+from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
+from isaaclab.utils import configclass
+from isaaclab.utils.math import quat_conjugate, quat_from_angle_axis, quat_mul
+
+from roto.assets.shadow_hand_lite import SHADOW_HAND_LITE_CFG
+from roto.tasks.roto_env import RotoEnv, RotoEnvCfg
+
+from isaaclab.markers.config import FRAME_MARKER_CFG  # isort: skip
+
+
+@configclass
+class ShadowLiteEnvCfg(RotoEnvCfg):
+    """Default configuration for the Shadow hand."""
+
+    scene: InteractiveSceneCfg = InteractiveSceneCfg(
+        num_envs=4096, env_spacing=0.7, replicate_physics=True
+    )
+
+    eye = (1, 1, 0.6)
+    lookat = (0, 0.3, 0.5)
+    viewer: ViewerCfg = ViewerCfg(eye=eye, lookat=lookat, resolution=(1920, 1080))
+
+    episode_length_s = 10.0
+
+
+    reset_joint_pos_noise = 0.2
+    reset_joint_vel_noise = 0.0
+
+    hand_height = 0.5
+    robot_cfg: ArticulationCfg = SHADOW_HAND_LITE_CFG.replace(prim_path="/World/envs/env_.*/Robot").replace(
+        init_state=ArticulationCfg.InitialStateCfg(
+            pos=(0.0, 0.0, hand_height),
+            #rot=(0.0, 0.0, -0.7071, 0.7071),
+            rot=(0.0, 0.0, -0.7933, 0.6087), 
+            joint_pos={".*": 0.0},
+        )
+    )
+
+    #+++++++++++++++++++++++++++++++++++++++++++++++++++++Baoding-specific overrides+++++++++++++++++++++++++++++++++++++++++++++++++++++
+    # tilting (-15 degree) forward. # finalized angle for hand rot=(0.0, 0.0, -0.7933, 0.6087)
+    # ball_mass_g = 20
+    # ball_reset_height = 0.46
+
+    # # ball size
+    # ball_diameter_inches = 1.1
+    # ball_radius_m = (ball_diameter_inches / 2) * 2.54 / 100
+    # ball_diameter_m = ball_radius_m * 2
+
+    # # initial ball positions
+    # ball_1_init_x = -0.03
+    # ball_1_init_y = -.2
+    # ball_2_init_x = 0.01
+    # ball_2_init_y = -0.22
+
+    # # target positions
+    # palm_target_x = 0
+    # palm_target_y = -0.25
+    # palm_target_z = 0.39
+
+    # target_offset = ball_diameter_m / 1.73205080757 + 0.001
+    # diagonal_target_x = palm_target_x - target_offset
+    # diagonal_target_y = palm_target_y + target_offset
+    # diagonal_target_z = palm_target_z + target_offset
+    #=========================================BOUNCE SHADOWLITE =====================================================
+    # tilting (-15 degree) forward. # finalized angle for hand rot=(0.0, 0.0, -0.7933, 0.6087)
+    # fall_height = 0.3          
+    # object_y_pos = -0.28    
+    # object_z_pos = 0.6
+    # default_object_pos = (0., -0.265, 0.6)  # is this affecting the ball position at all? cuz this is not changing anything in the viewer
+    # object_cfg: RigidObjectCfg = _make_bouncy_ball_cfg((0., -0.265, 0.6)  )
+
+    actuated_joint_names = ['rh_FFJ4', 'rh_MFJ4', 'rh_RFJ4', 'rh_THJ5', 'rh_FFJ3', 'rh_MFJ3', 'rh_RFJ3', 'rh_THJ4', 'rh_FFJ2', 'rh_MFJ2', 'rh_RFJ2', 'rh_FFJ1', 'rh_MFJ1', 'rh_RFJ1', 'rh_THJ2', 'rh_THJ1']
+    num_actions = len(actuated_joint_names)
+    action_space = num_actions
+
+    marker_cfg = FRAME_MARKER_CFG.copy()
+    marker_cfg.markers["frame"].scale = (0.05, 0.05, 0.05)
+    marker_cfg.prim_path = "/Visuals/ContactCfg"
+
+    robot_contact_sensor_cfg = ContactSensorCfg(
+        prim_path="/World/envs/env_.*/Robot/.*",
+        update_period=0.0,
+        history_length=1,
+    )
+
+
+
+class ShadowLiteEnv(RotoEnv):
+    """Shadow-hand base env providing tactile + proprio pipelines."""
+
+    cfg: ShadowLiteEnvCfg
+
+    def __init__(self, cfg: ShadowLiteEnvCfg, render_mode: str | None = None, **kwargs):
+
+        super().__init__(cfg, render_mode, **kwargs)
+        print("NUM TACTILE BODIES:", self.robot_contact_sensor.data.net_forces_w.shape)
+        self.num_tactile_observations = 0
+        self.tactile = torch.zeros((self.num_envs, 0), device=self.device)
+        self.last_tactile = torch.zeros((self.num_envs, 0), device=self.device)
+
+
+    def _setup_scene(self):
+        """Register the Shadow hand, contact sensors, and lighting."""
+        super()._setup_scene()
+
+        self.robot = Articulation(self.cfg.robot_cfg)
+        spawn_ground_plane(prim_path="/World/ground", cfg=GroundPlaneCfg())
+        self.scene.clone_environments(copy_from_source=False)
+        self.scene.articulations["robot"] = self.robot
+        self.robot_contact_sensor = ContactSensor(self.cfg.robot_contact_sensor_cfg)
+        self.scene.sensors["robot_contact_sensor"] = self.robot_contact_sensor
+
+
+    def _get_tactile(self):
+        """Return binary tactile activation per finger segment.
+
+        Reindexes the single contact sensor to match the legacy ordering:
+        [all distal, all proximal, all middle, palm, metacarpal].
+        """
+
+        forces = self.robot_contact_sensor.data.net_forces_w[:].clone()  # [N, B, 3]
+        norm = torch.linalg.vector_norm(forces, dim=-1)  # [N, B]
+
+        if self.tactile_cfg is not None and self.tactile_cfg.get("binary_tactile", True):
+            norm = (norm > self.binary_threshold).float()
+
+        self.last_tactile = self.tactile
+        self.tactile = norm
+        return norm
+
+    def _reset_idx(self, env_ids: Sequence[int] | None):
+        """Reset articulation state and optionally randomize joints.
+
+        Args:
+            env_ids: Environment indices to reset. If None, resets all environments.
+        """
+        if env_ids is None:
+            env_ids = self.robot._ALL_INDICES
+
+        # Reset articulation and rigid body attributes
+        super()._reset_idx(env_ids)
+
+        # Reset hand with noise
+        self._reset_robot(env_ids, joint_pos_noise=self.cfg.reset_joint_pos_noise)

@@ -1,0 +1,39 @@
+# allegro Bounce config: rl_only_pt
+
+observations:
+  obs_list:
+  - prop
+  - tactile
+  obs_stack: 4
+  tactile_cfg:
+    binary_tactile: true
+    binary_threshold: 0.01
+
+agent:
+  rollouts: 16
+  learning_epochs: 4
+  mini_batches: 8
+  discount_factor: 0.99
+  lambda: 0.95
+  learning_rate: 3.21e-05
+  grad_norm_clip: 1.0
+  ratio_clip: 0.2
+  value_clip: 0.2
+  entropy_loss_scale: 0
+  value_loss_scale: 1.0
+  kl_threshold: 0
+  learning_rate_scheduler: "KLAdaptiveLR"
+  learning_rate_scheduler_kwargs:
+    kl_threshold: 0.008
+    min_lr: 1e-6
+    max_lr: 1e-2
+    kl_factor: 2
+    lr_factor: 1.5
+    apply_to_all: true
+
+experiment:
+  experiment_name: rl_only_pt
+  wandb: 0
+  wandb_kwargs:
+    group: allegro_bounce_rl_only_pt
+    name: P

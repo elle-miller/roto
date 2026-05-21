@@ -103,7 +103,7 @@ We provide 3 environments x 7 cfgs, corresponding to the paper
 ```
 gym.register(
     id="Baoding",
-    entry_point="tasks.shadow.baoding:BaodingEnv",
+    entry_point="roto.tasks.baoding.baoding:BaodingShadowEnv",
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": baoding.BaodingCfg,

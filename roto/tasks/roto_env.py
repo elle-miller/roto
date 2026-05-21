@@ -32,16 +32,16 @@ from isaaclab.sensors import TiledCamera, TiledCameraCfg
 from isaaclab.sensors import ContactSensor, ContactSensorCfg
 from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
 
+from roto.tasks.physics import roto_sim_cfg, DECIMATION, PHYSICS_DT
 
 @configclass
 class RotoEnvCfg(DirectRLEnvCfg):
     """Simulation / scene defaults used by every RoTO task."""
 
-    # Physics simulation parameters
-    physics_dt = 1 / 120  # Simulation timestep (seconds)
-    decimation = 2  # Number of physics steps per control step
-    render_interval = 2  # Physics steps per rendering step
-    act_moving_average = 1.0
+    physics_dt = PHYSICS_DT
+    decimation = DECIMATION
+    # Must assign default; `sim: roto_sim_cfg` alone only annotates and leaves DirectRLEnvCfg's SimulationCfg().
+    sim: SimulationCfg = roto_sim_cfg
 
     # Isaac 4.5 compatibility
     observation_space = 0
@@ -52,19 +52,6 @@ class RotoEnvCfg(DirectRLEnvCfg):
     obs_stack: int = 1
     pixel_cfg: dict | None = None
     tactile_cfg: dict | None = None
-
-    # Simulation configuration
-    sim: SimulationCfg = SimulationCfg(
-        dt=physics_dt,
-        render_interval=decimation,
-        physics_material=RigidBodyMaterialCfg(
-            static_friction=1.0,
-            dynamic_friction=1.0,
-        ),
-        physx=PhysxCfg(
-            bounce_threshold_velocity=0.2,
-        ),
-    )
 
     # Scene configuration
     replicate_physics = True
@@ -82,7 +69,7 @@ class RotoEnvCfg(DirectRLEnvCfg):
     eye = (0.0, -0.6, 0.65)
     target = (0.0, -0.35, 0.5)
 
-    render_cfg = sim_utils.RenderCfg(rendering_mode="quality")
+    render_cfg = sim_utils.RenderCfg() #rendering_mode="quality")
 
     # tactile sensor configuration
     robot_contact_sensor_cfg = None
@@ -121,6 +108,13 @@ class RotoEnv(DirectRLEnv):
 
         super().__init__(cfg, render_mode, **kwargs)
 
+        print("--------------------------------")
+        print("RL frequency: ", 1 / (self.cfg.sim.dt * self.cfg.decimation))
+        print("Physics frequency: ", 1 / self.cfg.sim.dt)
+        print("Episode length: ", self.cfg.episode_length_s)
+        print("Episode length in steps: ", self.cfg.episode_length_s / (self.cfg.sim.dt * self.cfg.decimation))
+        print("--------------------------------")
+
         # Joint limits and targets
         self.robot_joint_pos_lower_limits = self.robot.data.soft_joint_pos_limits[0, :, 0].to(device=self.device)
         self.robot_joint_pos_upper_limits = self.robot.data.soft_joint_pos_limits[0, :, 1].to(device=self.device)
@@ -128,6 +122,7 @@ class RotoEnv(DirectRLEnv):
 
         self.joint_pos_cmd = torch.zeros((self.num_envs, self.robot.num_joints), device=self.device)
         self.prev_joint_pos_cmd = torch.zeros((self.num_envs, self.robot.num_joints), device=self.device)
+        self.joint_pos_error = torch.zeros((self.num_envs, self.robot.num_joints), device=self.device)
 
         # Indices of actuated joints
         self.actuated_dof_indices = [
@@ -161,6 +156,10 @@ class RotoEnv(DirectRLEnv):
             )
             self._tiled_camera.set_world_poses_from_view(eyes=eyes, targets=targets)
         
+        # Current / previous-step tactile (contact) readings for tasks (bounce, logging, etc.).
+        self.tactile = torch.zeros((self.num_envs, 0), device=self.device)
+        self.last_tactile = torch.zeros((self.num_envs, 0), device=self.device)
+
         # Visualize evaluation environment markers (pink boxes)
         if self.cfg.num_eval_envs > 0 and hasattr(self, "eval_markers"):
             # Position markers at evaluation environment origins (first num_eval_envs)
@@ -215,32 +214,21 @@ class RotoEnv(DirectRLEnv):
         Args:
             actions: Actions from the policy.
         """
-        self.last_action = self.joint_pos_cmd[:, self.actuated_dof_indices]
+
+        self.prev_joint_pos_cmd[:] = self.joint_pos_cmd
         self.actions = actions.clone()
 
-    def _apply_action(self) -> None:
-        """Apply actions to the robot.
-
-        Called multiple times per RL step for decimation. Applies action smoothing
-        and clamps actions to joint limits.
-        """
         self.joint_pos_cmd[:, self.actuated_dof_indices] = scale(
             self.actions,
             self.robot_joint_pos_lower_limits[self.actuated_dof_indices],
             self.robot_joint_pos_upper_limits[self.actuated_dof_indices],
         )
-        self.joint_pos_cmd[:, self.actuated_dof_indices] = (
-            self.cfg.act_moving_average * self.joint_pos_cmd[:, self.actuated_dof_indices]
-            + (1.0 - self.cfg.act_moving_average) * self.prev_joint_pos_cmd[:, self.actuated_dof_indices]
-        )
-        self.joint_pos_cmd[:, self.actuated_dof_indices] = saturate(
-            self.joint_pos_cmd[:, self.actuated_dof_indices],
-            self.robot_joint_pos_lower_limits[self.actuated_dof_indices],
-            self.robot_joint_pos_upper_limits[self.actuated_dof_indices],
-        )
 
-        self.prev_joint_pos_cmd[:, self.actuated_dof_indices] = self.joint_pos_cmd[:, self.actuated_dof_indices]
+    def _apply_action(self) -> None:
+        """Apply actions to the robot.
 
+        Called multiple times per RL step for decimation. 
+        """
         self.robot.set_joint_position_target(
             self.joint_pos_cmd[:, self.actuated_dof_indices], joint_ids=self.actuated_dof_indices
         )
@@ -282,8 +270,9 @@ class RotoEnv(DirectRLEnv):
         """
         prop = torch.cat(
             (
-                self.normalised_joint_pos,
-                self.normalised_joint_vel,
+                self.normalised_joint_pos[:, self.actuated_dof_indices],
+                self.normalised_joint_vel[:, self.actuated_dof_indices],
+                self.joint_pos_error[:, self.actuated_dof_indices],
                 self.actions,
             ),
             dim=-1,
@@ -368,9 +357,9 @@ class RotoEnv(DirectRLEnv):
         # Convert to binary activations based on threshold if binary_tactile is True
         if self.tactile_cfg is not None and self.tactile_cfg["binary_tactile"]:
             norm = (norm > self.binary_threshold).float()
-            return norm
-        else:
-            return norm
+        self.last_tactile = self.tactile
+        self.tactile = norm
+        return norm
 
     def _reset_robot(self, env_ids, joint_pos_noise=0.125):
         """Reset the robot joint positions and velocities.
@@ -405,17 +394,17 @@ class RotoEnv(DirectRLEnv):
         self.joint_pos[env_ids] = self.robot.data.joint_pos[env_ids]
         self.joint_vel[env_ids] = self.robot.data.joint_vel[env_ids]
         self.joint_acc[env_ids] = self.robot.data.joint_acc[env_ids]
+        self.joint_pos_error[env_ids] = self.joint_pos_cmd[env_ids] - self.joint_pos[env_ids]
 
         # Normalize joint positions
         self.normalised_joint_pos[env_ids] = unscale(
             self.joint_pos[env_ids], self.robot_joint_pos_lower_limits, self.robot_joint_pos_upper_limits
         )
         # Normalize velocities by dividing by a fixed scale factor
-        # Note: An alternative normalization using joint velocity limits is commented below
         self.normalised_joint_vel[env_ids] = self.joint_vel[env_ids] / 3.0
-        # self.normalised_joint_vel[env_ids] = unscale(
-        #     self.joint_vel[env_ids], -self.robot_joint_vel_limits, self.robot_joint_vel_limits
-        # )
+        self.normalised_joint_vel[env_ids] = unscale(
+            self.joint_vel[env_ids], -self.robot_joint_vel_limits, self.robot_joint_vel_limits
+        )
 
 
 @torch.jit.script
