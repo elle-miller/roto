@@ -5,7 +5,16 @@
      style="display: block; margin: 0 auto;"/>
 
 
-RoTO is a **reinforcement learning benchmark environment** designed to standardise and promote future research in tactile-based manipulation. The environments are designed to cover a wide range of tactile interactions: sparse (Find), intermittent (Bounce), and sustained (Baoding). We will continue to add more environments and strongly welcome contributions 🤗
+RoTO is a **reinforcement learning benchmark environment** designed to standardise and promote future research in tactile-based manipulation. We will continue to add more environments and strongly welcome contributions 🤗
+
+### Key features
+ - 5 robot embodiments: 4× hands + 1× arm (Allegro Hand, ORCA Hand, Shadow Dexterous Hand, Shadow Dexterous Hand Lite, Franka)
+ - 3 tactile-diverse tasks to cover sparse, intermittent, and sustained interactions: find an object, ball bouncing, and Baoding ball rotation</li>
+ - Integrated hyperparameter optimisation with optuna — essential for tactile agents but often missing ❗
+ - Well-tuned baselines for each robot-task-agent combo (40-trial sweep) that reach state-of-the-art speeds in sim
+
+
+### Version history
 - `roto 1.0` included the Find (Franka), Bounce & Baoding (Shadow Hand) tasks. It was introduced in [Enhancing Tactile-based RL for Robotic Control](https://elle-miller.github.io/tactile_rl/) (NeurIPS 2025), which shows that blind superhuman dexterity is possible with sparse binary contacts + self-supervision.
 - `roto 2.0` is extended to include the Allegro, ORCA, and Shadow Dexterous Hand Lite robots for the Bounce & Baoding tasks. We swept hyperparameters for the full state & blind agents, and benchmarked the results in a 2-page writeup [here](). The checkpoints/logs are [here]().
 
@@ -183,58 +192,56 @@ If you use this benchmark environment in your academic or professional research,
 
 ## Videos
 
-### Baoding: Shadow, Allegro, ORCA, Shadow Lite
+**States+Proprio+Binary Tactile** (vision, left) | **Proprio+Binary Tactile** (blind, right). Full-quality `.mp4` files: [project page](https://elle-miller.github.io/roto/) or `readme_assets/roto2_videos/`. Regenerate GIFs: `bash scripts/roto2_mp4_to_gif.sh` (default 60 fps, 320 px for side-by-side; `FORCE=1 WIDTH=400 ...` to override).
 
-Videos are paired left-to-right: **States+Proprio+Binary Tactile** (vision) | **Proprio+Binary Tactile** (blind).
+### Baoding: Shadow, Allegro, ORCA, Shadow Lite
 
 **Shadow Hand**
 
 | Vision | Blind |
 | :---: | :---: |
-| <video src="readme_assets/roto2_videos/shadow_baoding_vision.mp4" controls width="400"></video> | <video src="readme_assets/roto2_videos/shadow_baoding_blind.mp4" controls width="400"></video> |
+| <img src="readme_assets/roto2_gifs/shadow_baoding_vision.gif" width="320" alt="Shadow Baoding vision"> | <img src="readme_assets/roto2_gifs/shadow_baoding_blind.gif" width="320" alt="Shadow Baoding blind"> |
 
 **Allegro Hand**
 
 | Vision | Blind |
 | :---: | :---: |
-| <video src="readme_assets/roto2_videos/allegro_baoding_vision.mp4" controls width="400"></video> | <video src="readme_assets/roto2_videos/allegro_baoding_blind.mp4" controls width="400"></video> |
+| <img src="readme_assets/roto2_gifs/allegro_baoding_vision.gif" width="320" alt="Allegro Baoding vision"> | <img src="readme_assets/roto2_gifs/allegro_baoding_blind.gif" width="320" alt="Allegro Baoding blind"> |
 
 **ORCA Hand**
 
 | Vision | Blind |
 | :---: | :---: |
-| <video src="readme_assets/roto2_videos/orca_baoding_vision.mp4" controls width="400"></video> | <video src="readme_assets/roto2_videos/orca_baoding_blind.mp4" controls width="400"></video> |
+| <img src="readme_assets/roto2_gifs/orca_baoding_vision.gif" width="320" alt="ORCA Baoding vision"> | <img src="readme_assets/roto2_gifs/orca_baoding_blind.gif" width="320" alt="ORCA Baoding blind"> |
 
 **Shadow Dexterous Hand Lite**
 
 | Vision | Blind |
 | :---: | :---: |
-| <video src="readme_assets/roto2_videos/lite_baoding_vision.mp4" controls width="400"></video> | <video src="readme_assets/roto2_videos/lite_baoding_blind.mp4" controls width="400"></video> |
+| <img src="readme_assets/roto2_gifs/lite_baoding_vision.gif" width="320" alt="Shadow Lite Baoding vision"> | <img src="readme_assets/roto2_gifs/lite_baoding_blind.gif" width="320" alt="Shadow Lite Baoding blind"> |
 
 ### Bounce: Shadow, Allegro, ORCA, Shadow Lite
 
-Videos are paired left-to-right: **States+Proprio+Binary Tactile** (vision) | **Proprio+Binary Tactile** (blind).
-
 **Shadow Hand**
 
 | Vision | Blind |
 | :---: | :---: |
-| <video src="readme_assets/roto2_videos/shadow_bounce_vision.mp4" controls width="400"></video> | <video src="readme_assets/roto2_videos/shadow_bounce_blind.mp4" controls width="400"></video> |
+| <img src="readme_assets/roto2_gifs/shadow_bounce_vision.gif" width="320" alt="Shadow Bounce vision"> | <img src="readme_assets/roto2_gifs/shadow_bounce_blind.gif" width="320" alt="Shadow Bounce blind"> |
 
 **Allegro Hand**
 
 | Vision | Blind |
 | :---: | :---: |
-| <video src="readme_assets/roto2_videos/allegro_bounce_vision.mp4" controls width="400"></video> | <video src="readme_assets/roto2_videos/allegro_bounce_blind.mp4" controls width="400"></video> |
+| <img src="readme_assets/roto2_gifs/allegro_bounce_vision.gif" width="320" alt="Allegro Bounce vision"> | <img src="readme_assets/roto2_gifs/allegro_bounce_blind.gif" width="320" alt="Allegro Bounce blind"> |
 
 **ORCA Hand**
 
 | Vision | Blind |
 | :---: | :---: |
-| <video src="readme_assets/roto2_videos/orca_bounce_vision.mp4" controls width="400"></video> | <video src="readme_assets/roto2_videos/orca_bounce_blind.mp4" controls width="400"></video> |
+| <img src="readme_assets/roto2_gifs/orca_bounce_vision.gif" width="320" alt="ORCA Bounce vision"> | <img src="readme_assets/roto2_gifs/orca_bounce_blind.gif" width="320" alt="ORCA Bounce blind"> |
 
 **Shadow Dexterous Hand Lite**
 
 | Vision | Blind |
 | :---: | :---: |
-| <video src="readme_assets/roto2_videos/lite_bounce_vision.mp4" controls width="400"></video> | <video src="readme_assets/roto2_videos/lite_bounce_blind.mp4" controls width="400"></video> |
+| <img src="readme_assets/roto2_gifs/lite_bounce_vision.gif" width="320" alt="Shadow Lite Bounce vision"> | <img src="readme_assets/roto2_gifs/lite_bounce_blind.gif" width="320" alt="Shadow Lite Bounce blind"> |
