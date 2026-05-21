@@ -121,11 +121,13 @@ Mostly the same as default Isaac Lab setup. The only breaking change is that a g
 
 We use `opunta` for integrated hyperparameter optimisation. The command is the same as for `train.py`, but with an additional `--study` name argument. You can specify the pruner, number of trials, number of warm up steps etc.
 
-The basic command is below: where
-- {TASK} = Find,Bounce,Baoding
-- {ROBOT} = Shadow,Allegro,ORCA,
-- {CFG} = rl_only_pt, rl_only_ptg, forward_dynamics, etc. or define your own
+The basic command is below. Note that when running for the first time, you will need to update your wandb entity, project etc. in the relevant .yaml file.
+
 ```
+- {TASK} = [Find, Bounce, Baoding]
+- {ROBOT} = [shadow, shadowlite, orca, allegro, franka]
+- {CFG} = rl_only_pt (blind setting), rl_only_ptg (vision setting), forward_dynamics (blind + self-supervision), etc. or define your own
+
 # training
 python scripts/train.py --task {TASK} --robot {ROBOT} --agent_cfg {CFG} --num_envs 4196 --headless --seed 1234 
 
@@ -133,6 +135,13 @@ python scripts/train.py --task {TASK} --robot {ROBOT} --agent_cfg {CFG} --num_en
 python scripts/sweep.py --task {TASK} --robot {ROBOT} --agent_cfg {CFG} --num_envs 4196 --headless --seed 1234 --study {YOUR_STUDY_NAME}
 
 # playing - see final step in installation
+
+# examples
+python scripts/train.py --task Baoding --robot shadow --agent_cfg rl_only_pt --num_envs 4196 --headless
+python scripts/train.py --task Bounce --robot orca --agent_cfg rl_only_ptg --num_envs 4196 --headless
+python scripts/train.py --task Find --robot franka --agent_cfg forward_dynamics --num_envs 4196 --headless
+python scripts/sweep.py --task Baoding --robot shadowlite --agent_cfg rl_only_pt --num_envs 4196 --headless --study lite_baoding_blind
+
 ```
 
 ## 🤗 Contributing
