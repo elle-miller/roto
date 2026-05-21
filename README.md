@@ -5,17 +5,13 @@
      style="display: block; margin: 0 auto;"/>
 
 
-RoTO is a **reinforcement learning benchmark environment** designed to standardise and promote future research in tactile-based manipulation. We will continue to add more environments and strongly welcome contributions 🤗
+RoTO is a **reinforcement learning benchmark environment** designed to standardise and promote future research in tactile-based manipulation. The reason we made this is because tactile RL is hard! We are dealing with a trifecta of manipulation, on-policy RL, and ML-unfriendly tactile data. By open-sourcing our environments and robustly tuned baselines, we hope to reduce the barrier to entry and enable researchers to prioritise fundamental algorithmic challenges over tedious RL tuning. We will continue to add more environments and strongly welcome contributions 🤗
 
 ### Key features
  - 5 robot embodiments: 4× hands + 1× arm (Allegro Hand, ORCA Hand, Shadow Dexterous Hand, Shadow Dexterous Hand Lite, Franka)
- - 3 tactile-diverse tasks to cover sparse, intermittent, and sustained interactions: find an object, ball bouncing, and Baoding ball rotation</li>
+ - 3 tactile-diverse tasks to cover sparse, intermittent, and sustained interactions: find an object, ball bouncing, and Baoding ball rotation
  - Integrated hyperparameter optimisation with optuna — essential for tactile agents but often missing ❗
  - Well-tuned baselines for each robot-task-agent combo (40-trial sweep) that reach state-of-the-art speeds in sim
-
-Tactile RL is hard! We are dealing with a trifecta of manipulation, on-policy RL, and ML-unfriendly tactile data. We made `roto` to promote standardisation and reduce the barrier-to-entry for researchers interesting in exploring this space.
-
-We demonstrate a significant performance leap, with our blind agents achieving 13 Baoding ball rotations in 10 seconds, an order of magnitude faster than current state-of-the-art speeds. By open-sourcing our environments and robustly tuned baselines, we reduce the barrier to entry and enable researchers to prioritise fundamental algorithmic challenges over tedious RL tuning.
 
 ### Version history
 - `roto 1.0` included the Find (Franka), Bounce & Baoding (Shadow Hand) tasks. It was introduced in [Enhancing Tactile-based RL for Robotic Control](https://elle-miller.github.io/tactile_rl/) (NeurIPS 2025), which shows that blind superhuman dexterity is possible with sparse binary contacts + self-supervision.
@@ -121,7 +117,7 @@ Mostly the same as default Isaac Lab setup. The only breaking change is that a g
 
 We use `opunta` for integrated hyperparameter optimisation. The command is the same as for `train.py`, but with an additional `--study` name argument. You can specify the pruner, number of trials, number of warm up steps etc.
 
-The basic command is below. Note that when running for the first time, you will need to update your wandb entity, project etc. in the relevant .yaml file.
+The basic commands are below. Note that when running for the first time, you will need to update your wandb entity, project etc. in the relevant .yaml file, and possibly some asset paths.
 
 ```
 - {TASK} = [Find, Bounce, Baoding]
@@ -163,10 +159,29 @@ If you use this benchmark environment in your academic or professional research,
 }
 ```
 
+## Contributors
+
+`roto 2.0` (ICRA ViTac Workshop paper): original contributors with addition of:
+- Jayaram Reddy — National University of Singapore
+- [Ayush Deshmukh](https://www.linkedin.com/in/ayush-deshmukh-64b2b5226/) — University of Edinburgh
+
+`roto 1.0` (NeurIPS 2025 paper): see citation above.
+
+## 📧 Contact
+
+For any questions, issues, or collaborations, please feel free to post an issue/start a discussion/reach out.
+
+- Maintainer: Elle Miller
+- Project Website: https://elle-miller.github.io/tactile_rl
+
+This project is licensed under the BSD-3 License.
+
 
 ## Videos
 
-**States+Proprio+Binary Tactile** (vision, left) | **Proprio+Binary Tactile** (blind, right). Full gallery: [project page](https://elle-miller.github.io/roto/).
+Full gallery: [project page](https://elle-miller.github.io/roto/).
+
+In the below videos, "Vision" means the agent had access to object states, proprioception, and binary contacts. "Blind" means the agent only had proprioception and binary contacts. 
 
 ### Baoding task
 
@@ -252,11 +267,4 @@ If you use this benchmark environment in your academic or professional research,
 </tr>
 </table>
 
-## 📧 Contact
 
-For any questions, issues, or collaborations, please feel free to post an issue/start a discussion/reach out.
-
-- Maintainer: Elle Miller
-- Project Website: https://elle-miller.github.io/tactile_rl
-
-This project is licensed under the BSD-3 License.
