@@ -181,7 +181,7 @@ If you use this benchmark environment in your academic or professional research,
 
 ## Videos
 
-**States+Proprio+Binary Tactile** (vision, left) | **Proprio+Binary Tactile** (blind, right). Full gallery: [project page](https://elle-miller.github.io/roto/).
+**States+Proprio+Binary Tactile** (vision, left) | **Proprio+Binary Tactile** (blind, right). Full gallery: [project page](https://elle-miller.github.io/roto/). Paused preview uses `poster` images from `readme_assets/roto2_posters/` (GitHub-hosted videos often show black until play).
 
 ### Baoding task
 
@@ -190,8 +190,8 @@ If you use this benchmark environment in your academic or professional research,
 <table>
 <tr><th>Vision</th><th>Blind</th></tr>
 <tr>
-<td><video src="https://github.com/user-attachments/assets/f22b42c1-4fed-466b-bbce-0ccb6532a074" autoplay controls muted loop playsinline width="100%"></video></td>
-<td><video src="https://github.com/user-attachments/assets/94b710d8-b7d2-4ded-b0ef-e1d942154dd2" autoplay controls muted loop playsinline width="100%"></video></td>
+<td><video src="https://github.com/user-attachments/assets/f22b42c1-4fed-466b-bbce-0ccb6532a074" poster="readme_assets/roto2_posters/shadow_baoding_vision.jpg" controls preload="metadata" playsinline width="100%"></video></td>
+<td><video src="https://github.com/user-attachments/assets/94b710d8-b7d2-4ded-b0ef-e1d942154dd2" poster="readme_assets/roto2_posters/shadow_baoding_blind.jpg" controls preload="metadata" playsinline width="100%"></video></td>
 </tr>
 </table>
 
@@ -200,8 +200,8 @@ If you use this benchmark environment in your academic or professional research,
 <table>
 <tr><th>Vision</th><th>Blind</th></tr>
 <tr>
-<td><video src="https://github.com/user-attachments/assets/49e58414-7b50-4fd9-93b5-612dbc22a91a" autoplay controls muted loop playsinline width="100%"></video></td>
-<td><video src="https://github.com/user-attachments/assets/86984b31-bfdf-4dbd-89e8-deb575e50688" autoplay controls muted loop playsinline width="100%"></video></td>
+<td><video src="https://github.com/user-attachments/assets/49e58414-7b50-4fd9-93b5-612dbc22a91a" poster="readme_assets/roto2_posters/allegro_baoding_vision.jpg" controls preload="metadata" playsinline width="100%"></video></td>
+<td><video src="https://github.com/user-attachments/assets/86984b31-bfdf-4dbd-89e8-deb575e50688" poster="readme_assets/roto2_posters/allegro_baoding_blind.jpg" controls preload="metadata" playsinline width="100%"></video></td>
 </tr>
 </table>
 
@@ -210,8 +210,8 @@ If you use this benchmark environment in your academic or professional research,
 <table>
 <tr><th>Vision</th><th>Blind</th></tr>
 <tr>
-<td><video src="https://github.com/user-attachments/assets/19e2c878-1c4e-4ba3-8792-1d9b0f4d8f76" autoplay controls muted loop playsinline width="100%"></video></td>
-<td><video src="https://github.com/user-attachments/assets/5c55d6da-52ed-4479-973d-e9d2b9a73352" autoplay controls muted loop playsinline width="100%"></video></td>
+<td><video src="https://github.com/user-attachments/assets/19e2c878-1c4e-4ba3-8792-1d9b0f4d8f76" poster="readme_assets/roto2_posters/orca_baoding_vision.jpg" controls preload="metadata" playsinline width="100%"></video></td>
+<td><video src="https://github.com/user-attachments/assets/5c55d6da-52ed-4479-973d-e9d2b9a73352" poster="readme_assets/roto2_posters/orca_baoding_blind.jpg" controls preload="metadata" playsinline width="100%"></video></td>
 </tr>
 </table>
 
@@ -220,8 +220,8 @@ If you use this benchmark environment in your academic or professional research,
 <table>
 <tr><th>Vision</th><th>Blind</th></tr>
 <tr>
-<td><video src="https://github.com/user-attachments/assets/c8a1d95c-10e9-4402-9a9f-ce5a52cdaa9f" autoplay controls muted loop playsinline width="100%"></video></td>
-<td><video src="https://github.com/user-attachments/assets/c6acc1c1-3133-44ab-85a1-91da06c2b0b5" autoplay controls muted loop playsinline width="100%"></video></td>
+<td><video src="https://github.com/user-attachments/assets/c8a1d95c-10e9-4402-9a9f-ce5a52cdaa9f" poster="readme_assets/roto2_posters/lite_baoding_vision.jpg" controls preload="metadata" playsinline width="100%"></video></td>
+<td><video src="https://github.com/user-attachments/assets/c6acc1c1-3133-44ab-85a1-91da06c2b0b5" poster="readme_assets/roto2_posters/lite_baoding_blind.jpg" controls preload="metadata" playsinline width="100%"></video></td>
 </tr>
 </table>
 
@@ -232,8 +232,8 @@ If you use this benchmark environment in your academic or professional research,
 <table>
 <tr><th>Vision</th><th>Blind</th></tr>
 <tr>
-<td><video src="https://github.com/user-attachments/assets/ddc1ca07-67d4-4c7d-a3d1-854e3b8b453d" autoplay controls muted loop playsinline width="100%"></video></td>
-<td><video src="https://github.com/user-attachments/assets/eadd9bb1-f65e-4b06-9d1c-22f48c0488e7" autoplay controls muted loop playsinline width="100%"></video></td>
+<td><video src="https://github.com/user-attachments/assets/ddc1ca07-67d4-4c7d-a3d1-854e3b8b453d" poster="readme_assets/roto2_posters/shadow_bounce_vision.jpg" controls preload="metadata" playsinline width="100%"></video></td>
+<td><video src="https://github.com/user-attachments/assets/eadd9bb1-f65e-4b06-9d1c-22f48c0488e7" poster="readme_assets/roto2_posters/shadow_bounce_blind.jpg" controls preload="metadata" playsinline width="100%"></video></td>
 </tr>
 </table>
 
@@ -242,8 +242,8 @@ If you use this benchmark environment in your academic or professional research,
 <table>
 <tr><th>Vision</th><th>Blind</th></tr>
 <tr>
-<td><video src="https://github.com/user-attachments/assets/4a1182f9-6e41-46bc-a192-dcccfb7d9ff6" autoplay controls muted loop playsinline width="100%"></video></td>
-<td><video src="https://github.com/user-attachments/assets/82f16a08-81a1-4b68-b86b-5ebe026285c2" autoplay controls muted loop playsinline width="100%"></video></td>
+<td><video src="https://github.com/user-attachments/assets/4a1182f9-6e41-46bc-a192-dcccfb7d9ff6" poster="readme_assets/roto2_posters/allegro_bounce_vision.jpg" controls preload="metadata" playsinline width="100%"></video></td>
+<td><video src="https://github.com/user-attachments/assets/82f16a08-81a1-4b68-b86b-5ebe026285c2" poster="readme_assets/roto2_posters/allegro_bounce_blind.jpg" controls preload="metadata" playsinline width="100%"></video></td>
 </tr>
 </table>
 
@@ -252,8 +252,8 @@ If you use this benchmark environment in your academic or professional research,
 <table>
 <tr><th>Vision</th><th>Blind</th></tr>
 <tr>
-<td><video src="https://github.com/user-attachments/assets/eec4dcae-5d4c-4ffa-b5b8-a993871bd15d" autoplay controls muted loop playsinline width="100%"></video></td>
-<td><video src="https://github.com/user-attachments/assets/25158d10-4ae6-417c-9eef-030107709fe8" autoplay controls muted loop playsinline width="100%"></video></td>
+<td><video src="https://github.com/user-attachments/assets/eec4dcae-5d4c-4ffa-b5b8-a993871bd15d" poster="readme_assets/roto2_posters/orca_bounce_vision.jpg" controls preload="metadata" playsinline width="100%"></video></td>
+<td><video src="https://github.com/user-attachments/assets/25158d10-4ae6-417c-9eef-030107709fe8" poster="readme_assets/roto2_posters/orca_bounce_blind.jpg" controls preload="metadata" playsinline width="100%"></video></td>
 </tr>
 </table>
 
@@ -262,8 +262,8 @@ If you use this benchmark environment in your academic or professional research,
 <table>
 <tr><th>Vision</th><th>Blind</th></tr>
 <tr>
-<td><video src="https://github.com/user-attachments/assets/e57d20b0-66bf-47ee-b5d9-39bb6ba77124" autoplay controls muted loop playsinline width="100%"></video></td>
-<td><video src="https://github.com/user-attachments/assets/2e66bc18-67e1-4aa2-b458-ffa5792e25d0" autoplay controls muted loop playsinline width="100%"></video></td>
+<td><video src="https://github.com/user-attachments/assets/e57d20b0-66bf-47ee-b5d9-39bb6ba77124" poster="readme_assets/roto2_posters/lite_bounce_vision.jpg" controls preload="metadata" playsinline width="100%"></video></td>
+<td><video src="https://github.com/user-attachments/assets/2e66bc18-67e1-4aa2-b458-ffa5792e25d0" poster="readme_assets/roto2_posters/lite_bounce_blind.jpg" controls preload="metadata" playsinline width="100%"></video></td>
 </tr>
 </table>
 
