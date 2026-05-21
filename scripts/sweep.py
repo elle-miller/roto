@@ -24,9 +24,29 @@ parser.add_argument("--video_length", type=int, default=600, help="Length of the
 parser.add_argument("--video_interval", type=int, default=500, help="Interval between video recordings (in steps).")
 parser.add_argument("--num_envs", type=int, default=None, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default=None, help="Name of the task.")
+parser.add_argument(
+    "--robot",
+    type=str,
+    default=None,
+    help="Robot: Bounce/Baoding → shadow|shadowlite|orca|allegro; Find → franka. Defaults: shadow or franka.",
+)
 parser.add_argument("--agent_cfg", type=str, default=None, help="Name of the config.")
 parser.add_argument("--seed", type=int, default=None, help="Seed used for the environment")
 parser.add_argument("--study", type=str, default="default", help="study name")
+parser.add_argument(
+    "--rerun-trial",
+    type=int,
+    default=None,
+    metavar="N",
+    help="Load trial N from the existing Optuna study (--study) and run it on multiple seeds; skips the sweep.",
+)
+parser.add_argument(
+    "--rerun-seeds",
+    type=int,
+    nargs="+",
+    default=None,
+    help="Seeds for --rerun-trial (default: 5 6 7 8 9 10).",
+)
 
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
@@ -45,12 +65,16 @@ import isaaclab_tasks  # noqa: F401
 import optuna
 from common_utils import (
     LOG_PATH,
+    load_hand_task_agent_cfg,
     make_aux,
     make_env,
     make_memory,
     make_models,
     make_trainer,
+    register_hand_task_to_hydra,
+    resolve_gym_env_id,
     set_seed,
+    train_one_seed,
     update_env_cfg,
 )
 from isaaclab.utils import update_dict
@@ -59,6 +83,24 @@ from isaaclab_tasks.utils.parse_cfg import load_cfg_from_registry
 
 from multimodal_rl.rl.ppo import PPO, PPO_DEFAULT_CONFIG
 from multimodal_rl.tools.writer import Writer
+
+
+def apply_optuna_trial_params(agent_cfg: dict, trial: optuna.trial.FrozenTrial) -> None:
+    """Copy hyperparameters from a stored Optuna trial into ``agent_cfg``."""
+    p = trial.params
+    agent_cfg["agent"]["rollouts"] = 2 ** p["rollouts_pow"]
+    agent_cfg["agent"]["mini_batches"] = p["mini_batches"]
+    agent_cfg["agent"]["learning_epochs"] = p["learning_epochs"]
+    agent_cfg["agent"]["learning_rate"] = p["learning_rate"]
+    agent_cfg["agent"]["entropy_loss_scale"] = p["entropy_loss_scale"]
+    agent_cfg["agent"]["value_loss_scale"] = p["value_loss_scale"]
+    agent_cfg["agent"]["ratio_clip"] = p["ratio_clip"]
+
+    if "ssl_task" in agent_cfg:
+        agent_cfg["ssl_task"]["learning_rate"] = p["learning_rate_aux"]
+        agent_cfg["ssl_task"]["loss_weight"] = p["loss_weight_aux"]
+        if agent_cfg["ssl_task"]["type"] == "forward_dynamics":
+            agent_cfg["ssl_task"]["seq_length"] = p["seq_length"]
 
 
 class OptimisationRunner:
@@ -73,7 +115,7 @@ class OptimisationRunner:
             n_warmup_steps: Number of warmup steps for the pruner.
             interval_steps: Interval steps for the pruner.
         """
-        self.sampler = optuna.samplers.TPESampler(n_startup_trials=n_startup_trials)
+        self.sampler = optuna.samplers.TPESampler(n_startup_trials=n_startup_trials, multivariate=True)
 
         self.pruner = optuna.pruners.MedianPruner(
             n_startup_trials=n_startup_trials, n_warmup_steps=n_warmup_steps, interval_steps=interval_steps
@@ -145,22 +187,24 @@ class OptimisationRunner:
         set_seed(agent_cfg["seed"])
 
         # Suggest PPO hyperparameters
-        # Note: Memory issues can occur with large rollouts + aux tasks
-        if "ssl_task" in agent_cfg:
-            if agent_cfg["ssl_task"]["type"] == "forward_dynamics":
-                rollouts = trial.suggest_categorical("rollouts", [16, 32])
-            else:
-                rollouts = trial.suggest_categorical("rollouts", [16, 32, 64, 96])
+        # Note: Memory issues can occur with large rollouts + aux tasks     
+        if "ssl_task" in agent_cfg and agent_cfg["ssl_task"]["type"] == "forward_dynamics":
+            max_rollouts_pow = 5
+            
         else:
-            rollouts = trial.suggest_categorical("rollouts", [16, 32, 64, 96])
+            max_rollouts_pow = 6
+
+        rollouts = 2 ** trial.suggest_int("rollouts_pow", 4, max_rollouts_pow) # 16, 32, 64
         mini_batches = trial.suggest_categorical("mini_batches", [4, 8, 16, 32])
-        learning_epochs = trial.suggest_int("learning_epochs", low=5, high=20, step=1)
-        learning_rate = trial.suggest_float("learning_rate", low=1e-6, high=0.003, log=True)
-        entropy_loss_scale = trial.suggest_float("entropy_loss_scale", low=0, high=0.5)
-        value_loss_scale = trial.suggest_float("value_loss_scale", low=0, high=1.0)
-        value_clip = trial.suggest_float("value_clip", low=0, high=0.3)
-        ratio_clip = trial.suggest_float("ratio_clip", low=0, high=0.3)
-        gae_lambda = trial.suggest_float("gae_lambda", low=0.9, high=0.99)
+        learning_epochs = trial.suggest_int("learning_epochs", low=4, high=10, step=1)
+        learning_rate = trial.suggest_float("learning_rate", low=1e-5, high=5e-4, log=True)
+        entropy_loss_scale = trial.suggest_float("entropy_loss_scale", 1e-4, 0.01, log=True)
+        value_loss_scale = trial.suggest_float("value_loss_scale", low=0.1, high=1.0, log=True)
+        ratio_clip = trial.suggest_float("ratio_clip", low=0.1, high=0.2)
+
+        # Cap mini_batches for forward dynamics
+        if "ssl_task" in agent_cfg and agent_cfg["ssl_task"]["type"] == "forward_dynamics":
+            mini_batches = min(mini_batches, 8)
 
         agent_cfg["agent"]["rollouts"] = rollouts
         agent_cfg["agent"]["mini_batches"] = mini_batches
@@ -168,24 +212,18 @@ class OptimisationRunner:
         agent_cfg["agent"]["learning_rate"] = learning_rate
         agent_cfg["agent"]["entropy_loss_scale"] = entropy_loss_scale
         agent_cfg["agent"]["value_loss_scale"] = value_loss_scale
-        agent_cfg["agent"]["value_clip"] = value_clip
         agent_cfg["agent"]["ratio_clip"] = ratio_clip
-        agent_cfg["agent"]["lambda"] = gae_lambda
 
         # Suggest SSL task hyperparameters if applicable
         if "ssl_task" in agent_cfg:
-            learning_rate_aux = trial.suggest_float("learning_rate_aux", low=1e-5, high=1e-3, log=True)
-            loss_weight_aux = trial.suggest_float("loss_weight_aux", low=1e-3, high=10, log=True)
-            learning_epochs_ratio = trial.suggest_categorical("learning_epochs_ratio", [0.25, 0.5, 0.75, 1.0])
+            learning_rate_aux = trial.suggest_float("learning_rate_aux", low=1e-5, high=5e-4, log=True)
+            loss_weight_aux = trial.suggest_float("loss_weight_aux", low=1e-3, high=1, log=True)
 
             agent_cfg["ssl_task"]["learning_rate"] = learning_rate_aux
             agent_cfg["ssl_task"]["loss_weight"] = loss_weight_aux
-            agent_cfg["ssl_task"]["learning_epochs_ratio"] = learning_epochs_ratio
 
             if agent_cfg["ssl_task"]["type"] == "forward_dynamics":
-                # Cap sequence length to avoid long training times
-                seq_length = trial.suggest_int("seq_length", low=2, high=8, step=1)
-                seq_length = min(seq_length, 7)
+                seq_length = trial.suggest_int("seq_length", low=2, high=10, step=1)
                 agent_cfg["ssl_task"]["seq_length"] = seq_length
 
         # Setup models
@@ -235,14 +273,19 @@ class OptimisationRunner:
 
 
 if __name__ == "__main__":
-    print("Running sweep with Optuna")
-
-    sweep = False
+    if args_cli.rerun_trial is not None:
+        print(f"Rerun trial {args_cli.rerun_trial} on multiple seeds (skipping Optuna sweep)")
+    else:
+        print("Running sweep with Optuna")
 
     # Parse configuration
-    env_cfg, agent_cfg = register_task_to_hydra(args_cli.task, "default_cfg")
-
-    specialised_cfg = load_cfg_from_registry(args_cli.task, args_cli.agent_cfg)
+    args_cli.gym_env_id = resolve_gym_env_id(args_cli.task, args_cli.robot)
+    if args_cli.task in ("Bounce", "Baoding"):
+        env_cfg, agent_cfg = register_hand_task_to_hydra(args_cli.task, args_cli.robot, "default_cfg")
+        specialised_cfg = load_hand_task_agent_cfg(args_cli.task, args_cli.robot, args_cli.agent_cfg)
+    else:
+        env_cfg, agent_cfg = register_task_to_hydra(args_cli.gym_env_id, "default_cfg")
+        specialised_cfg = load_cfg_from_registry(args_cli.gym_env_id, args_cli.agent_cfg)
     agent_cfg = update_dict(agent_cfg, specialised_cfg)
 
     dtype = torch.float32
@@ -259,52 +302,91 @@ if __name__ == "__main__":
     max_sweep_timesteps_M = agent_cfg["sweeper"]["max_sweep_timesteps_M"]
     max_training_timesteps_M = agent_cfg["trainer"]["max_global_timesteps_M"]
 
-    if sweep:
-        # Setup logging for sweep
-        agent_cfg["experiment"]["experiment_name"] = args_cli.task + "_" + args_cli.agent_cfg + "_" + args_cli.study
-        agent_cfg["experiment"]["wandb_kwargs"]["group"] = (
-            args_cli.task + "_" + args_cli.agent_cfg + "_" + args_cli.study
-        )
-        storage = "./sweep_logs/" + agent_cfg["sweeper"]["storage"]
-        n_warmup_steps = agent_cfg["sweeper"]["warmup_timesteps_M"] * 1e6
-        agent_cfg["trainer"]["max_global_timesteps_M"] = max_sweep_timesteps_M
-
+    if args_cli.rerun_trial is not None:
+        storage = agent_cfg["sweeper"]["storage"]
         study_name = args_cli.study
-        total_trials = 50
-        n_startup_trials = 5
-        interval_steps = 1
+        study = optuna.load_study(study_name=study_name, storage=storage)
+        trial = next((t for t in study.trials if t.number == args_cli.rerun_trial), None)
+        if trial is None:
+            raise ValueError(
+                f"No trial with number {args_cli.rerun_trial} in study {study_name!r} "
+                f"({len(study.trials)} trials in storage)."
+            )
+        try:
+            apply_optuna_trial_params(agent_cfg, trial)
+        except KeyError as e:
+            raise KeyError(
+                f"Trial {args_cli.rerun_trial} is missing hyperparameters (incomplete trial?): {e}"
+            ) from e
+
+        agent_cfg["trainer"]["max_global_timesteps_M"] = max_training_timesteps_M
+        suffix = f"_trial_{args_cli.rerun_trial}"
+        agent_cfg["experiment"]["experiment_name"] = (
+            args_cli.task + "_" + args_cli.agent_cfg + "_" + args_cli.study + suffix
+        )
+        agent_cfg["experiment"]["wandb_kwargs"]["group"] = (
+            args_cli.task + "_" + args_cli.agent_cfg + "_" + args_cli.study + suffix
+        )
+        seeds = args_cli.rerun_seeds if args_cli.rerun_seeds is not None else [5, 6, 7, 8, 9, 10]
 
         writer = Writer(agent_cfg, delay_wandb_startup=True)
+        env_cfg = update_env_cfg(args_cli, env_cfg, agent_cfg)
+        env = make_env(agent_cfg, env_cfg, writer, args_cli)
 
-        # Make environment (order: gymnasium Env -> FrameStack -> IsaacLab)
-        env = make_env(env_cfg, writer, args_cli, agent_cfg["observations"]["obs_stack"])
+        print(f"Rerun Optuna trial {args_cli.rerun_trial} on seeds: {seeds}")
+        for seed in seeds:
+            agent_cfg["experiment"]["wandb_kwargs"]["name"] = f"trial_{args_cli.rerun_trial}_seed_{seed}"
+            env_cfg = update_env_cfg(args_cli, env_cfg, agent_cfg)
+            writer.setup_wandb(name=f"trial_{args_cli.rerun_trial}_seed_{seed}")
+            train_one_seed(args_cli, env, agent_cfg=agent_cfg, env_cfg=env_cfg, writer=writer, seed=seed)
+            writer.close_wandb()
+            writer.get_new_log_path()
 
-        runner = OptimisationRunner(study_name, n_startup_trials, n_warmup_steps, interval_steps)
+        env.close()
+        simulation_app.close()
+        sys.exit(0)
 
-        best_trial = runner.run(total_trials)
+    # Default path: Optuna sweep, then multi-seed evaluation of the best trial.
+    # Setup logging for sweep
+    agent_cfg["experiment"]["experiment_name"] = args_cli.task + "_" + args_cli.agent_cfg + "_" + args_cli.study
+    agent_cfg["experiment"]["wandb_kwargs"]["group"] = (
+        args_cli.task + "_" + args_cli.agent_cfg + "_" + args_cli.study
+    )
+    storage = agent_cfg["sweeper"]["storage"]
+    n_warmup_steps = agent_cfg["sweeper"]["warmup_timesteps_M"] * 1e6
+    agent_cfg["trainer"]["max_global_timesteps_M"] = max_sweep_timesteps_M
 
+    study_name = args_cli.study
+    total_trials = 40
+    n_startup_trials = 8
+    interval_steps = 1
+
+    writer = Writer(agent_cfg, delay_wandb_startup=True)
+
+    # Make environment (order: gymnasium Env -> FrameStack -> IsaacLab)
+    env = make_env(agent_cfg, env_cfg, writer, args_cli)
+
+    runner = OptimisationRunner(study_name, n_startup_trials, n_warmup_steps, interval_steps)
+
+    # Calculate how many more we need
+    # We count all trials (Complete, Pruned, and even Failed)
+    # to ensure we don't exceed the total budget.
+    trials_already_done = len(runner.study.trials)
+    remaining_trials = max(0, total_trials - trials_already_done)
+
+    if remaining_trials > 0:
+        print("Running remaining trials:", remaining_trials)
+        best_trial = runner.run(remaining_trials)
         print("Best trial:", best_trial)
 
-        writer.close_wandb()
+    else:
+        print(f"Study already reached or exceeded {total_trials} trials.")
+        exit()
 
-        # Apply best trial hyperparameters
-        agent_cfg["agent"]["rollouts"] = best_trial.params["rollouts"]
-        agent_cfg["agent"]["mini_batches"] = best_trial.params["mini_batches"]
-        agent_cfg["agent"]["learning_epochs"] = best_trial.params["learning_epochs"]
-        agent_cfg["agent"]["learning_rate"] = best_trial.params["learning_rate"]
-        agent_cfg["agent"]["entropy_loss_scale"] = best_trial.params["entropy_loss_scale"]
-        agent_cfg["agent"]["value_loss_scale"] = best_trial.params["value_loss_scale"]
-        agent_cfg["agent"]["value_clip"] = best_trial.params["value_clip"]
-        agent_cfg["agent"]["ratio_clip"] = best_trial.params["ratio_clip"]
-        agent_cfg["agent"]["lambda"] = best_trial.params["gae_lambda"]
+    writer.close_wandb()
 
-        if "ssl_task" in agent_cfg:
-            agent_cfg["ssl_task"]["learning_rate"] = best_trial.params["learning_rate_aux"]
-            agent_cfg["ssl_task"]["loss_weight"] = best_trial.params["loss_weight_aux"]
-            agent_cfg["ssl_task"]["learning_epochs_ratio"] = best_trial.params["learning_epochs_ratio"]
-
-            if agent_cfg["ssl_task"]["type"] == "forward_dynamics":
-                agent_cfg["ssl_task"]["seq_length"] = best_trial.params["seq_length"]
+    # Apply best trial hyperparameters
+    apply_optuna_trial_params(agent_cfg, best_trial)
 
     # Train best configuration on multiple seeds
     agent_cfg["experiment"]["experiment_name"] = args_cli.task + "_" + args_cli.agent_cfg + "_" + "seeded"
@@ -314,12 +396,9 @@ if __name__ == "__main__":
     test_seeds = [5, 6, 7, 8, 9, 10]
 
     print("Running best trial on multiple seeds:", test_seeds)
-    from common_utils import train_one_seed
 
     writer = Writer(agent_cfg, delay_wandb_startup=True)
     env_cfg = update_env_cfg(args_cli, env_cfg, agent_cfg)
-    if not sweep:
-        env = make_env(env_cfg, writer, args_cli, agent_cfg["observations"]["obs_stack"])
 
     for seed in test_seeds:
         print("Running seed:", seed)

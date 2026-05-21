@@ -1,0 +1,45 @@
+# Shadow Bounce config: forward_dynamics
+observations:
+  obs_list:
+  - prop
+  - tactile
+  obs_stack: 4
+  tactile_cfg:
+    binary_tactile: true
+    binary_threshold: 0.01
+
+agent:
+  rollouts: 32
+  learning_epochs: 4
+  mini_batches: 64
+  discount_factor: 0.99
+  lambda: 0.95
+  learning_rate: 1.5e-04
+  ratio_clip: 0.2
+  value_clip: 0.2
+  entropy_loss_scale: 0
+  value_loss_scale: 1.0
+  kl_threshold: 0
+  learning_rate_scheduler: "KLAdaptiveLR"
+  learning_rate_scheduler_kwargs:
+    kl_threshold: 0.008
+    min_lr: 1e-6
+    max_lr: 1e-2
+    kl_factor: 2
+    lr_factor: 1.5
+    apply_to_all: true
+
+ssl_task:
+  type: forward_dynamics
+  tactile_only: false
+  loss_weight: 0.8462
+  learning_rate: 4.53e-05
+  n_rollouts: 1
+  seq_length: 11
+
+experiment:
+  experiment_name: forward_dynamics
+  wandb: 1
+  wandb_kwargs:
+    group: forward_dynamics
+    name: 'null'
