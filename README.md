@@ -13,15 +13,13 @@ RoTO is a **reinforcement learning benchmark environment** designed to standardi
  - Integrated hyperparameter optimisation with optuna — essential for tactile agents but often missing ❗
  - Well-tuned baselines for each robot-task-agent combo (40-trial sweep) that reach state-of-the-art speeds in sim
 
+Tactile RL is hard! We are dealing with a trifecta of manipulation, on-policy RL, and ML-unfriendly tactile data. We made `roto` to promote standardisation and reduce the barrier-to-entry for researchers interesting in exploring this space.
+
+We demonstrate a significant performance leap, with our blind agents achieving 13 Baoding ball rotations in 10 seconds, an order of magnitude faster than current state-of-the-art speeds. By open-sourcing our environments and robustly tuned baselines, we reduce the barrier to entry and enable researchers to prioritise fundamental algorithmic challenges over tedious RL tuning.
 
 ### Version history
 - `roto 1.0` included the Find (Franka), Bounce & Baoding (Shadow Hand) tasks. It was introduced in [Enhancing Tactile-based RL for Robotic Control](https://elle-miller.github.io/tactile_rl/) (NeurIPS 2025), which shows that blind superhuman dexterity is possible with sparse binary contacts + self-supervision.
-- `roto 2.0` is extended to include the Allegro, ORCA, and Shadow Dexterous Hand Lite robots for the Bounce & Baoding tasks. We swept hyperparameters for the full state & blind agents, and benchmarked the results in a 2-page writeup [here](). The checkpoints/logs are [here]().
-
-<!-- <img src="readme_assets/images/roto.png" 
-     width="400" 
-     border="1"
-     style="display: block; margin: 0 auto;"/> -->
+- `roto 2.0` is extended to include the Allegro, ORCA, and Shadow Dexterous Hand Lite robots for the Bounce & Baoding tasks. We swept hyperparameters for the full state & blind agents, and benchmarked the results in a 2-page writeup [here](https://arxiv.org/abs/2605.21429v1). The checkpoints/logs are [here]().
 
 ## ✨ Overview
 
@@ -66,19 +64,13 @@ observations:
     normalise_rgb: true
     max_depth: 2.0  # meters
 ```
-Here is an example rendering of raw RGB, normalised RGB, and depth of Shadow Baoding agent.
-<img src="readme_assets/rgb.gif" 
-     width="200" 
-     border="1"
-     style="display: block; margin: 0 auto;"/>
-<img src="readme_assets/rgb_normalise.gif" 
-     width="200" 
-     border="1"
-     style="display: block; margin: 0 auto;"/>
-<img src="readme_assets/depth.gif" 
-     width="200" 
-     border="1"
-     style="display: block; margin: 0 auto;"/>
+Here is an example rendering of raw RGB, normalised RGB, and depth of a Shadow Baoding agent (upload `readme_assets/rgb.mp4`, `rgb_normalise.mp4`, `depth.mp4` via GitHub drag-drop; paste each URL on its own line):
+
+<!-- rgb.mp4 -->
+
+<!-- rgb_normalise.mp4 -->
+
+<!-- depth.mp4 -->
 
 ## 🛠️ Installation
 
@@ -106,12 +98,9 @@ python scripts/play.py --task Baoding --robot Shadow --num_envs 512 --agent_cfg 
 # save a video
 python scripts/play.py --task Baoding --robot Shadow --num_envs 512 --agent_cfg forward_dynamics_memory --video --video_length 1200 --headless --checkpoint readme_assets/checkpoints/baoding_memory.pt
 ```
-The video should pop up in a `./videos` folder and look like this:
+The video should pop up in a `./videos` folder. Example rollout (`readme_assets/baoding_memory.mp4` — paste drag-drop URL below):
 
-<img src="readme_assets/baoding_memory.gif" 
-     width="400" 
-     border="1"
-     style="display: block; margin: 0 auto;"/>
+<!-- baoding_memory.mp4 -->
 
 You can find more trained checkpoints in the [roto_paper_results](https://github.com/elle-miller/roto_paper_results) repository.
 
@@ -192,56 +181,24 @@ If you use this benchmark environment in your academic or professional research,
 
 ## Videos
 
-**States+Proprio+Binary Tactile** (vision, left) | **Proprio+Binary Tactile** (blind, right). Full-quality `.mp4` files: [project page](https://elle-miller.github.io/roto/) or `readme_assets/roto2_videos/`. Regenerate GIFs: `bash scripts/roto2_mp4_to_gif.sh` (default 60 fps, 320 px for side-by-side; `FORCE=1 WIDTH=400 ...` to override).
+**How to fill:** Edit this README on github.com → drag-drop each `.mp4` from `readme_assets/roto2_videos/` → replace the matching `PASTE` URL in the table (one URL per cell; GitHub embeds it). Full gallery: [project page](https://elle-miller.github.io/roto/).
+
+**States+Proprio+Binary Tactile** (vision) | **Proprio+Binary Tactile** (blind)
 
 ### Baoding: Shadow, Allegro, ORCA, Shadow Lite
 
-**Shadow Hand**
-
-| Vision | Blind |
-| :---: | :---: |
-| <img src="readme_assets/roto2_gifs/shadow_baoding_vision.gif" width="320" alt="Shadow Baoding vision"> | <img src="readme_assets/roto2_gifs/shadow_baoding_blind.gif" width="320" alt="Shadow Baoding blind"> |
-
-**Allegro Hand**
-
-| Vision | Blind |
-| :---: | :---: |
-| <img src="readme_assets/roto2_gifs/allegro_baoding_vision.gif" width="320" alt="Allegro Baoding vision"> | <img src="readme_assets/roto2_gifs/allegro_baoding_blind.gif" width="320" alt="Allegro Baoding blind"> |
-
-**ORCA Hand**
-
-| Vision | Blind |
-| :---: | :---: |
-| <img src="readme_assets/roto2_gifs/orca_baoding_vision.gif" width="320" alt="ORCA Baoding vision"> | <img src="readme_assets/roto2_gifs/orca_baoding_blind.gif" width="320" alt="ORCA Baoding blind"> |
-
-**Shadow Dexterous Hand Lite**
-
-| Vision | Blind |
-| :---: | :---: |
-| <img src="readme_assets/roto2_gifs/lite_baoding_vision.gif" width="320" alt="Shadow Lite Baoding vision"> | <img src="readme_assets/roto2_gifs/lite_baoding_blind.gif" width="320" alt="Shadow Lite Baoding blind"> |
+| Robot | Vision | Blind |
+| :--- | :--- | :--- |
+| Shadow | `shadow_baoding_vision.mp4`<br>https://github.com/user-attachments/assets/PASTE | `shadow_baoding_blind.mp4`<br>https://github.com/user-attachments/assets/PASTE |
+| Allegro | `allegro_baoding_vision.mp4`<br>https://github.com/user-attachments/assets/PASTE | `allegro_baoding_blind.mp4`<br>https://github.com/user-attachments/assets/PASTE |
+| ORCA | `orca_baoding_vision.mp4`<br>https://github.com/user-attachments/assets/PASTE | `orca_baoding_blind.mp4`<br>https://github.com/user-attachments/assets/PASTE |
+| Shadow Lite | `lite_baoding_vision.mp4`<br>https://github.com/user-attachments/assets/PASTE | `lite_baoding_blind.mp4`<br>https://github.com/user-attachments/assets/PASTE |
 
 ### Bounce: Shadow, Allegro, ORCA, Shadow Lite
 
-**Shadow Hand**
-
-| Vision | Blind |
-| :---: | :---: |
-| <img src="readme_assets/roto2_gifs/shadow_bounce_vision.gif" width="320" alt="Shadow Bounce vision"> | <img src="readme_assets/roto2_gifs/shadow_bounce_blind.gif" width="320" alt="Shadow Bounce blind"> |
-
-**Allegro Hand**
-
-| Vision | Blind |
-| :---: | :---: |
-| <img src="readme_assets/roto2_gifs/allegro_bounce_vision.gif" width="320" alt="Allegro Bounce vision"> | <img src="readme_assets/roto2_gifs/allegro_bounce_blind.gif" width="320" alt="Allegro Bounce blind"> |
-
-**ORCA Hand**
-
-| Vision | Blind |
-| :---: | :---: |
-| <img src="readme_assets/roto2_gifs/orca_bounce_vision.gif" width="320" alt="ORCA Bounce vision"> | <img src="readme_assets/roto2_gifs/orca_bounce_blind.gif" width="320" alt="ORCA Bounce blind"> |
-
-**Shadow Dexterous Hand Lite**
-
-| Vision | Blind |
-| :---: | :---: |
-| <img src="readme_assets/roto2_gifs/lite_bounce_vision.gif" width="320" alt="Shadow Lite Bounce vision"> | <img src="readme_assets/roto2_gifs/lite_bounce_blind.gif" width="320" alt="Shadow Lite Bounce blind"> |
+| Robot | Vision | Blind |
+| :--- | :--- | :--- |
+| Shadow | `shadow_bounce_vision.mp4`<br>https://github.com/user-attachments/assets/PASTE | `shadow_bounce_blind.mp4`<br>https://github.com/user-attachments/assets/PASTE |
+| Allegro | `allegro_bounce_vision.mp4`<br>https://github.com/user-attachments/assets/PASTE | `allegro_bounce_blind.mp4`<br>https://github.com/user-attachments/assets/PASTE |
+| ORCA | `orca_bounce_vision.mp4`<br>https://github.com/user-attachments/assets/PASTE | `orca_bounce_blind.mp4`<br>https://github.com/user-attachments/assets/PASTE |
+| Shadow Lite | `lite_bounce_vision.mp4`<br>https://github.com/user-attachments/assets/PASTE | `lite_bounce_blind.mp4`<br>https://github.com/user-attachments/assets/PASTE |
