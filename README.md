@@ -8,10 +8,10 @@
 RoTO is a **reinforcement learning benchmark environment** designed to standardise and promote future research in tactile-based manipulation. The reason we made this is because tactile RL is hard! We are dealing with a trifecta of manipulation, on-policy RL, and ML-unfriendly tactile data. By open-sourcing our environments and robustly tuned baselines, we hope to reduce the barrier to entry and enable researchers to prioritise fundamental algorithmic challenges over tedious RL tuning. We will continue to add more environments and strongly welcome contributions 🤗
 
 ### Key features
- - 5 robot embodiments: 4× hands + 1× arm (Allegro Hand, ORCA Hand, Shadow Dexterous Hand, Shadow Dexterous Hand Lite, Franka)
- - 3 tactile-diverse tasks to cover sparse, intermittent, and sustained interactions: find an object, ball bouncing, and Baoding ball rotation
- - Integrated hyperparameter optimisation with optuna — essential for tactile agents but often missing ❗
- - Well-tuned baselines for each robot-task-agent combo (40-trial sweep) that reach state-of-the-art speeds in sim
+ - **5 robot embodiments**: 4× hands + 1× arm (Allegro Hand, ORCA Hand, Shadow Dexterous Hand, Shadow Dexterous Hand Lite, Franka)
+ - **3 tactile-diverse tasks** to cover sparse, intermittent, and sustained interactions: find an object, ball bouncing, and Baoding ball rotation
+ - **Integrated hyperparameter optimisation** with optuna — essential for tactile agents but often missing ❗
+ - **Well-tuned baselines** for each robot-task-agent combo (40-trial sweep) that reach state-of-the-art speeds in sim
 
 ### Version history
 - `roto 1.0` included the Find (Franka), Bounce & Baoding (Shadow Hand) tasks. It was introduced in [Enhancing Tactile-based RL for Robotic Control](https://elle-miller.github.io/tactile_rl/) (NeurIPS 2025), which shows that blind superhuman dexterity is possible with sparse binary contacts + self-supervision.
