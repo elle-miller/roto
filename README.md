@@ -15,7 +15,7 @@ RoTO is a **reinforcement learning benchmark environment** designed to standardi
 
 ### Version history
 - `roto 1.0` included the Find (Franka), Bounce & Baoding (Shadow Hand) tasks. It was introduced in [Enhancing Tactile-based RL for Robotic Control](https://elle-miller.github.io/tactile_rl/) (NeurIPS 2025), which shows that blind superhuman dexterity is possible with sparse binary contacts + self-supervision.
-- `roto 2.0` is extended to include the Allegro, ORCA, and Shadow Dexterous Hand Lite robots for the Bounce & Baoding tasks. We swept hyperparameters for the full state & blind agents, and benchmarked the results in a 2-page writeup [here](https://arxiv.org/abs/2605.21429v1).
+- `roto 2.0` is extended to include the Allegro, ORCA, and Shadow Dexterous Hand Lite robots for the Bounce & Baoding tasks. We swept hyperparameters for the full state & blind agents, and benchmarked the results in a 2-page [paper]((https://arxiv.org/abs/2605.21429v1)), accepted to ViTAC 2026 workshop at ICRA. See [project page](https://elle-miller.github.io/roto/) for some speedy agent videos.
 
 The data 📁 for the NeurIPS paper and roto 2.0 ICRA workshop paper (checkpoints, training logs, plot scripts) are available in the [roto_paper_results](https://github.com/elle-miller/roto_paper_results) repo.
 
@@ -40,41 +40,7 @@ The agents are all joint position controlled. Franka has 9 joints, Shadow has 20
 | <img src="readme_assets/images/bounce.png" alt="Bounce Environment" width="400px"> | The agent must bounce a ball as many times as possible within 10s. | Sparse bounce bonus  | Shadow, ORCA, Allegro, Shadow Lite |
 | <img src="readme_assets/images/baoding.png" alt="Baoding Environment" width="400px"> | The agent must rotate two small balls around each other as many times as possible within 10s. |  Small distance reward to ball target + successful rotation bonus  | Shadow, ORCA, Allegro, Shadow Lite |
 
-## Observations
 
-We use dictionary-style observations, and categorising into proprioception, tactile, rgb, depth, and gt (ground-truth). The proprioception & tactile methods should be defined in `{Robot}Env`, but gt information is task-dependent. To specify which observations are used, add the keys to `obs_list` in the agent cfg..
-```
-observations:
-  obs_list:
-  - prop
-  - tactile
-  - rgb
-  - depth
-  - gt
-  obs_stack: 3
-  tactile_cfg:
-    binary_tactile: true
-    binary_threshold: 0.01
-  pixel_cfg:
-    width: 80
-    height: 80
-    latent_pixel_dim: 128 
-    normalise_rgb: true
-    max_depth: 2.0  # meters
-```
-Here is an example rendering of raw RGB, normalised RGB, and depth of Shadow Baoding agent.
-<img src="readme_assets/rgb.gif" 
-     width="200" 
-     border="1"
-     style="display: block; margin: 0 auto;"/>
-<img src="readme_assets/rgb_normalise.gif" 
-     width="200" 
-     border="1"
-     style="display: block; margin: 0 auto;"/>
-<img src="readme_assets/depth.gif" 
-     width="200" 
-     border="1"
-     style="display: block; margin: 0 auto;"/>
 
 ## 🛠️ Installation
 
@@ -137,8 +103,43 @@ python scripts/train.py --task Baoding --robot shadow --agent_cfg rl_only_pt --n
 python scripts/train.py --task Bounce --robot orca --agent_cfg rl_only_ptg --num_envs 4196 --headless
 python scripts/train.py --task Find --robot franka --agent_cfg forward_dynamics --num_envs 4196 --headless
 python scripts/sweep.py --task Baoding --robot shadowlite --agent_cfg rl_only_pt --num_envs 4196 --headless --study lite_baoding_blind
-
 ```
+
+## Observations
+
+We use dictionary-style observations, and categorising into proprioception, tactile, rgb, depth, and gt (ground-truth). The proprioception & tactile methods should be defined in `{Robot}Env`, but gt information is task-dependent. To specify which observations are used, add the keys to `obs_list` in the agent cfg..
+```
+observations:
+  obs_list:
+  - prop
+  - tactile
+  - rgb
+  - depth
+  - gt
+  obs_stack: 3
+  tactile_cfg:
+    binary_tactile: true
+    binary_threshold: 0.01
+  pixel_cfg:
+    width: 80
+    height: 80
+    latent_pixel_dim: 128 
+    normalise_rgb: true
+    max_depth: 2.0  # meters
+```
+Here is an example rendering of raw RGB, normalised RGB, and depth of Shadow Baoding agent.
+<img src="readme_assets/rgb.gif" 
+     width="200" 
+     border="1"
+     style="display: block; margin: 0 auto;"/>
+<img src="readme_assets/rgb_normalise.gif" 
+     width="200" 
+     border="1"
+     style="display: block; margin: 0 auto;"/>
+<img src="readme_assets/depth.gif" 
+     width="200" 
+     border="1"
+     style="display: block; margin: 0 auto;"/>
 
 ## 🤗 Contributing
 We highly welcome community contributions and PRs! The most promising research directions we think are:
@@ -177,7 +178,7 @@ For any questions, issues, or collaborations, please feel free to post an issue/
 This project is licensed under the BSD-3 License.
 
 
-## Videos
+## 🎥 Videos
 
 Full gallery: [project page](https://elle-miller.github.io/roto/).
 
