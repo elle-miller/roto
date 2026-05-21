@@ -181,24 +181,54 @@ If you use this benchmark environment in your academic or professional research,
 
 ## Videos
 
-**How to fill:** Edit this README on github.com → drag-drop each `.mp4` from `readme_assets/roto2_videos/` → replace the matching `PASTE` URL in the table (one URL per cell; GitHub embeds it). Full gallery: [project page](https://elle-miller.github.io/roto/).
 
-**States+Proprio+Binary Tactile** (vision) | **Proprio+Binary Tactile** (blind)
+baoding 
+shadow vision, blind
 
-### Baoding: Shadow, Allegro, ORCA, Shadow Lite
+https://github.com/user-attachments/assets/f22b42c1-4fed-466b-bbce-0ccb6532a074
 
-| Robot | Vision | Blind |
-| :--- | :--- | :--- |
-| Shadow | `shadow_baoding_vision.mp4`<br>https://github.com/user-attachments/assets/PASTE | `shadow_baoding_blind.mp4`<br>https://github.com/user-attachments/assets/PASTE |
-| Allegro | `allegro_baoding_vision.mp4`<br>https://github.com/user-attachments/assets/PASTE | `allegro_baoding_blind.mp4`<br>https://github.com/user-attachments/assets/PASTE |
-| ORCA | `orca_baoding_vision.mp4`<br>https://github.com/user-attachments/assets/PASTE | `orca_baoding_blind.mp4`<br>https://github.com/user-attachments/assets/PASTE |
-| Shadow Lite | `lite_baoding_vision.mp4`<br>https://github.com/user-attachments/assets/PASTE | `lite_baoding_blind.mp4`<br>https://github.com/user-attachments/assets/PASTE |
+https://github.com/user-attachments/assets/94b710d8-b7d2-4ded-b0ef-e1d942154dd2
 
-### Bounce: Shadow, Allegro, ORCA, Shadow Lite
+allegro files too big
 
-| Robot | Vision | Blind |
-| :--- | :--- | :--- |
-| Shadow | `shadow_bounce_vision.mp4`<br>https://github.com/user-attachments/assets/PASTE | `shadow_bounce_blind.mp4`<br>https://github.com/user-attachments/assets/PASTE |
-| Allegro | `allegro_bounce_vision.mp4`<br>https://github.com/user-attachments/assets/PASTE | `allegro_bounce_blind.mp4`<br>https://github.com/user-attachments/assets/PASTE |
-| ORCA | `orca_bounce_vision.mp4`<br>https://github.com/user-attachments/assets/PASTE | `orca_bounce_blind.mp4`<br>https://github.com/user-attachments/assets/PASTE |
-| Shadow Lite | `lite_bounce_vision.mp4`<br>https://github.com/user-attachments/assets/PASTE | `lite_bounce_blind.mp4`<br>https://github.com/user-attachments/assets/PASTE |
+orca
+
+https://github.com/user-attachments/assets/19e2c878-1c4e-4ba3-8792-1d9b0f4d8f76
+
+https://github.com/user-attachments/assets/5c55d6da-52ed-4479-973d-e9d2b9a73352
+
+lite
+
+https://github.com/user-attachments/assets/c8a1d95c-10e9-4402-9a9f-ce5a52cdaa9f
+
+https://github.com/user-attachments/assets/c6acc1c1-3133-44ab-85a1-91da06c2b0b5
+
+bounce
+
+shadow
+
+https://github.com/user-attachments/assets/ddc1ca07-67d4-4c7d-a3d1-854e3b8b453d
+
+https://github.com/user-attachments/assets/eadd9bb1-f65e-4b06-9d1c-22f48c0488e7
+
+allegro
+
+https://github.com/user-attachments/assets/4a1182f9-6e41-46bc-a192-dcccfb7d9ff6
+
+https://github.com/user-attachments/assets/82f16a08-81a1-4b68-b86b-5ebe026285c2
+
+orca
+
+https://github.com/user-attachments/assets/eec4dcae-5d4c-4ffa-b5b8-a993871bd15d
+
+https://github.com/user-attachments/assets/25158d10-4ae6-417c-9eef-030107709fe8
+
+lite
+
+https://github.com/user-attachments/assets/e57d20b0-66bf-47ee-b5d9-39bb6ba77124
+
+https://github.com/user-attachments/assets/2e66bc18-67e1-4aa2-b458-ffa5792e25d0
+
+
+Full gallery: [project page](https://elle-miller.github.io/roto/).
+
