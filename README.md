@@ -197,7 +197,8 @@ Allegro `.mp4` sources in `readme_assets/roto2_videos/` were trimmed to 80% leng
 
 | Vision | Blind |
 | :---: | :---: |
-| <!-- paste allegro_baoding_vision.mp4 URL --> | <!-- paste allegro_baoding_blind.mp4 URL --> |
+| https://github.com/user-attachments/assets/49e58414-7b50-4fd9-93b5-612dbc22a91a
+| https://github.com/user-attachments/assets/86984b31-bfdf-4dbd-89e8-deb575e50688 |
 
 **ORCA Hand**
 
