@@ -181,54 +181,59 @@ If you use this benchmark environment in your academic or professional research,
 
 ## Videos
 
+**States+Proprio+Binary Tactile** (vision, left) | **Proprio+Binary Tactile** (blind, right). Full gallery: [project page](https://elle-miller.github.io/roto/).
 
-baoding 
-shadow vision, blind
+Allegro `.mp4` sources in `readme_assets/roto2_videos/` were trimmed to 80% length (~16 s) for GitHub upload — re-drag-drop `allegro_baoding_vision.mp4` and `allegro_baoding_blind.mp4` if those cells are still empty.
 
-https://github.com/user-attachments/assets/f22b42c1-4fed-466b-bbce-0ccb6532a074
+### Baoding: Shadow, Allegro, ORCA, Shadow Lite
 
-https://github.com/user-attachments/assets/94b710d8-b7d2-4ded-b0ef-e1d942154dd2
+**Shadow Hand**
 
-allegro files too big
+| Vision | Blind |
+| :---: | :---: |
+| https://github.com/user-attachments/assets/f22b42c1-4fed-466b-bbce-0ccb6532a074 | https://github.com/user-attachments/assets/94b710d8-b7d2-4ded-b0ef-e1d942154dd2 |
 
-orca
+**Allegro Hand**
 
-https://github.com/user-attachments/assets/19e2c878-1c4e-4ba3-8792-1d9b0f4d8f76
+| Vision | Blind |
+| :---: | :---: |
+| <!-- paste allegro_baoding_vision.mp4 URL --> | <!-- paste allegro_baoding_blind.mp4 URL --> |
 
-https://github.com/user-attachments/assets/5c55d6da-52ed-4479-973d-e9d2b9a73352
+**ORCA Hand**
 
-lite
+| Vision | Blind |
+| :---: | :---: |
+| https://github.com/user-attachments/assets/19e2c878-1c4e-4ba3-8792-1d9b0f4d8f76 | https://github.com/user-attachments/assets/5c55d6da-52ed-4479-973d-e9d2b9a73352 |
 
-https://github.com/user-attachments/assets/c8a1d95c-10e9-4402-9a9f-ce5a52cdaa9f
+**Shadow Dexterous Hand Lite**
 
-https://github.com/user-attachments/assets/c6acc1c1-3133-44ab-85a1-91da06c2b0b5
+| Vision | Blind |
+| :---: | :---: |
+| https://github.com/user-attachments/assets/c8a1d95c-10e9-4402-9a9f-ce5a52cdaa9f | https://github.com/user-attachments/assets/c6acc1c1-3133-44ab-85a1-91da06c2b0b5 |
 
-bounce
+### Bounce: Shadow, Allegro, ORCA, Shadow Lite
 
-shadow
+**Shadow Hand**
 
-https://github.com/user-attachments/assets/ddc1ca07-67d4-4c7d-a3d1-854e3b8b453d
+| Vision | Blind |
+| :---: | :---: |
+| https://github.com/user-attachments/assets/ddc1ca07-67d4-4c7d-a3d1-854e3b8b453d | https://github.com/user-attachments/assets/eadd9bb1-f65e-4b06-9d1c-22f48c0488e7 |
 
-https://github.com/user-attachments/assets/eadd9bb1-f65e-4b06-9d1c-22f48c0488e7
+**Allegro Hand**
 
-allegro
+| Vision | Blind |
+| :---: | :---: |
+| https://github.com/user-attachments/assets/4a1182f9-6e41-46bc-a192-dcccfb7d9ff6 | https://github.com/user-attachments/assets/82f16a08-81a1-4b68-b86b-5ebe026285c2 |
 
-https://github.com/user-attachments/assets/4a1182f9-6e41-46bc-a192-dcccfb7d9ff6
+**ORCA Hand**
 
-https://github.com/user-attachments/assets/82f16a08-81a1-4b68-b86b-5ebe026285c2
+| Vision | Blind |
+| :---: | :---: |
+| https://github.com/user-attachments/assets/eec4dcae-5d4c-4ffa-b5b8-a993871bd15d | https://github.com/user-attachments/assets/25158d10-4ae6-417c-9eef-030107709fe8 |
 
-orca
+**Shadow Dexterous Hand Lite**
 
-https://github.com/user-attachments/assets/eec4dcae-5d4c-4ffa-b5b8-a993871bd15d
-
-https://github.com/user-attachments/assets/25158d10-4ae6-417c-9eef-030107709fe8
-
-lite
-
-https://github.com/user-attachments/assets/e57d20b0-66bf-47ee-b5d9-39bb6ba77124
-
-https://github.com/user-attachments/assets/2e66bc18-67e1-4aa2-b458-ffa5792e25d0
-
-
-Full gallery: [project page](https://elle-miller.github.io/roto/).
+| Vision | Blind |
+| :---: | :---: |
+| https://github.com/user-attachments/assets/e57d20b0-66bf-47ee-b5d9-39bb6ba77124 | https://github.com/user-attachments/assets/2e66bc18-67e1-4aa2-b458-ffa5792e25d0 |
 
