@@ -323,15 +323,16 @@
       <inertia ixx="0.00000094" ixy="0.0" ixz="0.0" iyy="0.0000011" iyz="0.0" izz="0.00000053"/>
     </inertial>
     <visual>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <!-- TouchLab v5 fingertip body (mesh+origin swapped from PST); origin is a starting guess, tune in viewer -->
+      <origin rpy="0 0 0" xyz="0 0 0.0345"/>
       <geometry name="rh_ffdistal_visual">
-        <mesh filename="meshes/components/f_distal/pst/f_distal_pst.dae" scale="0.001 0.001 0.001"/>
+        <mesh filename="meshes/touchlab/fingertip_v5_simple.stl" scale="0.1 0.1 0.1"/>
       </geometry>
     </visual>
     <collision>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <origin rpy="0 0 0" xyz="0 0 0.0345"/>
       <geometry name="rh_ffdistal_collision_geom">
-        <mesh filename="meshes/components/f_distal/pst/f_distal_pst.dae" scale="0.001 0.001 0.001"/>
+        <mesh filename="meshes/touchlab/fingertip_v5_simple.stl" scale="0.1 0.1 0.1"/>
       </geometry>
     </collision>
   </link>
@@ -343,7 +344,7 @@
     <!-- standard distal joint -->
     <limit effort="2" lower="0" upper="1.5707963267948966" velocity="2.0"/>
     <dynamics damping="0.1"/>
-    <mimic joint="rh_FFJ2" multiplier="1.0" offset="0.0"/>
+    
   </joint>
   <gazebo reference="rh_FFJ1">
     <provideFeedback>1</provideFeedback>
@@ -537,15 +538,16 @@
       <inertia ixx="0.00000094" ixy="0.0" ixz="0.0" iyy="0.0000011" iyz="0.0" izz="0.00000053"/>
     </inertial>
     <visual>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <!-- TouchLab v5 fingertip body (mesh+origin swapped from PST); origin is a starting guess, tune in viewer -->
+      <origin rpy="0 0 0" xyz="0 0 0.0345"/>
       <geometry name="rh_mfdistal_visual">
-        <mesh filename="meshes/components/f_distal/pst/f_distal_pst.dae" scale="0.001 0.001 0.001"/>
+        <mesh filename="meshes/touchlab/fingertip_v5_simple.stl" scale="0.1 0.1 0.1"/>
       </geometry>
     </visual>
     <collision>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <origin rpy="0 0 0" xyz="0 0 0.0345"/>
       <geometry name="rh_mfdistal_collision_geom">
-        <mesh filename="meshes/components/f_distal/pst/f_distal_pst.dae" scale="0.001 0.001 0.001"/>
+        <mesh filename="meshes/touchlab/fingertip_v5_simple.stl" scale="0.1 0.1 0.1"/>
       </geometry>
     </collision>
   </link>
@@ -556,7 +558,7 @@
     <axis xyz="1 0 0"/>
     <!-- standard distal joint -->
     <limit effort="2" lower="0" upper="1.5707963267948966" velocity="2.0"/>
-    <mimic joint="rh_MFJ2" multiplier="1.0" offset="0.0"/>
+   
     <dynamics damping="0.1"/>
     
   </joint>
@@ -752,15 +754,16 @@
       <inertia ixx="0.00000094" ixy="0.0" ixz="0.0" iyy="0.0000011" iyz="0.0" izz="0.00000053"/>
     </inertial>
     <visual>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <!-- TouchLab v5 fingertip body (mesh+origin swapped from PST); origin is a starting guess, tune in viewer -->
+      <origin rpy="0 0 0" xyz="0 0 0.0345"/>
       <geometry name="rh_rfdistal_visual">
-        <mesh filename="meshes/components/f_distal/pst/f_distal_pst.dae" scale="0.001 0.001 0.001"/>
+        <mesh filename="meshes/touchlab/fingertip_v5_simple.stl" scale="0.1 0.1 0.1"/>
       </geometry>
     </visual>
     <collision>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <origin rpy="0 0 0" xyz="0 0 0.0345"/>
       <geometry name="rh_rfdistal_collision_geom">
-        <mesh filename="meshes/components/f_distal/pst/f_distal_pst.dae" scale="0.001 0.001 0.001"/>
+        <mesh filename="meshes/touchlab/fingertip_v5_simple.stl" scale="0.1 0.1 0.1"/>
       </geometry>
     </collision>
   </link>
@@ -772,7 +775,7 @@
     <!-- standard distal joint -->
     <limit effort="2" lower="0" upper="1.5707963267948966" velocity="2.0"/>
     <dynamics damping="0.1"/>
-    <mimic joint="rh_RFJ2" multiplier="1.0" offset="0.0"/>
+
   </joint>
   <gazebo reference="rh_RFJ1">
     <provideFeedback>1</provideFeedback>
@@ -1003,25 +1006,26 @@
       <inertia ixx="0.0000021" ixy="0.0" ixz="0.0" iyy="0.0000022" iyz="0.0" izz="0.000001"/>
     </inertial>
     <visual>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <!-- TouchLab v5 fingertip body (mesh+origin swapped from PST); origin is a starting guess, tune in viewer -->
+      <origin rpy="0 0 0" xyz="0 0 0.0345"/>
       <geometry name="rh_thdistal_visual">
-        <mesh filename="meshes/components/th_distal/pst/th_distal_pst.dae" scale="0.001 0.001 0.001"/>
+        <mesh filename="meshes/touchlab/fingertip_v5_simple.stl" scale="0.1 0.1 0.1"/>
       </geometry>
       <material name="shadow_thmiddle_material">
         <color rgba="0.2 0.2 0.2 1.0"/>
       </material>
     </visual>
     <collision>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <origin rpy="0 0 0" xyz="0 0 0.0345"/>
       <geometry name="rh_thmiddle_collision_geom">
-        <mesh filename="meshes/components/th_distal/pst/th_distal_pst.dae" scale="0.001 0.001 0.001"/>
+        <mesh filename="meshes/touchlab/fingertip_v5_simple.stl" scale="0.1 0.1 0.1"/>
       </geometry>
     </collision>
   </link>
   <joint name="rh_THJ1" type="revolute">
     <parent link="rh_thmiddle"/>
     <child link="rh_thdistal"/>
-    <origin rpy="0 0 0" xyz="0 0 0.032"/>
+    <origin rpy="0 0 0" xyz="0 0 0.034"/>
     <axis xyz="1 0 0"/>
     <limit effort="1.0" lower="-0.2617993877991494" upper="1.5707963267948966" velocity="4.0"/>
     <dynamics damping="0.2"/>

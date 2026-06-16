@@ -9,7 +9,7 @@ observations:
   obs_stack: 4
   tactile_cfg:
     binary_tactile: true
-    binary_threshold: 0.0
+    binary_threshold: 0.01
 
 encoder:
   method: early
@@ -58,10 +58,10 @@ experiment:
     entity: in60seconds-shorts-the-university-of-edinburgh
 
 trainer:
-  num_eval_envs: 1
+  num_eval_envs: 100
   max_global_timesteps_M: 250
 
 sweeper:
-  storage: sqlite:///shadow_baoding.db
+  storage: sqlite:///shadowlite_baoding_newmimic_baoding_1p5.db #nomimic_bao is terminal1
   warmup_timesteps_M: 100
-  max_sweep_timesteps_M: 150
+  max_sweep_timesteps_M: 250

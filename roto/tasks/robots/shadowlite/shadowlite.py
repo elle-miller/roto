@@ -46,18 +46,42 @@ class ShadowLiteEnvCfg(RotoEnvCfg):
 
     episode_length_s = 10.0
 
-
-    reset_joint_pos_noise = 0.2
+    reset_joint_pos_noise = 0.1
     reset_joint_vel_noise = 0.0
 
+    tacsl_contact_expr: str | None = "{ENV_REGEX_NS}/ball1"
+    """Prim path expression for the TacSL contact object.
+    Set to None to disable TacSL and fall back to ContactSensor (e.g. --no_ball mode).
+    """
+
     hand_height = 0.5
+    # Stock Shadow Lite (PST caps) from shadow_hand_lite.py.
     robot_cfg: ArticulationCfg = SHADOW_HAND_LITE_CFG.replace(prim_path="/World/envs/env_.*/Robot").replace(
         init_state=ArticulationCfg.InitialStateCfg(
             pos=(0.0, 0.0, hand_height),
             #rot=(0.0, 0.0, -0.7071, 0.7071),
-            rot=(-0.7071, 0, 0.0, 0.7071), #upright pos 
-            #rot=(0.0, 0.0, -0.7933, 0.6087), 15 degree tilt forward facing up
-            joint_pos={".*": 0.0},
+            #rot=(-0.7071, 0, 0.0, 0.7071), #upright pos 
+            #rot=(0.0, 0.0, -0.7373, 0.6756),
+            rot=(0.0, 0.0, -0.7933, 0.6087), #15 degree tilt forward facing up
+            joint_pos={
+                # ── Knuckle abduction (J4) — fan FF/RF away from the middle finger.
+                #    FFJ4 axis is (0,-1,0) but RFJ4 axis is (0,1,0) (mirrored), so the
+                #    SAME numeric sign rotates them in opposite world directions = spread.
+                #    Limit is ±0.349 rad (±20°); flip both signs if they converge instead.
+                "rh_FFJ4":  -0.349,   # index fans out (toward thumb side)
+                "rh_RFJ4":  -0.349,   # ring fans out (toward little-finger side)
+                # ── Finger curl — open a bit for a larger ball ───────────────────
+                "rh_FFJ3":  0.65,    # MCP ~37°
+                "rh_FFJ2":  0.87,    # PIP ~50°
+                "rh_MFJ3":  0.65,    # MCP ~37°
+                "rh_MFJ2":  0.87,    # PIP ~50°
+                "rh_RFJ3":  0.65,    # MCP ~37°
+                "rh_RFJ2":  0.87,    # PIP ~50°
+                # ── Thumb (TH) — back off so it sits a bit more open, not tucked ─
+                "rh_THJ5":  0.4,     # rotate thumb inward ~23°
+                "rh_THJ4":  0.5,     # abduct across palm ~29°
+                "rh_THJ2":  0.35,    # flex ~20°
+            },
 
         #     joint_pos = {
         #     # ── Index finger (FF) — EXTENDED and spread outward ──────────────────
@@ -120,21 +144,36 @@ class ShadowLiteEnvCfg(RotoEnvCfg):
     # default_object_pos = (0., -0.265, 0.6)  # is this affecting the ball position at all? cuz this is not changing anything in the viewer
     # object_cfg: RigidObjectCfg = _make_bouncy_ball_cfg((0., -0.265, 0.6)  )
 
-    actuated_joint_names = [
-        # Finger Knuckles (Abduction/Adduction)
-        'rh_FFJ4', 'rh_MFJ4', 'rh_RFJ4', 
-        # Finger MCP (Proximal)
-        'rh_FFJ3', 'rh_MFJ3', 'rh_RFJ3', 
-        # Finger PIP (Middle) - J1 will mimic these
-        'rh_FFJ2', 'rh_MFJ2', 'rh_RFJ2', 
-        # Thumb joints (Complete chain)
-        'rh_THJ5', 'rh_THJ4', 'rh_THJ2', 'rh_THJ1'
-    ]
+    control_joint_names = [
+    "rh_FFJ4", "rh_MFJ4", "rh_RFJ4", "rh_THJ5",   # 0,1,2,3
+    "rh_FFJ3", "rh_MFJ3", "rh_RFJ3", "rh_THJ4",   # 4,5,6,7
+    "rh_FFJ2", "rh_MFJ2", "rh_RFJ2",              # 8,9,10  ← the J2 drivers
+    "rh_THJ2", "rh_THJ1",                          # 11,12
+]
 
-    #actuated_joint_names = ['rh_FFJ4', 'rh_MFJ4', 'rh_RFJ4', 'rh_THJ5', 'rh_FFJ3', 'rh_MFJ3', 'rh_RFJ3', 'rh_THJ4', 'rh_FFJ2', 'rh_MFJ2', 'rh_RFJ2', 'rh_FFJ1', 'rh_MFJ1', 'rh_RFJ1', 'rh_THJ2', 'rh_THJ1']
+    coupled_joint_map = {
+        "rh_FFJ1": "rh_FFJ2",
+        "rh_MFJ1": "rh_MFJ2",
+        "rh_RFJ1": "rh_RFJ2",
+    }
+
+    # J2 must reach this angle (rad) before J1 starts moving.
+    # 0.785 rad = 45°: first half of J2's range drives J2, second half drives J1.
+    coupling_theta: float = 0.785
+
+    # GRDF coupling (experimental): derive the coupled J1/J2 commands from the
+    # phase couplings declared in the GRDF robot file instead of the
+    # coupling_theta split above. Same law today, but the coupling lives in the
+    # robot description (single source of truth, upgradeable from hardware
+    # sweeps without touching env code). Keep False until the Baoding A/B
+    # untangling runs finish.
+    
+
+    actuated_joint_names = ['rh_FFJ4', 'rh_MFJ4', 'rh_RFJ4', 'rh_THJ5', 'rh_FFJ3', 'rh_MFJ3', 'rh_RFJ3', 'rh_THJ4', 'rh_FFJ2', 'rh_MFJ2', 'rh_RFJ2', 'rh_FFJ1', 'rh_MFJ1', 'rh_RFJ1', 'rh_THJ2', 'rh_THJ1']
 
 
-    num_actions = len(actuated_joint_names)
+    num_actions = len(control_joint_names)
+
     action_space = num_actions
 
     marker_cfg = FRAME_MARKER_CFG.copy()
@@ -142,10 +181,12 @@ class ShadowLiteEnvCfg(RotoEnvCfg):
     marker_cfg.prim_path = "/Visuals/ContactCfg"
 
     robot_contact_sensor_cfg = ContactSensorCfg(
-    prim_path="/World/envs/env_.*/Robot/rh_(ffdistal|mfdistal|rfdistal|thdistal)",
+    #prim_path="/World/envs/env_.*/Robot/rh_(ffdistal|mfdistal|rfdistal|thdistal)",
+    prim_path="/World/envs/env_.*/Robot/.*",
     update_period=0.0,
     history_length=1,
 )
+
 
 
 

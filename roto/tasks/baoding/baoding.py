@@ -189,21 +189,38 @@ class BaodingShadowLiteCfg(BaodingTaskCfg, ShadowLiteEnvCfg):
 
     ball_reset_height = 0.46
 
+    ball_mass_g = 30
+    success_tolerance = 0.013
+
     # ball size
-    ball_diameter_inches = 1.2
+    ball_diameter_inches = 1.5
     ball_radius_m = (ball_diameter_inches / 2) * 2.54 / 100
     ball_diameter_m = ball_radius_m * 2
 
     # initial ball positions
     ball_1_init_x = -0.03
-    ball_1_init_y = -.2
-    ball_2_init_x = -0.01
-    ball_2_init_y = -0.24
+    ball_1_init_y = -.225
+    ball_2_init_x = 0.01
+    ball_2_init_y = -0.255
 
     # target positions
     palm_target_x = 0
     palm_target_y = -0.25
-    palm_target_z = 0.39
+    palm_target_z = 0.41
+
+    # for 40 degree tilt forward
+    # ball_1_init_x = -0.03
+    # ball_1_init_y = -.17
+    # ball_2_init_x = -0.01
+    # ball_2_init_y = -0.19
+
+    # # target positions
+    # palm_target_x = 0
+    # palm_target_y = -0.19
+    # palm_target_z = 0.28
+
+ 
+
 
     target_offset = ball_diameter_m / 1.73205080757 + 0.001
     diagonal_target_x = palm_target_x - target_offset
@@ -413,8 +430,8 @@ class BaodingMixin:
         self._compute_intermediate_values()
 
         out_of_reach = self.ball_dist >= self.cfg.ball_dist_terminate
-        ball_1_fall = self.ball_1_pos[:, 2] < 0.3
-        ball_2_fall = self.ball_2_pos[:, 2] < 0.3
+        ball_1_fall = self.ball_1_pos[:, 2] < 0.2
+        ball_2_fall = self.ball_2_pos[:, 2] < 0.2 # changed from 0.3 to 0.2 for shadowlite 40 degree since the reset height is lower and we don't want episodes to terminate immediately after reset 
         termination = out_of_reach | ball_1_fall | ball_2_fall
         time_out = self.episode_length_buf >= self.max_episode_length - 1
 
@@ -461,7 +478,8 @@ class BaodingMixin:
     def _baoding_reset_balls(self, env_ids: Sequence[int]) -> None:
         ball_1_default_state = self.ball_1.data.default_root_state.clone()[env_ids]
         ball_2_default_state = self.ball_2.data.default_root_state.clone()[env_ids]
-        pos_noise = sample_uniform(-0.005, 0.005, (len(env_ids), 3), device=self.device)
+        #pos_noise = sample_uniform(-0.005, 0.005, (len(env_ids), 3), device=self.device) - > added noise 
+        pos_noise = sample_uniform(0.0, 0.0, (len(env_ids), 3), device=self.device)
 
         ball_1_default_state[:, 0:3] = ball_1_default_state[:, 0:3] + pos_noise + self.scene.env_origins[env_ids]
         ball_1_default_state[:, 7:] = torch.zeros_like(self.ball_1.data.default_root_state[env_ids, 7:])

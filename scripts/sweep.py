@@ -58,11 +58,27 @@ app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
 
+import os
+
 import numpy as np
 import torch
 
 import isaaclab_tasks  # noqa: F401
 import optuna
+
+# Repo root is the parent of this scripts/ directory.
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _resolve_storage(storage: str) -> str:
+    """Resolve a relative sqlite:/// path to an absolute path anchored at the repo root."""
+    prefix = "sqlite:///"
+    abs_prefix = "sqlite:////"
+    if storage.startswith(prefix) and not storage.startswith(abs_prefix):
+        db_name = storage[len(prefix):]
+        if not os.path.isabs(db_name):
+            return f"{prefix}{os.path.join(_REPO_ROOT, db_name)}"
+    return storage
 from common_utils import (
     LOG_PATH,
     load_hand_task_agent_cfg,
@@ -89,7 +105,7 @@ def apply_optuna_trial_params(agent_cfg: dict, trial: optuna.trial.FrozenTrial) 
     """Copy hyperparameters from a stored Optuna trial into ``agent_cfg``."""
     p = trial.params
     agent_cfg["agent"]["rollouts"] = 2 ** p["rollouts_pow"]
-    agent_cfg["agent"]["mini_batches"] = p["mini_batches"]
+    agent_cfg["agent"]["mini_batches"] = 2 ** p["mini_batches_pow"]
     agent_cfg["agent"]["learning_epochs"] = p["learning_epochs"]
     agent_cfg["agent"]["learning_rate"] = p["learning_rate"]
     agent_cfg["agent"]["entropy_loss_scale"] = p["entropy_loss_scale"]
@@ -192,10 +208,11 @@ class OptimisationRunner:
             max_rollouts_pow = 5
             
         else:
-            max_rollouts_pow = 6
+            max_rollouts_pow = 6 
 
-        rollouts = 2 ** trial.suggest_int("rollouts_pow", 4, max_rollouts_pow) # 16, 32, 64
-        mini_batches = trial.suggest_categorical("mini_batches", [4, 8, 16, 32])
+        rollouts = 2 ** trial.suggest_int("rollouts_pow", 4, max_rollouts_pow) # 16, 32, 64 due to memory constraints, we can't always use 64 rollouts with large aux tasks
+        #rollouts = trial.suggest_categorical("rollouts", [16, 32])
+        mini_batches = 2 ** trial.suggest_int("mini_batches_pow", 2, 5) # 4, 8, 16, 32 — int avoids CategoricalDistribution dynamic value space errors on study resume
         learning_epochs = trial.suggest_int("learning_epochs", low=4, high=10, step=1)
         learning_rate = trial.suggest_float("learning_rate", low=1e-5, high=5e-4, log=True)
         entropy_loss_scale = trial.suggest_float("entropy_loss_scale", 1e-4, 0.01, log=True)
@@ -303,7 +320,7 @@ if __name__ == "__main__":
     max_training_timesteps_M = agent_cfg["trainer"]["max_global_timesteps_M"]
 
     if args_cli.rerun_trial is not None:
-        storage = agent_cfg["sweeper"]["storage"]
+        storage = _resolve_storage(agent_cfg["sweeper"]["storage"])
         study_name = args_cli.study
         study = optuna.load_study(study_name=study_name, storage=storage)
         trial = next((t for t in study.trials if t.number == args_cli.rerun_trial), None)
@@ -352,7 +369,7 @@ if __name__ == "__main__":
     agent_cfg["experiment"]["wandb_kwargs"]["group"] = (
         args_cli.task + "_" + args_cli.agent_cfg + "_" + args_cli.study
     )
-    storage = agent_cfg["sweeper"]["storage"]
+    storage = _resolve_storage(agent_cfg["sweeper"]["storage"])
     n_warmup_steps = agent_cfg["sweeper"]["warmup_timesteps_M"] * 1e6
     agent_cfg["trainer"]["max_global_timesteps_M"] = max_sweep_timesteps_M
 

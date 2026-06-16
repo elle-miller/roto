@@ -131,6 +131,16 @@ class RotoEnv(DirectRLEnv):
         ]
         self.actuated_dof_indices.sort()
 
+        # Policy-controlled joints, in action-vector order
+        self.control_dof_indices = [self.robot.joint_names.index(n) for n in cfg.control_joint_names]
+
+        # Coupled joints: dependent J1 <- driver J2 (same order as the dict)
+        self.coupled_dependent_indices = [self.robot.joint_names.index(d) for d in cfg.coupled_joint_map.keys()]
+        self.coupled_driver_indices    = [self.robot.joint_names.index(d) for d in cfg.coupled_joint_map.values()]
+        # θ (rad): J2 must exceed this before J1 starts moving
+        self.coupling_theta = getattr(cfg, "coupling_theta", 0.0)
+
+
         # Action and state tensors
         self.actions = torch.zeros((self.num_envs, self.cfg.num_actions), device=self.device)
         default_joint_pos = self.robot.data.default_joint_pos
@@ -210,20 +220,54 @@ class RotoEnv(DirectRLEnv):
         self.action_space = action
 
     def _pre_physics_step(self, actions: torch.Tensor) -> None:
-        """Store actions from policy before physics step.
-
-        Args:
-            actions: Actions from the policy.
-        """
-
         self.prev_joint_pos_cmd[:] = self.joint_pos_cmd
-        self.actions = actions.clone()
+        self.actions = actions.clone()  # (num_envs, 13)
 
-        self.joint_pos_cmd[:, self.actuated_dof_indices] = scale(
+        # 13 actions -> 13 directly controlled joints
+        self.joint_pos_cmd[:, self.control_dof_indices] = scale(
             self.actions,
-            self.robot_joint_pos_lower_limits[self.actuated_dof_indices],
-            self.robot_joint_pos_upper_limits[self.actuated_dof_indices],
+            self.robot_joint_pos_lower_limits[self.control_dof_indices],
+            self.robot_joint_pos_upper_limits[self.control_dof_indices],
         )
+
+        # fill the 3 coupled J1 commands from the J2 drivers
+        self._handle_coupled_joints()
+
+
+    def _handle_coupled_joints(self) -> None:
+        """Split a single 'finger curl' proxy action into J2 and J1 commands.
+
+        The policy action for J2 is scaled to [0, J2_upper] by _pre_physics_step and
+        treated here as a combined curl proxy.  coupling_theta (rad) is the split point:
+
+          proxy ∈ [0,     theta]:  J2 ramps 0 → J2_max,  J1 = 0
+          proxy ∈ [theta, J2_max]: J2 = J2_max (held),   J1 ramps 0 → J1_max
+
+        With coupling_theta = pi/4 (0.785 rad = 45°) and J2_max = J1_max = pi/2 (90°):
+          proxy = 0.785 (45°) → J2 = 90°, J1 =  0°
+          proxy = 1.31  (75°) → J2 = 90°, J1 = 60°
+          proxy = 1.57  (90°) → J2 = 90°, J1 = 90°
+        """
+        # proxy = what _pre_physics_step wrote for J2, in [0, J2_upper]
+        proxy   = self.joint_pos_cmd[:, self.coupled_driver_indices]          # (N, 3)
+        j2_upper = self.robot_joint_pos_upper_limits[self.coupled_driver_indices]    # (3,)
+        j1_upper = self.robot_joint_pos_upper_limits[self.coupled_dependent_indices] # (3,)
+        theta = self.coupling_theta  # scalar (rad)
+
+        zeros = torch.zeros_like(j2_upper)  # tensor min — torch.clamp requires min/max same type
+
+        # J2: proxy in [0, theta] maps linearly to [0, J2_max]; clamp above theta
+        j2_cmd = torch.clamp(proxy * (j2_upper / theta), zeros, j2_upper)
+
+        # J1: proxy in [theta, J2_max] maps linearly to [0, J1_max]; zero below theta
+        j1_cmd = torch.clamp(
+            (proxy - theta) / (j2_upper - theta) * j1_upper,
+            zeros, j1_upper,
+        )
+
+        self.joint_pos_cmd[:, self.coupled_driver_indices]    = j2_cmd
+        self.joint_pos_cmd[:, self.coupled_dependent_indices] = j1_cmd
+
 
     def _apply_action(self) -> None:
         """Apply actions to the robot.
@@ -380,7 +424,7 @@ class RotoEnv(DirectRLEnv):
         self.robot.set_joint_position_target(joint_pos, env_ids=env_ids)
         self.robot.write_joint_state_to_sim(joint_pos, joint_vel, env_ids=env_ids)
 
-    def _compute_intermediate_values(self, env_ids):
+    def _compute_intermediate_values(self, env_ids=None):
         """Compute intermediate values for observations and rewards.
 
         Updates joint positions, velocities, accelerations, and their normalized versions.
