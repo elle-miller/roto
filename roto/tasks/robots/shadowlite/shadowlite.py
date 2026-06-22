@@ -181,8 +181,8 @@ class ShadowLiteEnvCfg(RotoEnvCfg):
     marker_cfg.prim_path = "/Visuals/ContactCfg"
 
     robot_contact_sensor_cfg = ContactSensorCfg(
-    #prim_path="/World/envs/env_.*/Robot/rh_(ffdistal|mfdistal|rfdistal|thdistal)",
-    prim_path="/World/envs/env_.*/Robot/.*",
+    prim_path="/World/envs/env_.*/Robot/rh_(ffdistal|mfdistal|rfdistal|thdistal)",
+    #prim_path="/World/envs/env_.*/Robot/.*",
     update_period=0.0,
     history_length=1,
 )

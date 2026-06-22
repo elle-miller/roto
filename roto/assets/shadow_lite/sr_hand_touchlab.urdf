@@ -296,7 +296,7 @@
     <child link="rh_ffmiddle"/>
     <origin rpy="0 0 0" xyz="0 0 0.045"/>
     <axis xyz="1 0 0"/>
-    <limit effort="2" lower="0" upper="1.5707963267948966" velocity="2.0"/>
+    <limit effort="2" lower="0" upper="1.63" velocity="2.0"/>
     <dynamics damping="0.1"/>
   </joint>
   <gazebo reference="rh_FFJ2">
@@ -511,7 +511,7 @@
     <child link="rh_mfmiddle"/>
     <origin rpy="0 0 0" xyz="0 0 0.045"/>
     <axis xyz="1 0 0"/>
-    <limit effort="2" lower="0" upper="1.5707963267948966" velocity="2.0"/>
+    <limit effort="2" lower="0" upper="1.63" velocity="2.0"/>
     <dynamics damping="0.1"/>
   </joint>
   <gazebo reference="rh_MFJ2">
@@ -727,7 +727,7 @@
     <child link="rh_rfmiddle"/>
     <origin rpy="0 0 0" xyz="0 0 0.045"/>
     <axis xyz="1 0 0"/>
-    <limit effort="2" lower="0" upper="1.5707963267948966" velocity="2.0"/>
+    <limit effort="2" lower="0" upper="1.63" velocity="2.0"/>
     <dynamics damping="0.1"/>
   </joint>
   <gazebo reference="rh_RFJ2">

@@ -7,13 +7,17 @@
 
 from __future__ import annotations
 
+import inspect
 from collections.abc import Sequence
 from pathlib import Path
 
 import torch
 
+import isaaclab.envs.mdp as mdp
 import isaaclab.sim as sim_utils
 from isaaclab.assets import ArticulationCfg, RigidObject, RigidObjectCfg
+from isaaclab.managers import EventTermCfg as EventTerm
+from isaaclab.managers import SceneEntityCfg
 from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
 from isaaclab.sim.schemas.schemas_cfg import CollisionPropertiesCfg
 from isaaclab.utils import configclass
@@ -184,12 +188,101 @@ class BaodingCfg(BaodingTaskCfg, ShadowEnvCfg):
     """Baoding on the Shadow hand (registered env ``Baoding``)."""
 
 @configclass
+class ShadowLiteFrictionEventCfg:
+    """Per-segment friction domain randomization, re-sampled every episode reset.
+
+    One event term per finger-segment type (distal / middle / proximal / knuckle);
+    each targets a disjoint set of bodies via a body-name regex and gets its own
+    friction range. ``num_buckets`` > 1 is required so that the 4096 parallel envs
+    see varied friction (with the default of 1, every env would get identical
+    friction). ``make_consistent`` enforces sampled dynamic_friction <=
+    static_friction.
+
+    Note: palm/forearm are merged into the fixed base during URDF->USD conversion,
+    so they are not separate articulation bodies; palm friction is randomized via
+    the base body 'world' (which carries the palm collision shapes).
+    """
+
+    distal_friction = EventTerm(  # fingertips that grip the balls
+        func=mdp.randomize_rigid_body_material,
+        mode="reset",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names="rh_.*distal"),
+            "static_friction_range": (0.8, 1.5),
+            "dynamic_friction_range": (0.7, 1.3),
+            "restitution_range": (0.0, 0.0),
+            "num_buckets": 250,
+            "make_consistent": True,
+        },
+    )
+    middle_friction = EventTerm(
+        func=mdp.randomize_rigid_body_material,
+        mode="reset",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names="rh_.*middle"),
+            "static_friction_range": (0.7, 1.2),
+            "dynamic_friction_range": (0.6, 1.0),
+            "restitution_range": (0.0, 0.0),
+            "num_buckets": 250,
+            "make_consistent": True,
+        },
+    )
+    proximal_friction = EventTerm(
+        func=mdp.randomize_rigid_body_material,
+        mode="reset",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names="rh_.*proximal"),
+            "static_friction_range": (0.7, 1.2),
+            "dynamic_friction_range": (0.6, 1.0),
+            "restitution_range": (0.0, 0.0),
+            "num_buckets": 250,
+            "make_consistent": True,
+        },
+    )
+    knuckle_friction = EventTerm(  # ff/mf/rf knuckles + thumb base
+        func=mdp.randomize_rigid_body_material,
+        mode="reset",
+        params={
+            # Note: the palm/forearm links are merged into the fixed base during
+            # URDF->USD conversion, so they are not separate articulation bodies
+            # and cannot be targeted here. The knuckles + thumb base are the`1`
+            # proximal-most randomizable bodies.
+            "asset_cfg": SceneEntityCfg("robot", body_names="rh_(.*knuckle|thbase)"),
+            "static_friction_range": (0.5, 1.0),
+            "dynamic_friction_range": (0.4, 0.9),
+            "restitution_range": (0.0, 0.0),
+            "num_buckets": 250,
+            "make_consistent": True,
+        },
+    )
+    palm_friction = EventTerm(
+        func=mdp.randomize_rigid_body_material,
+        mode="reset",
+        params={
+            # palm/forearm collision is merged onto the fixed base body 'world',
+            # so targeting 'world' randomizes the palm contact surface.
+            "asset_cfg": SceneEntityCfg("robot", body_names="world"),
+            "static_friction_range": (0.3, 0.8),
+            "dynamic_friction_range": (0.3, 0.8),
+            "restitution_range": (0.0, 0.0),
+            "num_buckets": 250,
+            "make_consistent": True,
+        },
+    )
+
+
+@configclass
 class BaodingShadowLiteCfg(BaodingTaskCfg, ShadowLiteEnvCfg):
     """Baoding on the ShadowLite hand."""
 
+    events: ShadowLiteFrictionEventCfg = ShadowLiteFrictionEventCfg()
+
+    # Ball friction DR: one value sampled per env each reset, applied to BOTH balls.
+    ball_friction_range: tuple[float, float] = (0.2, 0.6)
+
     ball_reset_height = 0.46
 
-    ball_mass_g = 30
+    ball_mass_g = 55
     success_tolerance = 0.013
 
     # ball size
@@ -449,6 +542,25 @@ class BaodingMixin:
 
     def _reset_object(self, env_ids: Sequence[int]) -> None:
         self._baoding_reset_balls(env_ids)
+        if getattr(self.cfg, "ball_friction_range", None) is not None:
+            self._randomize_ball_friction(env_ids)
+
+    def _randomize_ball_friction(self, env_ids: Sequence[int]) -> None:
+        """Sample one friction value per env and apply it to BOTH balls (same each reset).
+
+        randomize_rigid_body_material can't express "same value across two separate
+        RigidObjects", so this writes the ball material buffers directly, mirroring
+        that function's buffer handling.
+        """
+        lo, hi = self.cfg.ball_friction_range
+        eids = env_ids.cpu()
+        mu = sample_uniform(lo, hi, (len(eids), 1, 1), device="cpu")  # [n_env, 1 shape, 1]
+        for ball in (self.ball_1, self.ball_2):
+            materials = ball.root_physx_view.get_material_properties()  # [N, 1, 3] on CPU
+            materials[eids, :, 0:1] = mu   # static friction
+            materials[eids, :, 1:2] = mu   # dynamic friction (= static)
+            materials[eids, :, 2:3] = 0.0  # restitution
+            ball.root_physx_view.set_material_properties(materials, eids)
 
     def _reset_target_pose(self, reached_goal_ids):
         self.ball_goal_idx[reached_goal_ids] = ~self.ball_goal_idx[reached_goal_ids]
@@ -512,6 +624,34 @@ class BaodingShadowLiteEnv(BaodingMixin, ShadowLiteEnv):
     def __init__(self, cfg: BaodingShadowLiteCfg, render_mode: str | None = None, **kwargs):
         apply_baoding_object_cfgs_from_scalars(cfg)
         super().__init__(cfg, render_mode, **kwargs)
+
+        # Friction DR uses class-based event terms (randomize_rigid_body_material,
+        # a ManagerTermBase). Isaac Lab normally instantiates those classes lazily
+        # via a timeline PLAY-event callback, but that callback does not fire in
+        # this DirectRLEnv construction path, leaving the terms as raw classes — so
+        # the reset-mode apply() ends up calling the class __init__ and raises
+        # "unexpected keyword argument 'asset_cfg'". Instantiate them now that the
+        # sim is playing. We only resolve a SceneEntityCfg if it is still
+        # unresolved: the framework already resolves body_names -> body_ids (but
+        # leaves body_names as the regex), so a second resolve would raise a
+        # spurious "body_names and body_ids inconsistent" error.
+        em = getattr(self, "event_manager", None)
+        if em is not None and self.sim.is_playing():
+            for term_cfgs in em._mode_term_cfgs.values():
+                for term_cfg in term_cfgs:
+                    for value in term_cfg.params.values():
+                        if (
+                            isinstance(value, SceneEntityCfg)
+                            and value.body_names is not None
+                            and value.body_ids == slice(None)
+                        ):
+                            value.resolve(self.scene)
+                    if inspect.isclass(term_cfg.func):
+                        term_cfg.func = term_cfg.func(cfg=term_cfg, env=self)
+            # Mark resolved so a later timeline PLAY callback does not re-resolve
+            # the (now resolved) SceneEntityCfgs and raise the inconsistency error.
+            em._is_scene_entities_resolved = True
+
         self._init_baoding_state()
 
 

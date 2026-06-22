@@ -9,17 +9,17 @@ observations:
     binary_threshold: 0.01
     
 agent:
-  rollouts: 32
-  learning_epochs: 8
-  mini_batches: 4
+  rollouts: 16 #32 default 32
+  learning_epochs: 7 # defualt 8
+  mini_batches: 3 #4# altering this based on best seed
   discount_factor: 0.99
   lambda: 0.95
-  learning_rate: 2.02e-04
+  learning_rate: 2.6495e-04 #2.02e-04 
   grad_norm_clip: 1.0
   ratio_clip: 0.2
   value_clip: 0.2
-  value_loss_scale: 1.0
-  entropy_loss_scale: 0.05
+  value_loss_scale: 0.1322 #1.0
+  entropy_loss_scale: 0.0001344 #0.05
   kl_threshold: 0
 
 experiment:
