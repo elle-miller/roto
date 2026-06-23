@@ -590,8 +590,8 @@ class BaodingMixin:
     def _baoding_reset_balls(self, env_ids: Sequence[int]) -> None:
         ball_1_default_state = self.ball_1.data.default_root_state.clone()[env_ids]
         ball_2_default_state = self.ball_2.data.default_root_state.clone()[env_ids]
-        #pos_noise = sample_uniform(-0.005, 0.005, (len(env_ids), 3), device=self.device) - > added noise 
-        pos_noise = sample_uniform(0.0, 0.0, (len(env_ids), 3), device=self.device)
+        pos_noise = sample_uniform(-0.005, 0.005, (len(env_ids), 3), device=self.device)# - > added noise 
+        #pos_noise = sample_uniform(0.0, 0.0, (len(env_ids), 3), device=self.device)
 
         ball_1_default_state[:, 0:3] = ball_1_default_state[:, 0:3] + pos_noise + self.scene.env_origins[env_ids]
         ball_1_default_state[:, 7:] = torch.zeros_like(self.ball_1.data.default_root_state[env_ids, 7:])

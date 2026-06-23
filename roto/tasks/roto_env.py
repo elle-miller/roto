@@ -134,6 +134,11 @@ class RotoEnv(DirectRLEnv):
         # Policy-controlled joints, in action-vector order
         self.control_dof_indices = [self.robot.joint_names.index(n) for n in cfg.control_joint_names]
 
+        # Joints used for the proprioception vector. Defaults to all actuated joints
+        # (current behavior); robots whose obs should exclude coupled mimic joints
+        # override this (see ShadowLiteEnv).
+        self.prop_dof_indices = self.actuated_dof_indices
+
         # Coupled joints: dependent J1 <- driver J2 (same order as the dict)
         self.coupled_dependent_indices = [self.robot.joint_names.index(d) for d in cfg.coupled_joint_map.keys()]
         self.coupled_driver_indices    = [self.robot.joint_names.index(d) for d in cfg.coupled_joint_map.values()]
@@ -315,9 +320,9 @@ class RotoEnv(DirectRLEnv):
         """
         prop = torch.cat(
             (
-                self.normalised_joint_pos[:, self.actuated_dof_indices],
-                self.normalised_joint_vel[:, self.actuated_dof_indices],
-                self.joint_pos_error[:, self.actuated_dof_indices],
+                self.normalised_joint_pos[:, self.prop_dof_indices],
+                self.normalised_joint_vel[:, self.prop_dof_indices],
+                self.joint_pos_error[:, self.prop_dof_indices],
                 self.actions,
             ),
             dim=-1,

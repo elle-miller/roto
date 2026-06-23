@@ -198,6 +198,12 @@ class ShadowLiteEnv(RotoEnv):
     def __init__(self, cfg: ShadowLiteEnvCfg, render_mode: str | None = None, **kwargs):
 
         super().__init__(cfg, render_mode, **kwargs)
+
+        # Hardware has only 13 actuators; the 3 coupled J1 mimics (FFJ1/MFJ1/RFJ1)
+        # are not independently observable. Build proprioception over the 13
+        # policy-controlled joints (control_joint_names order) to match deployment.
+        self.prop_dof_indices = self.control_dof_indices
+
         print("NUM TACTILE BODIES:", self.robot_contact_sensor.data.net_forces_w.shape)
         self.num_tactile_observations = 0
         self.tactile = torch.zeros((self.num_envs, 0), device=self.device)
