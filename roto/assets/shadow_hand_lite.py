@@ -28,8 +28,8 @@ from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
 
 # A single spawn block is shared by both configs below (it never changes).
 _SHADOW_LITE_SPAWN = sim_utils.UrdfFileCfg(
-    asset_path=f"/home/ayush/icra/roto/roto/assets/shadow_lite/sr_hand_touchlab.urdf",  # change path
-    usd_dir=f"/home/ayush/icra/roto/roto/assets/shadow_lite/",
+    asset_path=f"/home/ayush/Desktop/real_to_sim/roto/roto/assets/shadow_lite/sr_hand_touchlab.urdf",  # change path
+    usd_dir=f"/home/ayush/Desktop/real_to_sim/roto/roto/assets/shadow_lite/",
     usd_file_name="sr_hand_touch_nomimic.usd",
     scale=(1.0, 1.0, 1.0),
 
@@ -61,7 +61,7 @@ _SHADOW_LITE_SPAWN = sim_utils.UrdfFileCfg(
         stabilization_threshold=0.0005,
     ),
     joint_drive_props=sim_utils.JointDrivePropertiesCfg(drive_type="force"),
-    fixed_tendons_props=sim_utils.FixedTendonPropertiesCfg(limit_stiffness=30.0, damping=0.1),
+    #fixed_tendons_props=sim_utils.FixedTendonPropertiesCfg(limit_stiffness=30.0, damping=0.1),
 )
 
 _SHADOW_LITE_INIT = ArticulationCfg.InitialStateCfg(

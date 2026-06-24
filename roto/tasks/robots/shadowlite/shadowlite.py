@@ -161,6 +161,12 @@ class ShadowLiteEnvCfg(RotoEnvCfg):
     # 0.785 rad = 45°: first half of J2's range drives J2, second half drives J1.
     coupling_theta: float = 0.785
 
+    # Route-2 sequencing: gate the J1 mimic on MEASURED J2 so J1 can't lead its
+    # driver. J1's commanded curl is scaled by how close measured J2 is to its
+    # limit, ramping over [couple_gate_lo_frac * J2_max, J2_max]. Default off.
+    couple_gate_j1_on_measured: bool = True
+    couple_gate_lo_frac: float = 0.7
+
     # GRDF coupling (experimental): derive the coupled J1/J2 commands from the
     # phase couplings declared in the GRDF robot file instead of the
     # coupling_theta split above. Same law today, but the coupling lives in the

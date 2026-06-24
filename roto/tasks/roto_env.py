@@ -144,6 +144,10 @@ class RotoEnv(DirectRLEnv):
         self.coupled_driver_indices    = [self.robot.joint_names.index(d) for d in cfg.coupled_joint_map.values()]
         # θ (rad): J2 must exceed this before J1 starts moving
         self.coupling_theta = getattr(cfg, "coupling_theta", 0.0)
+        # Optional closed-loop sequencing: gate J1's command on MEASURED J2 so the
+        # mimic can't out-run its driver (see _handle_coupled_joints).
+        self.couple_gate_j1_on_measured = getattr(cfg, "couple_gate_j1_on_measured", False)
+        self.couple_gate_lo_frac        = getattr(cfg, "couple_gate_lo_frac", 0.9)
 
 
         # Action and state tensors
@@ -269,6 +273,21 @@ class RotoEnv(DirectRLEnv):
             (proxy - theta) / (j2_upper - theta) * j1_upper,
             zeros, j1_upper,
         )
+
+        # Closed-loop sequencing: scale J1's command by how far the MEASURED J2
+        # has reached its limit, so J1 cannot lead its driver no matter what the
+        # proxy asks. gate ramps 0->1 over [couple_gate_lo_frac * J2_max, J2_max].
+        if self.couple_gate_j1_on_measured:
+            meas_j2 = self.robot.data.joint_pos[:, self.coupled_driver_indices]   # live measured J2 (N,3)
+            gate_lo = self.couple_gate_lo_frac * j2_upper                          # (3,)
+            # frac=1 makes gate_lo == j2_upper; clamp the denominator so the gate
+            # degrades to a hard step at j2_upper instead of dividing by zero (NaN).
+            denom = torch.clamp(j2_upper - gate_lo, min=1e-6)
+            gate = torch.clamp(
+                (meas_j2 - gate_lo) / denom,
+                zeros, torch.ones_like(j2_upper),
+            )
+            j1_cmd = j1_cmd * gate
 
         self.joint_pos_cmd[:, self.coupled_driver_indices]    = j2_cmd
         self.joint_pos_cmd[:, self.coupled_dependent_indices] = j1_cmd

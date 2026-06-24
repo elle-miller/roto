@@ -104,14 +104,24 @@ USE_TACTILE = True
 TACTILE_BINARY    = True
 TACTILE_THRESHOLD = 0.0
 
-# Number of tactile sensor values from /shadow_touchlab_translator/calibrated.
-# ⚠️ VERIFY: run `rostopic echo /shadow_touchlab_translator/calibrated -n 1` and count values.
-NUM_TACTILE = 4   # placeholder — update with real count
-ff = 16
-mf = 16
-rf = 16
-lf = 16
-th = 16
+# The hardware translator publishes 80 taxels (5 fingers x 16). The policy was
+# trained in sim with one binary contact per distal FINGERTIP (4 fingers, no
+# little finger), so we aggregate the 80 taxels down to 4 per-finger contacts
+# before feeding the policy. NUM_TACTILE is therefore the post-aggregation
+# dimension (4), matching the trained encoder.
+NUM_TACTILE = 4
+
+# Raw taxel layout on /shadow_touchlab_translator/calibrated_flat (80 values).
+# Assumed block order: taxels 0-15 = ff, 16-31 = mf, 32-47 = rf, 48-63 = lf,
+# 64-79 = th. ⚠️ VERIFY against the translator if contacts look wrong.
+TAXELS_PER_FINGER = 16
+HW_FINGER_ORDER   = ["ff", "mf", "rf", "lf", "th"]   # order of the 80-taxel blocks
+SIM_FINGERS       = ["ff", "mf", "rf", "th"]          # sim sensors (drops little finger)
+
+# Per-step tactile logging — dumps an .npz at the end of each episode for
+# comparison against a sim recording (see scripts/plot_tactile_compare.py).
+LOG_TACTILE     = True
+TACTILE_LOG_DIR = os.path.dirname(os.path.abspath(__file__))
 
 PALM_LINK = 'rh_palm'    # fixed base of the hand
 FF_TIP    = 'rh_fftip'   # first finger tip
@@ -370,6 +380,18 @@ def prop_callback(data):
         joint_vel_norm = normalise(joint_vel, -VEL_LIMITS_NORM, VEL_LIMITS_NORM)
 
 
+def aggregate_taxels_to_fingers(raw80):
+    """Collapse the 80-taxel hardware vector to one contact value per sim finger.
+
+    Reshapes 80 -> (5 fingers x TAXELS_PER_FINGER), reduces each finger's taxels
+    with max (logical-OR for binary data, peak force otherwise), then selects the
+    4 fingers present in sim (SIM_FINGERS order). Returns shape (4,).
+    """
+    per_finger = raw80.reshape(len(HW_FINGER_ORDER), TAXELS_PER_FINGER).max(axis=1)
+    idx = [HW_FINGER_ORDER.index(f) for f in SIM_FINGERS]
+    return per_finger[idx].astype(np.float32)
+
+
 def tactile_callback(msg):
     global tactile_raw
 
@@ -422,8 +444,11 @@ def get_proprioception(cur_targets_radians, prev_actions_raw):
         pos_norm   = joint_pos_norm.copy()
         vel_norm   = joint_vel_norm.copy()
         actual_pos = joint_pos.copy()
-        tac        = tactile_raw.copy() if (USE_TACTILE and tactile_raw is not None) \
-                     else np.zeros(NUM_TACTILE)
+        # Aggregate 80 taxels -> 4 per-finger contacts to match the sim-trained
+        # policy (see aggregate_taxels_to_fingers / NUM_TACTILE).
+        tac        = aggregate_taxels_to_fingers(tactile_raw.copy()) \
+                     if (USE_TACTILE and tactile_raw is not None) \
+                     else np.zeros(NUM_TACTILE, dtype=np.float32)
 
     # --- Build current prop frame ---
     joint_pos_error = cur_targets_radians - actual_pos   # cmd - actual (radians)
@@ -855,15 +880,21 @@ def rl_policy_loop():
             break
  
         rospy.loginfo("Running episode for {} steps at {} Hz...".format(EPISODE_TIMESTEPS, RL_HZ))
- 
+
+        # Per-step tactile log buffers (saved at end of episode if LOG_TACTILE).
+        tac_raw80_buf = []   # [T, 80] raw taxel snapshot fed to aggregation
+        tac_agg4_buf  = []   # [T, 4]  per-finger contact the policy consumed
+        tac_time_buf  = []   # [T]     wall-clock timestamp per step
+
         # --- Run one episode ---
         for t in range(EPISODE_TIMESTEPS):
- 
+
             # Step 1: Read latest sensor data (written by callback thread)
             # The lock ensures we get a consistent snapshot, not a half-update.
             with data_lock:
                 pos_norm = joint_pos_norm.copy()
                 vel_norm = joint_vel_norm.copy()
+                tac_snapshot = tactile_raw.copy() if (USE_TACTILE and tactile_raw is not None) else None
  
             # Step 2: Build observation vector
             prop_tensor, tactile_tensor = get_proprioception(cur_targets, prev_actions_raw)
@@ -901,12 +932,42 @@ def rl_policy_loop():
             # Step 9: Remember what we just commanded
             prev_targets = cur_targets.copy()
             prev_actions_raw = actions.copy()
- 
+
+            # Step 9b: Log tactile (raw taxels + per-finger aggregation) for this step.
+            if LOG_TACTILE:
+                if tac_snapshot is not None and len(tac_snapshot) == len(HW_FINGER_ORDER) * TAXELS_PER_FINGER:
+                    tac_raw80_buf.append(tac_snapshot.astype(np.float32))
+                    tac_agg4_buf.append(aggregate_taxels_to_fingers(tac_snapshot))
+                else:
+                    tac_raw80_buf.append(np.zeros(len(HW_FINGER_ORDER) * TAXELS_PER_FINGER, dtype=np.float32))
+                    tac_agg4_buf.append(np.zeros(NUM_TACTILE, dtype=np.float32))
+                tac_time_buf.append(rospy.get_time())
+
             if t % 10 == 0:
                 rospy.loginfo("  Step {}/{}".format(t, EPISODE_TIMESTEPS))
  
         rospy.loginfo("Episode complete.")
- 
+
+        # --- Save tactile log for this episode ---
+        if LOG_TACTILE and len(tac_agg4_buf) > 0:
+            import time as _time
+            ts = _time.strftime("%Y%m%d_%H%M%S")
+            out_path = os.path.join(TACTILE_LOG_DIR, "tactile_hw_{}.npz".format(ts))
+            np.savez_compressed(
+                out_path,
+                tactile_raw80=np.array(tac_raw80_buf, dtype=np.float32),   # [T, 80]
+                tactile_binary=np.array(tac_agg4_buf, dtype=np.float32),   # [T, 4]
+                timestamps=np.array(tac_time_buf, dtype=np.float64),       # [T]
+                finger_names=np.array(SIM_FINGERS),
+                rl_dt=np.float32(1.0 / RL_HZ),
+                source="hw",
+            )
+            agg = np.array(tac_agg4_buf)
+            rospy.loginfo("Saved tactile log ({} steps) -> {}".format(len(tac_agg4_buf), out_path))
+            rospy.loginfo("  Per-finger activation fraction: " + ", ".join(
+                "{}={:.3f}".format(n, f) for n, f in zip(SIM_FINGERS, agg.mean(axis=0))
+            ))
+
         # --- Hold position at end of episode ---
         # Send current targets again so hand stays still rather than going limp.
         publish_to_hand(publishers, cur_targets)
