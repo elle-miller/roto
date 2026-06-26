@@ -16,6 +16,8 @@ It is a child of `DirectRLEnv`, which is a base environment for Isaac Lab RL tas
 
 from __future__ import annotations
 
+import math
+
 import torch
 
 import isaaclab.sim as sim_utils
@@ -144,6 +146,38 @@ class RotoEnv(DirectRLEnv):
         self.coupled_driver_indices    = [self.robot.joint_names.index(d) for d in cfg.coupled_joint_map.values()]
         # θ (rad): J2 must exceed this before J1 starts moving
         self.coupling_theta = getattr(cfg, "coupling_theta", 0.0)
+        # Optional closed-loop sequencing: gate J1's command on MEASURED J2 so the
+        # mimic can't out-run its driver (see _handle_coupled_joints).
+        self.couple_gate_j1_on_measured = getattr(cfg, "couple_gate_j1_on_measured", False)
+        self.couple_gate_lo_frac        = getattr(cfg, "couple_gate_lo_frac", 0.9)
+        # Angular band width at the top of J2's range over which the gate ramps 0→1.
+        # At frac=1 gate_lo==j2_upper so the band collapses to tol, meaning J1 fires
+        # only when measured J2 is within tol of its limit (not never, which was the bug).
+        self.couple_gate_j2_tol         = getattr(cfg, "couple_gate_j2_tol", 0.035)  # ~2°
+
+        # Stateful backlash coupling (asymmetric forward/backward). When on, the
+        # J1<-J2 coupling carries J1 as state with a per-episode latched "unlock"
+        # angle R (combined ffj0 frame). On uncurl J2 unlocks early at R while J1
+        # unwinds to 0 at 100°; reversing inside (100°, R) freezes J1 until the
+        # motor returns to R. See _handle_coupled_joints. Disabled -> old gate path.
+        self.couple_asymmetric_backward = getattr(cfg, "couple_asymmetric_backward", False)
+        _rel_lo, _rel_hi = getattr(cfg, "couple_release_range_deg", (100.0, 140.0))
+        self.couple_release_lo = _rel_lo * math.pi / 180.0   # combined-frame rad
+        self.couple_release_hi = _rel_hi * math.pi / 180.0
+        self.couple_dir_deadband = getattr(cfg, "couple_dir_deadband", 0.002)  # rad
+        n_coupled = len(self.coupled_driver_indices)
+        # combined-frame split point (rad): J2 owns [0, j2_upper], J1 owns the rest.
+        self._couple_j2_top = self.robot_joint_pos_upper_limits[self.coupled_driver_indices].clone()    # (3,) ~100°
+        self._couple_j1_span = self.robot_joint_pos_upper_limits[self.coupled_dependent_indices].clone() # (3,) ~80°
+        self._couple_m_top = self._couple_j2_top + self._couple_j1_span                                  # (3,) ~180°
+        self.couple_release = torch.full((self.num_envs, n_coupled), self.couple_release_hi, device=self.device)  # latched/episode
+        self.prev_m         = torch.zeros((self.num_envs, n_coupled), device=self.device)
+        self.couple_dir     = torch.ones((self.num_envs, n_coupled), device=self.device)   # +1 curl / -1 uncurl
+        self.j1_state       = torch.zeros((self.num_envs, n_coupled), device=self.device)
+        # Backlash freeze state: set when the finger reverses curl->uncurl inside the
+        # (100°, R) zone; J1 holds at couple_frozen_val until the motor returns to R.
+        self.couple_frozen_flag = torch.zeros((self.num_envs, n_coupled), dtype=torch.bool, device=self.device)
+        self.couple_frozen_val  = torch.zeros((self.num_envs, n_coupled), device=self.device)
 
 
         # Action and state tensors
@@ -235,8 +269,33 @@ class RotoEnv(DirectRLEnv):
             self.robot_joint_pos_upper_limits[self.control_dof_indices],
         )
 
+        # Snapshot the stateful-coupling buffers so the settle phase can freeze them:
+        # while the hand is held in its catch pose, the policy's curl proxy must NOT
+        # advance the backlash state (otherwise J1/J2 drift away from the open hand and
+        # hand over a corrupt state when the policy takes over).
+        sc = getattr(self, "settle_counter", None)
+        settling = (sc > 0) if sc is not None else None
+        snap = None
+        if settling is not None and self.couple_asymmetric_backward and settling.any():
+            snap = (self.prev_m.clone(), self.couple_dir.clone(), self.j1_state.clone(),
+                    self.couple_frozen_flag.clone(), self.couple_frozen_val.clone())
+
         # fill the 3 coupled J1 commands from the J2 drivers
         self._handle_coupled_joints()
+
+        # Settle phase: hold the default catch pose while balls drop into the palm.
+        # BaodingMixin sets self.settle_counter on each reset; we check generically so
+        # other envs (no balls) are unaffected.
+        if settling is not None and settling.any():
+            self.joint_pos_cmd[settling] = self.robot.data.default_joint_pos[settling]
+            if snap is not None:
+                # restore the frozen coupling state for the settling envs only
+                self.prev_m[settling]             = snap[0][settling]
+                self.couple_dir[settling]         = snap[1][settling]
+                self.j1_state[settling]           = snap[2][settling]
+                self.couple_frozen_flag[settling] = snap[3][settling]
+                self.couple_frozen_val[settling]  = snap[4][settling]
+            self.settle_counter[settling] -= 1
 
 
     def _handle_coupled_joints(self) -> None:
@@ -270,8 +329,121 @@ class RotoEnv(DirectRLEnv):
             zeros, j1_upper,
         )
 
+        if self.couple_asymmetric_backward:
+            # Stateful backlash coupling supersedes the measured-J2 gate.
+            j2_cmd, j1_cmd = self._asymmetric_backlash(j2_cmd, j1_cmd, j2_upper, j1_upper)
+        elif self.couple_gate_j1_on_measured:
+            # Closed-loop sequencing: scale J1's command by how far the MEASURED J2
+            # has reached its limit, so J1 cannot lead its driver no matter what the
+            # proxy asks. gate ramps 0->1 over [couple_gate_lo_frac * J2_max, J2_max].
+            meas_j2  = self.robot.data.joint_pos[:, self.coupled_driver_indices]   # (N, 3)
+            gate_lo  = self.couple_gate_lo_frac * j2_upper                          # (3,)
+            # Guarantee a finite ramp band even when frac=1 (gate_lo == j2_upper).
+            # At frac=1: band==tol, gate opens over [j2_upper-tol, j2_upper].
+            # At frac<1: band==j2_upper-gate_lo (same as before, tol has no effect).
+            tol      = self.couple_gate_j2_tol
+            band     = torch.clamp(j2_upper - gate_lo, min=tol)
+            opens_at = j2_upper - band
+            gate = torch.clamp(
+                (meas_j2 - opens_at) / band,
+                zeros, torch.ones_like(j2_upper),
+            )
+            j1_cmd = j1_cmd * gate
+
         self.joint_pos_cmd[:, self.coupled_driver_indices]    = j2_cmd
         self.joint_pos_cmd[:, self.coupled_dependent_indices] = j1_cmd
+
+    def _asymmetric_backlash(self, j2_fwd, j1_fwd, j2_upper, j1_upper):
+        """Stateful backlash J1<-J2 coupling in the combined ffj0 frame.
+
+        The combined motor target m = j2_fwd + j1_fwd (rad, in [0, j2_upper+j1_upper] ~
+        [0,180°]) is the single input; j2_upper~100° is the J2/J1 split. Per finger we
+        carry j1 as state plus a per-episode latched unlock angle R = couple_release.
+
+          • curl (m rising, fresh): j2 = min(m, 100°), j1 = clamp(m-100°, 0, 80°) — J1
+            only moves once J2 saturates at 100°.
+          • uncurl (m falling): j1 = clamp(m-100°, 0, 80°) (hits 0 at m=100°); J2 unlocks
+            EARLY at R: j2 = (m/R)·100° for m<R, so over [100°,R] both J2 and J1 drop.
+          • reversal (uncurl, stop in (100°,R), curl back): j1 FREEZES at its value until
+            m climbs back to R, then resumes from the frozen value up to 80° at m=180°.
+
+        Returns (j2_cmd, j1_cmd), both (N,3), and advances the per-finger state.
+        """
+        j2_top  = self._couple_j2_top      # (3,) ~100°
+        j1_span = self._couple_j1_span     # (3,) ~80°
+        m_top   = self._couple_m_top       # (3,) ~180°
+        R       = self.couple_release      # (N,3) latched per episode
+        db      = self.couple_dir_deadband
+        eps     = 1e-4
+
+        m = j2_fwd + j1_fwd                                       # combined motor target
+        zeros = torch.zeros_like(m)
+
+        delta   = m - self.prev_m
+        rising  = delta >  db
+        falling = delta < -db
+        # latch direction when steady (|delta| <= db)
+        new_dir = torch.where(rising, torch.ones_like(m),
+                              torch.where(falling, -torch.ones_like(m), self.couple_dir))
+
+        l = torch.clamp(m - j2_top, zeros, j1_span)              # demand curve (engage @100°)
+
+        frozen = self.couple_frozen_flag
+        fval   = self.couple_frozen_val
+        # enter freeze: direction flips uncurl->curl while below full curl and below R
+        flip_up = (self.couple_dir < 0) & (new_dir > 0)
+        enter   = flip_up & (self.j1_state < j1_span - eps) & (m < R)
+        frozen  = frozen | enter
+        fval    = torch.where(enter, self.j1_state, fval)
+        # uncurling clears the freeze (J1 tracks the demand back down). Use the LATCHED
+        # direction, not instantaneous `falling`, so a steady frame (slider not moving,
+        # |delta|<deadband) keeps the uncurl state instead of reverting.
+        uncurling = new_dir < 0
+        frozen  = frozen & ~uncurling
+
+        # resume ramp: frozen_val -> j1_span over [R, m_top]; hold below R
+        denom   = torch.clamp(m_top - R, min=eps)
+        resume  = fval + (m - R) / denom * (j1_span - fval)
+        resume  = torch.clamp(resume, fval, j1_span)
+        j1_frozen_branch = torch.where(m >= R, resume, fval)
+
+        j1 = torch.where(frozen, j1_frozen_branch, l)
+        # freeze done once the resume ramp has caught the demand (top region)
+        frozen = frozen & ~(j1 >= l - eps)
+
+        # J2: unlock-at-R curve while uncurling or frozen; fresh saturate-at-100° while
+        # curling. Keyed on the LATCHED direction so steady frames during an uncurl don't
+        # snap J2 back to the j2_fresh (=100°) branch — that was the "J2 bounces back to
+        # the limit and won't uncurl" bug, since most slider frames are steady.
+        j2_down  = torch.clamp(m / R * j2_top, zeros, j2_top)    # unlock at R
+        j2_fresh = torch.clamp(m, zeros, j2_top)                 # engage at 100° fresh
+        j2 = torch.where(uncurling | frozen, j2_down, j2_fresh)
+
+        # advance state
+        self.couple_dir         = new_dir
+        self.prev_m             = m
+        self.j1_state           = j1
+        self.couple_frozen_flag = frozen
+        self.couple_frozen_val  = fval
+        return j2, j1
+
+    def _sample_coupling_params(self, env_ids):
+        """Draw the per-episode latched backlash unlock R and clear coupling state.
+
+        Called on reset (from ShadowLiteEnv._reset_idx). Each finger gets a fresh
+        R ~ U(release_lo, release_hi); direction, motor history, J1 state and the
+        freeze latch are reset so the new episode starts from a clean open hand.
+        """
+        n = len(env_ids)
+        k = len(self.coupled_driver_indices)
+        self.couple_release[env_ids] = sample_uniform(
+            self.couple_release_lo, self.couple_release_hi, (n, k), self.device
+        )
+        self.prev_m[env_ids]             = 0.0
+        self.couple_dir[env_ids]         = 1.0
+        self.j1_state[env_ids]           = 0.0
+        self.couple_frozen_flag[env_ids] = False
+        self.couple_frozen_val[env_ids]  = 0.0
 
 
     def _apply_action(self) -> None:
