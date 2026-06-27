@@ -178,10 +178,10 @@ class ShadowLiteEnvCfg(RotoEnvCfg):
     couple_release_range_deg: tuple[float, float] = (100.0, 140.0)
     couple_dir_deadband: float = 0.002   # rad; |Δm| below this latches direction
 
-    # Hand mounting tilt domain randomization, sampled once per episode. Interpolates
-    # between the 0° "facing up" pose and the 15° forward-tilt pose. (15.0, 15.0)
-    # reproduces the fixed 15° mount.
-    hand_tilt_range_deg: tuple[float, float] = (0.0, 15.0)
+    # Hand mounting tilt. (lo, hi) equal -> fixed mount (no DR), which is the default:
+    # the hand sits at the fixed 15° forward tilt from init_state. Widen to e.g.
+    # (0.0, 15.0) to domain-randomize the tilt per episode.
+    hand_tilt_range_deg: tuple[float, float] = (15.0, 15.0)
 
     # GRDF coupling (experimental): derive the coupled J1/J2 commands from the
     # phase couplings declared in the GRDF robot file instead of the
@@ -294,9 +294,12 @@ class ShadowLiteEnv(RotoEnv):
 
         Samples tilt in cfg.hand_tilt_range_deg and nlerps between the 0° and 15°
         root quaternions (the two are ~15° apart, so a normalized lerp matches slerp
-        to <0.1° over this arc). (15,15) reproduces the fixed mount.
+        to <0.1° over this arc). When lo == hi (default) there is no DR, so we skip
+        the root-pose write entirely and leave the hand at its fixed init_state tilt.
         """
         lo, hi = self.cfg.hand_tilt_range_deg
+        if lo == hi:
+            return                              # no DR: keep the fixed init mount
         n = len(env_ids)
         q0  = torch.tensor(self._Q_TILT_0,  device=self.device)
         q15 = torch.tensor(self._Q_TILT_15, device=self.device)
