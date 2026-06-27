@@ -58,7 +58,7 @@ experiment:
     entity: in60seconds-shorts-the-university-of-edinburgh
 
 trainer:
-  num_eval_envs: 100
+  num_eval_envs: 1 # 100
   max_global_timesteps_M: 250
 
 sweeper:

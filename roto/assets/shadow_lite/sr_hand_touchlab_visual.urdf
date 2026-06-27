@@ -70,16 +70,10 @@
     <visual>
       <origin rpy="0 0 1.5707963267948966" xyz="0 0 0.0"/>
       <geometry name="rh_forearm_visual">
-        <mesh filename="meshes/components/forearm/forearm_G1M5.dae" scale="1.0 1.0 1.0"/>
+        <mesh filename="meshes/components/forearm/forearm_G1M5.stl" scale="1.0 1.0 1.0"/>
       </geometry>
       <material name="Grey"/>
     </visual>
-    <collision>
-      <origin rpy="0 0 0" xyz="0 0 0.065"/>
-      <geometry name="rh_forearm_collision">
-        <box size="0.120 0.109 0.130"/>
-      </geometry>
-    </collision>
   </link>
   <gazebo reference="rh_forearm">
     <selfCollide>false</selfCollide>
@@ -101,16 +95,10 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry name="rh_palm_visual">
-        <mesh filename="meshes/components/palm/palm_G1M5.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="meshes/components/palm/palm_G1M5_m.stl" scale="1.0 1.0 1.0"/>
       </geometry>
       <material name="Grey"/>
     </visual>
-    <collision>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
-      <geometry name="rh_palm_collision_geom">
-        <mesh filename="meshes/components/palm/palm_G1M5.stl" scale="0.001 0.001 0.001"/>
-      </geometry>
-    </collision>
   </link>
   <joint name="rh_ee_fixed_joint" type="fixed">
     <parent link="rh_palm"/>
@@ -135,16 +123,10 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0.0005"/>
       <geometry name="rh_ffknuckle_visual">
-        <mesh filename="meshes/components/f_knuckle/f_knuckle_G1M5.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="meshes/components/f_knuckle/f_knuckle_G1M5_m.stl" scale="1.0 1.0 1.0"/>
       </geometry>
-      <material name="Grey"/>
+      <material name="LightGrey"/>
     </visual>
-    <collision>
-      <origin rpy="0 0 0" xyz="0 0 0.0005"/>
-      <geometry name="rh_ffknuckle_collision_geom">
-        <mesh filename="meshes/components/f_knuckle/f_knuckle_G1M5.stl" scale="0.001 0.001 0.001"/>
-      </geometry>
-    </collision>
   </link>
   <joint name="rh_FFJ4" type="revolute">
     <parent link="rh_palm"/>
@@ -182,16 +164,10 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry name="rh_ffproximal_visual">
-        <mesh filename="meshes/components/f_proximal/f_proximal_G1M5.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="meshes/components/f_proximal/f_proximal_G1M5_m.stl" scale="1.0 1.0 1.0"/>
       </geometry>
       <material name="Grey"/>
     </visual>
-    <collision>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
-      <geometry name="rh_ffproximal_collision_geom">
-        <mesh filename="meshes/components/f_proximal/f_proximal_G1M5.stl" scale="0.001 0.001 0.001"/>
-      </geometry>
-    </collision>
   </link>
   <joint name="rh_FFJ3" type="revolute">
     <parent link="rh_ffknuckle"/>
@@ -227,16 +203,10 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry name="rh_ffmiddle_visual">
-        <mesh filename="meshes/components/f_middle/f_middle_G1M5.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="meshes/components/f_middle/f_middle_G1M5_m.stl" scale="1.0 1.0 1.0"/>
       </geometry>
       <material name="Grey"/>
     </visual>
-    <collision>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
-      <geometry name="rh_ffmiddle_collision_geom">
-        <mesh filename="meshes/components/f_middle/f_middle_G1M5.stl" scale="0.001 0.001 0.001"/>
-      </geometry>
-    </collision>
   </link>
   <joint name="rh_FFJ2" type="revolute">
     <parent link="rh_ffproximal"/>
@@ -273,15 +243,9 @@
       <!-- TouchLab v5 fingertip body (mesh+origin swapped from PST); origin is a starting guess, tune in viewer -->
       <origin rpy="0 0 0" xyz="0 0 0.0345"/>
       <geometry name="rh_ffdistal_visual">
-        <mesh filename="meshes/touchlab/fingertip_v5_simple.stl" scale="0.1 0.1 0.1"/>
+        <mesh filename="meshes/touchlab/fingertip_v5_simple_m.stl" scale="1.0 1.0 1.0"/>
       </geometry>
     </visual>
-    <collision>
-      <origin rpy="0 0 0" xyz="0 0 0.0345"/>
-      <geometry name="rh_ffdistal_collision_geom">
-        <mesh filename="meshes/touchlab/fingertip_v5_simple.stl" scale="0.1 0.1 0.1"/>
-      </geometry>
-    </collision>
   </link>
   <joint name="rh_FFJ1" type="revolute">
     <parent link="rh_ffmiddle"/>
@@ -313,7 +277,6 @@
       <always_on>1</always_on>
       <update_rate>1000.0</update_rate>
       <contact>
-        <collision>rh_ffdistal_collision</collision>
         <topic>rh_ffdistal_collision</topic>
       </contact>
       <plugin filename="libgazebo_ros_bumper.so" name="rh_ffdistal_gazebo_ros_bumper_controller">
@@ -338,16 +301,10 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0.0005"/>
       <geometry name="rh_mfknuckle_visual">
-        <mesh filename="meshes/components/f_knuckle/f_knuckle_G1M5.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="meshes/components/f_knuckle/f_knuckle_G1M5_m.stl" scale="1.0 1.0 1.0"/>
       </geometry>
-      <material name="Grey"/>
+      <material name="LightGrey"/>
     </visual>
-    <collision>
-      <origin rpy="0 0 0" xyz="0 0 0.0005"/>
-      <geometry name="rh_mfknuckle_collision_geom">
-        <mesh filename="meshes/components/f_knuckle/f_knuckle_G1M5.stl" scale="0.001 0.001 0.001"/>
-      </geometry>
-    </collision>
   </link>
   <joint name="rh_MFJ4" type="revolute">
     <parent link="rh_palm"/>
@@ -385,16 +342,10 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry name="rh_mfproximal_visual">
-        <mesh filename="meshes/components/f_proximal/f_proximal_G1M5.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="meshes/components/f_proximal/f_proximal_G1M5_m.stl" scale="1.0 1.0 1.0"/>
       </geometry>
       <material name="Grey"/>
     </visual>
-    <collision>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
-      <geometry name="rh_mfproximal_collision_geom">
-        <mesh filename="meshes/components/f_proximal/f_proximal_G1M5.stl" scale="0.001 0.001 0.001"/>
-      </geometry>
-    </collision>
   </link>
   <joint name="rh_MFJ3" type="revolute">
     <parent link="rh_mfknuckle"/>
@@ -430,16 +381,10 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry name="rh_mfmiddle_visual">
-        <mesh filename="meshes/components/f_middle/f_middle_G1M5.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="meshes/components/f_middle/f_middle_G1M5_m.stl" scale="1.0 1.0 1.0"/>
       </geometry>
       <material name="Grey"/>
     </visual>
-    <collision>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
-      <geometry name="rh_mfmiddle_collision_geom">
-        <mesh filename="meshes/components/f_middle/f_middle_G1M5.stl" scale="0.001 0.001 0.001"/>
-      </geometry>
-    </collision>
   </link>
   <joint name="rh_MFJ2" type="revolute">
     <parent link="rh_mfproximal"/>
@@ -476,15 +421,9 @@
       <!-- TouchLab v5 fingertip body (mesh+origin swapped from PST); origin is a starting guess, tune in viewer -->
       <origin rpy="0 0 0" xyz="0 0 0.0345"/>
       <geometry name="rh_mfdistal_visual">
-        <mesh filename="meshes/touchlab/fingertip_v5_simple.stl" scale="0.1 0.1 0.1"/>
+        <mesh filename="meshes/touchlab/fingertip_v5_simple_m.stl" scale="1.0 1.0 1.0"/>
       </geometry>
     </visual>
-    <collision>
-      <origin rpy="0 0 0" xyz="0 0 0.0345"/>
-      <geometry name="rh_mfdistal_collision_geom">
-        <mesh filename="meshes/touchlab/fingertip_v5_simple.stl" scale="0.1 0.1 0.1"/>
-      </geometry>
-    </collision>
   </link>
   <joint name="rh_MFJ1" type="revolute">
     <parent link="rh_mfmiddle"/>
@@ -517,7 +456,6 @@
       <always_on>1</always_on>
       <update_rate>1000.0</update_rate>
       <contact>
-        <collision>rh_mfdistal_collision</collision>
         <topic>rh_mfdistal_collision</topic>
       </contact>
       <plugin filename="libgazebo_ros_bumper.so" name="rh_mfdistal_gazebo_ros_bumper_controller">
@@ -542,16 +480,10 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0.0005"/>
       <geometry name="rh_rfknuckle_visual">
-        <mesh filename="meshes/components/f_knuckle/f_knuckle_G1M5.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="meshes/components/f_knuckle/f_knuckle_G1M5_m.stl" scale="1.0 1.0 1.0"/>
       </geometry>
-      <material name="Grey"/>
+      <material name="LightGrey"/>
     </visual>
-    <collision>
-      <origin rpy="0 0 0" xyz="0 0 0.0005"/>
-      <geometry name="rh_rfknuckle_collision_geom">
-        <mesh filename="meshes/components/f_knuckle/f_knuckle_G1M5.stl" scale="0.001 0.001 0.001"/>
-      </geometry>
-    </collision>
   </link>
   <joint name="rh_RFJ4" type="revolute">
     <parent link="rh_palm"/>
@@ -589,16 +521,10 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry name="rh_rfproximal_visual">
-        <mesh filename="meshes/components/f_proximal/f_proximal_G1M5.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="meshes/components/f_proximal/f_proximal_G1M5_m.stl" scale="1.0 1.0 1.0"/>
       </geometry>
       <material name="Grey"/>
     </visual>
-    <collision>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
-      <geometry name="rh_rfproximal_collision_geom">
-        <mesh filename="meshes/components/f_proximal/f_proximal_G1M5.stl" scale="0.001 0.001 0.001"/>
-      </geometry>
-    </collision>
   </link>
   <joint name="rh_RFJ3" type="revolute">
     <parent link="rh_rfknuckle"/>
@@ -634,16 +560,10 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry name="rh_rfmiddle_visual">
-        <mesh filename="meshes/components/f_middle/f_middle_G1M5.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="meshes/components/f_middle/f_middle_G1M5_m.stl" scale="1.0 1.0 1.0"/>
       </geometry>
       <material name="Grey"/>
     </visual>
-    <collision>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
-      <geometry name="rh_rfmiddle_collision_geom">
-        <mesh filename="meshes/components/f_middle/f_middle_G1M5.stl" scale="0.001 0.001 0.001"/>
-      </geometry>
-    </collision>
   </link>
   <joint name="rh_RFJ2" type="revolute">
     <parent link="rh_rfproximal"/>
@@ -680,15 +600,9 @@
       <!-- TouchLab v5 fingertip body (mesh+origin swapped from PST); origin is a starting guess, tune in viewer -->
       <origin rpy="0 0 0" xyz="0 0 0.0345"/>
       <geometry name="rh_rfdistal_visual">
-        <mesh filename="meshes/touchlab/fingertip_v5_simple.stl" scale="0.1 0.1 0.1"/>
+        <mesh filename="meshes/touchlab/fingertip_v5_simple_m.stl" scale="1.0 1.0 1.0"/>
       </geometry>
     </visual>
-    <collision>
-      <origin rpy="0 0 0" xyz="0 0 0.0345"/>
-      <geometry name="rh_rfdistal_collision_geom">
-        <mesh filename="meshes/touchlab/fingertip_v5_simple.stl" scale="0.1 0.1 0.1"/>
-      </geometry>
-    </collision>
   </link>
   <joint name="rh_RFJ1" type="revolute">
     <parent link="rh_rfmiddle"/>
@@ -720,7 +634,6 @@
       <always_on>1</always_on>
       <update_rate>1000.0</update_rate>
       <contact>
-        <collision>rh_rfdistal_collision</collision>
         <topic>rh_rfdistal_collision</topic>
       </contact>
       <plugin filename="libgazebo_ros_bumper.so" name="rh_rfdistal_gazebo_ros_bumper_controller">
@@ -747,14 +660,10 @@
       <geometry name="rh_thbase_visual">
         <box size="0.001 0.001 0.001"/>
       </geometry>
-      <material name="Grey"/>
+      <material name="shadow_thbase_material">
+        <color rgba="0.5 0.5 0.5 1.0"/>
+      </material>
     </visual>
-    <collision>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
-      <geometry name="rh_thbase_collision_geom">
-        <sphere radius="0.011"/>
-      </geometry>
-    </collision>
   </link>
   <joint name="rh_THJ5" type="revolute">
     <parent link="rh_palm"/>
@@ -791,16 +700,12 @@
     <visual>
       <origin rpy="0 0 1.5707963267948966" xyz="0 0 0"/>
       <geometry name="rh_thproximal_visual">
-        <mesh filename="meshes/components/th_proximal/th_proximal_G1M5.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="meshes/components/th_proximal/th_proximal_G1M5_m.stl" scale="1.0 1.0 1.0"/>
       </geometry>
-      <material name="Grey"/>
+      <material name="shadow_thproximal_material">
+        <color rgba="0.2 0.2 0.2 1.0"/>
+      </material>
     </visual>
-    <collision>
-      <origin rpy="0 0 1.5707963267948966" xyz="0 0 0"/>
-      <geometry name="rh_thproximal_collision_geom">
-        <mesh filename="meshes/components/th_proximal/th_proximal_G1M5.stl" scale="0.001 0.001 0.001"/>
-      </geometry>
-    </collision>
   </link>
   <joint name="rh_THJ4" type="revolute">
     <parent link="rh_thbase"/>
@@ -838,14 +743,10 @@
       <geometry name="rh_thhub_visual">
         <box size="0.001 0.001 0.001"/>
       </geometry>
-      <material name="Grey"/>
+      <material name="shadow_thhub_material">
+        <color rgba="0.7 0.7 0.7 1.0"/>
+      </material>
     </visual>
-    <collision>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
-      <geometry name="rh_thhub_collision_geom">
-        <sphere radius="0.010"/>
-      </geometry>
-    </collision>
   </link>
   <joint name="rh_THJ3" type="fixed">
     <parent link="rh_thproximal"/>
@@ -866,16 +767,12 @@
     <visual>
       <origin rpy="0 0 1.5707963267948966" xyz="0 0 0"/>
       <geometry name="rh_thmiddle_visual">
-        <mesh filename="meshes/components/th_middle/th_middle_G1M5.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="meshes/components/th_middle/th_middle_G1M5_m.stl" scale="1.0 1.0 1.0"/>
       </geometry>
-      <material name="Grey"/>
+      <material name="shadow_thmiddle_material">
+        <color rgba="0.2 0.2 0.2 1.0"/>
+      </material>
     </visual>
-    <collision>
-      <origin rpy="0 0 1.5707963267948966" xyz="0 0 0"/>
-      <geometry name="rh_thmiddle_collision_geom">
-        <mesh filename="meshes/components/th_middle/th_middle_G1M5.stl" scale="0.001 0.001 0.001"/>
-      </geometry>
-    </collision>
   </link>
   <joint name="rh_THJ2" type="revolute">
     <parent link="rh_thhub"/>
@@ -912,18 +809,9 @@
       <!-- TouchLab v5 fingertip body (mesh+origin swapped from PST); origin is a starting guess, tune in viewer -->
       <origin rpy="0 0 0" xyz="0 0 0.0345"/>
       <geometry name="rh_thdistal_visual">
-        <mesh filename="meshes/touchlab/fingertip_v5_simple.stl" scale="0.1 0.1 0.1"/>
+        <mesh filename="meshes/touchlab/fingertip_v5_simple_m.stl" scale="1.0 1.0 1.0"/>
       </geometry>
-      <material name="shadow_thmiddle_material">
-        <color rgba="0.2 0.2 0.2 1.0"/>
-      </material>
     </visual>
-    <collision>
-      <origin rpy="0 0 0" xyz="0 0 0.0345"/>
-      <geometry name="rh_thmiddle_collision_geom">
-        <mesh filename="meshes/touchlab/fingertip_v5_simple.stl" scale="0.1 0.1 0.1"/>
-      </geometry>
-    </collision>
   </link>
   <joint name="rh_THJ1" type="revolute">
     <parent link="rh_thmiddle"/>
@@ -953,7 +841,6 @@
       <always_on>1</always_on>
       <update_rate>1000.0</update_rate>
       <contact>
-        <collision>rh_thdistal_collision</collision>
         <topic>rh_thdistal_collision</topic>
       </contact>
       <plugin filename="libgazebo_ros_bumper.so" name="rh_thdistal_gazebo_ros_bumper_controller">

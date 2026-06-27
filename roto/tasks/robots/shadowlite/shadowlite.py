@@ -22,7 +22,7 @@ from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sensors import ContactSensor, ContactSensorCfg
 from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
 from isaaclab.utils import configclass
-from isaaclab.utils.math import quat_conjugate, quat_from_angle_axis, quat_mul
+from isaaclab.utils.math import quat_conjugate, quat_from_angle_axis, quat_mul, sample_uniform
 
 from roto.assets.shadow_hand_lite import SHADOW_HAND_LITE_CFG
 from roto.tasks.roto_env import RotoEnv, RotoEnvCfg
@@ -163,9 +163,25 @@ class ShadowLiteEnvCfg(RotoEnvCfg):
 
     # Route-2 sequencing: gate the J1 mimic on MEASURED J2 so J1 can't lead its
     # driver. J1's commanded curl is scaled by how close measured J2 is to its
-    # limit, ramping over [couple_gate_lo_frac * J2_max, J2_max]. Default off.
+    # limit, ramping over [opens_at, J2_max] where opens_at = J2_max - band.
+    # frac=1.0 (strict): J1 only fires when J2 is within couple_gate_j2_tol of its limit.
+    # frac<1.0: gate opens earlier, at frac * J2_max (legacy behaviour).
     couple_gate_j1_on_measured: bool = True
-    couple_gate_lo_frac: float = 0.7
+    couple_gate_lo_frac: float = 1.0    # strict: J1 only once J2 reaches its limit
+    couple_gate_j2_tol: float = 0.035   # rad (~2°) tolerance band at the J2 limit
+
+    # Stateful backlash coupling (supersedes the measured-J2 gate when True). On
+    # uncurl J2 unlocks early at a per-episode random angle R (combined ffj0 frame,
+    # degrees), J1 unwinds to 0 at 100°, and reversing inside (100°,R) freezes J1
+    # until the motor returns to R. See RotoEnv._asymmetric_backlash.
+    couple_asymmetric_backward: bool = True
+    couple_release_range_deg: tuple[float, float] = (100.0, 140.0)
+    couple_dir_deadband: float = 0.002   # rad; |Δm| below this latches direction
+
+    # Hand mounting tilt. (lo, hi) equal -> fixed mount (no DR), which is the default:
+    # the hand sits at the fixed 15° forward tilt from init_state. Widen to e.g.
+    # (0.0, 15.0) to domain-randomize the tilt per episode.
+    hand_tilt_range_deg: tuple[float, float] = (15.0, 15.0)
 
     # GRDF coupling (experimental): derive the coupled J1/J2 commands from the
     # phase couplings declared in the GRDF robot file instead of the
@@ -260,3 +276,39 @@ class ShadowLiteEnv(RotoEnv):
 
         # Reset hand with noise
         self._reset_robot(env_ids, joint_pos_noise=self.cfg.reset_joint_pos_noise)
+
+        # Per-episode coupling DR: latch a new backlash unlock angle and clear state.
+        if getattr(self, "couple_asymmetric_backward", False):
+            self._sample_coupling_params(env_ids)
+
+        # Per-episode hand mounting-tilt DR.
+        self._randomize_hand_tilt(env_ids)
+
+    # 0° "facing up" and 15° forward-tilt root quaternions (w, x, y, z); the tilt DR
+    # interpolates between them.
+    _Q_TILT_0  = (0.0, 0.0, -0.7071, 0.7071)
+    _Q_TILT_15 = (0.0, 0.0, -0.7933, 0.6087)
+
+    def _randomize_hand_tilt(self, env_ids):
+        """Write a per-episode randomized forward tilt to the (fixed-base) hand root.
+
+        Samples tilt in cfg.hand_tilt_range_deg and nlerps between the 0° and 15°
+        root quaternions (the two are ~15° apart, so a normalized lerp matches slerp
+        to <0.1° over this arc). When lo == hi (default) there is no DR, so we skip
+        the root-pose write entirely and leave the hand at its fixed init_state tilt.
+        """
+        lo, hi = self.cfg.hand_tilt_range_deg
+        if lo == hi:
+            return                              # no DR: keep the fixed init mount
+        n = len(env_ids)
+        q0  = torch.tensor(self._Q_TILT_0,  device=self.device)
+        q15 = torch.tensor(self._Q_TILT_15, device=self.device)
+        # endpoints are 15° apart -> t = tilt_deg / 15 maps tilt to the interpolation
+        t = sample_uniform(lo / 15.0, hi / 15.0, (n, 1), self.device)
+        q = (1.0 - t) * q0 + t * q15
+        q = q / torch.linalg.vector_norm(q, dim=-1, keepdim=True)
+
+        root_pose = self.robot.data.default_root_state[env_ids, :7].clone()
+        root_pose[:, 0:3] = root_pose[:, 0:3] + self.scene.env_origins[env_ids]
+        root_pose[:, 3:7] = q
+        self.robot.write_root_pose_to_sim(root_pose, env_ids)

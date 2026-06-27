@@ -870,7 +870,7 @@
     <visual>
       <origin rpy="0 0 1.5707963267948966" xyz="0 0 0"/>
       <geometry name="rh_thproximal_visual">
-        <mesh filename="meshes/components/th_proximal/th_proximal_G1M5.dae" scale="0.001 0.001 0.001"/>
+        <mesh filename="meshes/components/th_proximal/th_proximal_G1M5.stl" scale="0.001 0.001 0.001"/>
       </geometry>
       <material name="shadow_thproximal_material">
         <color rgba="0.2 0.2 0.2 1.0"/>

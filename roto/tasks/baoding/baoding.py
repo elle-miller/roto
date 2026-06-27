@@ -95,7 +95,7 @@ def make_baoding_object_cfgs(
         prim_path="/Visuals/target_1",
         markers={
             "target_1": sim_utils.SphereCfg(
-                radius=ball_radius_m * 0.01,
+                radius=ball_radius_m ,
                 visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=colour_1),
             ),
         },
@@ -104,7 +104,7 @@ def make_baoding_object_cfgs(
         prim_path="/Visuals/target_2",
         markers={
             "target_2": sim_utils.SphereCfg(
-                radius=ball_radius_m * 0.01,
+                radius=ball_radius_m,
                 visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=colour_2),
             ),
         },
@@ -146,6 +146,10 @@ class BaodingTaskCfg:
     target_offset = ball_diameter_m / 1.73205080757 + 0.001
     ball_dist_terminate = 0.15
     success_tolerance = 0.01 # 1cm by default
+    # Steps at episode start where the hand holds its cradle pose so balls can
+    # settle from their drop height into the palm before the policy takes control.
+    # 0 = disabled (backward-compatible). ~15 steps ≈ 0.25 s at 60 Hz.
+    settle_steps: int = 15
     palm_target_x = -0.03
     palm_target_y = -0.38
     palm_target_z = 0.46
@@ -439,6 +443,10 @@ class BaodingMixin:
         self.ball_goal_idx = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
         self.update_goal_pos()
 
+        # Per-env countdown used by roto_env._pre_physics_step to hold the catch
+        # pose while balls settle. Set to cfg.settle_steps on every reset.
+        self.settle_counter = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
+
     def _setup_scene(self) -> None:
         super()._setup_scene()
         self.ball_1 = RigidObject(self.cfg.ball_1_cfg)
@@ -524,8 +532,14 @@ class BaodingMixin:
 
         out_of_reach = self.ball_dist >= self.cfg.ball_dist_terminate
         ball_1_fall = self.ball_1_pos[:, 2] < 0.2
-        ball_2_fall = self.ball_2_pos[:, 2] < 0.2 # changed from 0.3 to 0.2 for shadowlite 40 degree since the reset height is lower and we don't want episodes to terminate immediately after reset 
-        termination = out_of_reach | ball_1_fall | ball_2_fall
+        ball_2_fall = self.ball_2_pos[:, 2] < 0.2 # changed from 0.3 to 0.2 for shadowlite 40 degree since the reset height is lower and we don't want episodes to terminate immediately after reset
+        physics_termination = out_of_reach | ball_1_fall | ball_2_fall
+        # Suppress termination while the settle countdown is active so a ball that
+        # hasn't landed yet can't trigger an immediate episode reset.
+        settling = getattr(self, "settle_counter", None)
+        if settling is not None:
+            physics_termination = physics_termination & (settling == 0)
+        termination = physics_termination
         time_out = self.episode_length_buf >= self.max_episode_length - 1
 
         return termination, time_out
@@ -539,6 +553,9 @@ class BaodingMixin:
         self._reset_object(env_ids)
 
         self.num_rotations[env_ids] = 0
+
+        # Restart settle countdown so the hand holds its pose while balls drop.
+        self.settle_counter[env_ids] = getattr(self.cfg, "settle_steps", 0)
 
     def _reset_object(self, env_ids: Sequence[int]) -> None:
         self._baoding_reset_balls(env_ids)

@@ -70,14 +70,14 @@
     <visual>
       <origin rpy="0 0 1.5707963267948966" xyz="0 0 0.0"/>
       <geometry name="rh_forearm_visual">
-        <mesh filename="meshes/components/forearm/forearm_G1M5.dae" scale="1.0 1.0 1.0"/>
+        <mesh filename="meshes/components/forearm/forearm_G1M5.stl" scale="1.0 1.0 1.0"/>
       </geometry>
       <material name="Grey"/>
     </visual>
     <collision>
-      <origin rpy="0 0 0" xyz="0 0 0.065"/>
+      <origin rpy="0 0 1.5707963267948966" xyz="0 0 0.0"/>
       <geometry name="rh_forearm_collision">
-        <box size="0.120 0.109 0.130"/>
+        <mesh filename="meshes/components/forearm/forearm_G1M5.stl" scale="1.0 1.0 1.0"/>
       </geometry>
     </collision>
   </link>
@@ -101,14 +101,14 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry name="rh_palm_visual">
-        <mesh filename="meshes/components/palm/palm_G1M5.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="meshes/components/palm/palm_G1M5_m.stl" scale="1.0 1.0 1.0"/>
       </geometry>
       <material name="Grey"/>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry name="rh_palm_collision_geom">
-        <mesh filename="meshes/components/palm/palm_G1M5.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="meshes/components/palm/palm_G1M5_m.stl" scale="1.0 1.0 1.0"/>
       </geometry>
     </collision>
   </link>
@@ -135,14 +135,14 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0.0005"/>
       <geometry name="rh_ffknuckle_visual">
-        <mesh filename="meshes/components/f_knuckle/f_knuckle_G1M5.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="meshes/components/f_knuckle/f_knuckle_G1M5_m.stl" scale="1.0 1.0 1.0"/>
       </geometry>
-      <material name="Grey"/>
+      <material name="LightGrey"/>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0.0005"/>
       <geometry name="rh_ffknuckle_collision_geom">
-        <mesh filename="meshes/components/f_knuckle/f_knuckle_G1M5.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="meshes/components/f_knuckle/f_knuckle_G1M5_m.stl" scale="1.0 1.0 1.0"/>
       </geometry>
     </collision>
   </link>
@@ -182,14 +182,14 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry name="rh_ffproximal_visual">
-        <mesh filename="meshes/components/f_proximal/f_proximal_G1M5.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="meshes/components/f_proximal/f_proximal_G1M5_m.stl" scale="1.0 1.0 1.0"/>
       </geometry>
       <material name="Grey"/>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry name="rh_ffproximal_collision_geom">
-        <mesh filename="meshes/components/f_proximal/f_proximal_G1M5.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="meshes/components/f_proximal/f_proximal_G1M5_m.stl" scale="1.0 1.0 1.0"/>
       </geometry>
     </collision>
   </link>
@@ -227,14 +227,14 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry name="rh_ffmiddle_visual">
-        <mesh filename="meshes/components/f_middle/f_middle_G1M5.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="meshes/components/f_middle/f_middle_G1M5_m.stl" scale="1.0 1.0 1.0"/>
       </geometry>
       <material name="Grey"/>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry name="rh_ffmiddle_collision_geom">
-        <mesh filename="meshes/components/f_middle/f_middle_G1M5.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="meshes/components/f_middle/f_middle_G1M5_m.stl" scale="1.0 1.0 1.0"/>
       </geometry>
     </collision>
   </link>
@@ -273,13 +273,13 @@
       <!-- TouchLab v5 fingertip body (mesh+origin swapped from PST); origin is a starting guess, tune in viewer -->
       <origin rpy="0 0 0" xyz="0 0 0.0345"/>
       <geometry name="rh_ffdistal_visual">
-        <mesh filename="meshes/touchlab/fingertip_v5_simple.stl" scale="0.1 0.1 0.1"/>
+        <mesh filename="meshes/touchlab/fingertip_v5_simple_m.stl" scale="1.0 1.0 1.0"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0.0345"/>
       <geometry name="rh_ffdistal_collision_geom">
-        <mesh filename="meshes/touchlab/fingertip_v5_simple.stl" scale="0.1 0.1 0.1"/>
+        <mesh filename="meshes/touchlab/fingertip_v5_simple_m.stl" scale="1.0 1.0 1.0"/>
       </geometry>
     </collision>
   </link>
@@ -338,14 +338,14 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0.0005"/>
       <geometry name="rh_mfknuckle_visual">
-        <mesh filename="meshes/components/f_knuckle/f_knuckle_G1M5.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="meshes/components/f_knuckle/f_knuckle_G1M5_m.stl" scale="1.0 1.0 1.0"/>
       </geometry>
-      <material name="Grey"/>
+      <material name="LightGrey"/>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0.0005"/>
       <geometry name="rh_mfknuckle_collision_geom">
-        <mesh filename="meshes/components/f_knuckle/f_knuckle_G1M5.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="meshes/components/f_knuckle/f_knuckle_G1M5_m.stl" scale="1.0 1.0 1.0"/>
       </geometry>
     </collision>
   </link>
@@ -385,14 +385,14 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry name="rh_mfproximal_visual">
-        <mesh filename="meshes/components/f_proximal/f_proximal_G1M5.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="meshes/components/f_proximal/f_proximal_G1M5_m.stl" scale="1.0 1.0 1.0"/>
       </geometry>
       <material name="Grey"/>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry name="rh_mfproximal_collision_geom">
-        <mesh filename="meshes/components/f_proximal/f_proximal_G1M5.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="meshes/components/f_proximal/f_proximal_G1M5_m.stl" scale="1.0 1.0 1.0"/>
       </geometry>
     </collision>
   </link>
@@ -430,14 +430,14 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry name="rh_mfmiddle_visual">
-        <mesh filename="meshes/components/f_middle/f_middle_G1M5.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="meshes/components/f_middle/f_middle_G1M5_m.stl" scale="1.0 1.0 1.0"/>
       </geometry>
       <material name="Grey"/>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry name="rh_mfmiddle_collision_geom">
-        <mesh filename="meshes/components/f_middle/f_middle_G1M5.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="meshes/components/f_middle/f_middle_G1M5_m.stl" scale="1.0 1.0 1.0"/>
       </geometry>
     </collision>
   </link>
@@ -476,13 +476,13 @@
       <!-- TouchLab v5 fingertip body (mesh+origin swapped from PST); origin is a starting guess, tune in viewer -->
       <origin rpy="0 0 0" xyz="0 0 0.0345"/>
       <geometry name="rh_mfdistal_visual">
-        <mesh filename="meshes/touchlab/fingertip_v5_simple.stl" scale="0.1 0.1 0.1"/>
+        <mesh filename="meshes/touchlab/fingertip_v5_simple_m.stl" scale="1.0 1.0 1.0"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0.0345"/>
       <geometry name="rh_mfdistal_collision_geom">
-        <mesh filename="meshes/touchlab/fingertip_v5_simple.stl" scale="0.1 0.1 0.1"/>
+        <mesh filename="meshes/touchlab/fingertip_v5_simple_m.stl" scale="1.0 1.0 1.0"/>
       </geometry>
     </collision>
   </link>
@@ -542,14 +542,14 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0.0005"/>
       <geometry name="rh_rfknuckle_visual">
-        <mesh filename="meshes/components/f_knuckle/f_knuckle_G1M5.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="meshes/components/f_knuckle/f_knuckle_G1M5_m.stl" scale="1.0 1.0 1.0"/>
       </geometry>
-      <material name="Grey"/>
+      <material name="LightGrey"/>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0.0005"/>
       <geometry name="rh_rfknuckle_collision_geom">
-        <mesh filename="meshes/components/f_knuckle/f_knuckle_G1M5.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="meshes/components/f_knuckle/f_knuckle_G1M5_m.stl" scale="1.0 1.0 1.0"/>
       </geometry>
     </collision>
   </link>
@@ -589,14 +589,14 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry name="rh_rfproximal_visual">
-        <mesh filename="meshes/components/f_proximal/f_proximal_G1M5.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="meshes/components/f_proximal/f_proximal_G1M5_m.stl" scale="1.0 1.0 1.0"/>
       </geometry>
       <material name="Grey"/>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry name="rh_rfproximal_collision_geom">
-        <mesh filename="meshes/components/f_proximal/f_proximal_G1M5.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="meshes/components/f_proximal/f_proximal_G1M5_m.stl" scale="1.0 1.0 1.0"/>
       </geometry>
     </collision>
   </link>
@@ -634,14 +634,14 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry name="rh_rfmiddle_visual">
-        <mesh filename="meshes/components/f_middle/f_middle_G1M5.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="meshes/components/f_middle/f_middle_G1M5_m.stl" scale="1.0 1.0 1.0"/>
       </geometry>
       <material name="Grey"/>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry name="rh_rfmiddle_collision_geom">
-        <mesh filename="meshes/components/f_middle/f_middle_G1M5.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="meshes/components/f_middle/f_middle_G1M5_m.stl" scale="1.0 1.0 1.0"/>
       </geometry>
     </collision>
   </link>
@@ -680,13 +680,13 @@
       <!-- TouchLab v5 fingertip body (mesh+origin swapped from PST); origin is a starting guess, tune in viewer -->
       <origin rpy="0 0 0" xyz="0 0 0.0345"/>
       <geometry name="rh_rfdistal_visual">
-        <mesh filename="meshes/touchlab/fingertip_v5_simple.stl" scale="0.1 0.1 0.1"/>
+        <mesh filename="meshes/touchlab/fingertip_v5_simple_m.stl" scale="1.0 1.0 1.0"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0.0345"/>
       <geometry name="rh_rfdistal_collision_geom">
-        <mesh filename="meshes/touchlab/fingertip_v5_simple.stl" scale="0.1 0.1 0.1"/>
+        <mesh filename="meshes/touchlab/fingertip_v5_simple_m.stl" scale="1.0 1.0 1.0"/>
       </geometry>
     </collision>
   </link>
@@ -747,7 +747,9 @@
       <geometry name="rh_thbase_visual">
         <box size="0.001 0.001 0.001"/>
       </geometry>
-      <material name="Grey"/>
+      <material name="shadow_thbase_material">
+        <color rgba="0.5 0.5 0.5 1.0"/>
+      </material>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
@@ -791,14 +793,16 @@
     <visual>
       <origin rpy="0 0 1.5707963267948966" xyz="0 0 0"/>
       <geometry name="rh_thproximal_visual">
-        <mesh filename="meshes/components/th_proximal/th_proximal_G1M5.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="meshes/components/th_proximal/th_proximal_G1M5_m.stl" scale="1.0 1.0 1.0"/>
       </geometry>
-      <material name="Grey"/>
+      <material name="shadow_thproximal_material">
+        <color rgba="0.2 0.2 0.2 1.0"/>
+      </material>
     </visual>
     <collision>
       <origin rpy="0 0 1.5707963267948966" xyz="0 0 0"/>
       <geometry name="rh_thproximal_collision_geom">
-        <mesh filename="meshes/components/th_proximal/th_proximal_G1M5.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="meshes/components/th_proximal/th_proximal_G1M5_m.stl" scale="1.0 1.0 1.0"/>
       </geometry>
     </collision>
   </link>
@@ -838,7 +842,9 @@
       <geometry name="rh_thhub_visual">
         <box size="0.001 0.001 0.001"/>
       </geometry>
-      <material name="Grey"/>
+      <material name="shadow_thhub_material">
+        <color rgba="0.7 0.7 0.7 1.0"/>
+      </material>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
@@ -866,14 +872,16 @@
     <visual>
       <origin rpy="0 0 1.5707963267948966" xyz="0 0 0"/>
       <geometry name="rh_thmiddle_visual">
-        <mesh filename="meshes/components/th_middle/th_middle_G1M5.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="meshes/components/th_middle/th_middle_G1M5_m.stl" scale="1.0 1.0 1.0"/>
       </geometry>
-      <material name="Grey"/>
+      <material name="shadow_thmiddle_material">
+        <color rgba="0.2 0.2 0.2 1.0"/>
+      </material>
     </visual>
     <collision>
       <origin rpy="0 0 1.5707963267948966" xyz="0 0 0"/>
       <geometry name="rh_thmiddle_collision_geom">
-        <mesh filename="meshes/components/th_middle/th_middle_G1M5.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="meshes/components/th_middle/th_middle_G1M5_m.stl" scale="1.0 1.0 1.0"/>
       </geometry>
     </collision>
   </link>
@@ -912,16 +920,14 @@
       <!-- TouchLab v5 fingertip body (mesh+origin swapped from PST); origin is a starting guess, tune in viewer -->
       <origin rpy="0 0 0" xyz="0 0 0.0345"/>
       <geometry name="rh_thdistal_visual">
-        <mesh filename="meshes/touchlab/fingertip_v5_simple.stl" scale="0.1 0.1 0.1"/>
+        <mesh filename="meshes/touchlab/fingertip_v5_simple_m.stl" scale="1.0 1.0 1.0"/>
       </geometry>
-      <material name="shadow_thmiddle_material">
-        <color rgba="0.2 0.2 0.2 1.0"/>
-      </material>
+      
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0.0345"/>
-      <geometry name="rh_thmiddle_collision_geom">
-        <mesh filename="meshes/touchlab/fingertip_v5_simple.stl" scale="0.1 0.1 0.1"/>
+      <geometry name="rh_thdistal_collision_geom">
+        <mesh filename="meshes/touchlab/fingertip_v5_simple_m.stl" scale="1.0 1.0 1.0"/>
       </geometry>
     </collision>
   </link>
