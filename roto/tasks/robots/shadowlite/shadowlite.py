@@ -171,11 +171,15 @@ class ShadowLiteEnvCfg(RotoEnvCfg):
     couple_gate_j2_tol: float = 0.035   # rad (~2°) tolerance band at the J2 limit
 
     # Stateful backlash coupling (supersedes the measured-J2 gate when True). On
-    # uncurl J2 unlocks early at a per-episode random angle R (combined ffj0 frame,
+    # uncurl J2 unlocks early at a FIXED per-finger angle R (combined ffj0 frame,
     # degrees), J1 unwinds to 0 at 100°, and reversing inside (100°,R) freezes J1
     # until the motor returns to R. See RotoEnv._asymmetric_backlash.
     couple_asymmetric_backward: bool = True
-    couple_release_range_deg: tuple[float, float] = (100.0, 140.0)
+    # R is a constant mechanical property per finger (no per-episode randomization,
+    # to match real hardware). Scalar = same R for all 3 fingers, or a per-finger
+    # (FF, MF, RF) tuple. R=100 -> no backlash; larger R -> more slop. Set to the
+    # measured hardware backlash.
+    couple_release_deg: tuple[float, float, float] = (120.0, 120.0, 120.0)
     couple_dir_deadband: float = 0.002   # rad; |Δm| below this latches direction
 
     # Hand mounting tilt. (lo, hi) equal -> fixed mount (no DR), which is the default:

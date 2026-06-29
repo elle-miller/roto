@@ -156,21 +156,29 @@ class RotoEnv(DirectRLEnv):
         self.couple_gate_j2_tol         = getattr(cfg, "couple_gate_j2_tol", 0.035)  # ~2°
 
         # Stateful backlash coupling (asymmetric forward/backward). When on, the
-        # J1<-J2 coupling carries J1 as state with a per-episode latched "unlock"
+        # J1<-J2 coupling carries J1 as state with a FIXED per-finger "unlock"
         # angle R (combined ffj0 frame). On uncurl J2 unlocks early at R while J1
         # unwinds to 0 at 100°; reversing inside (100°, R) freezes J1 until the
         # motor returns to R. See _handle_coupled_joints. Disabled -> old gate path.
         self.couple_asymmetric_backward = getattr(cfg, "couple_asymmetric_backward", False)
-        _rel_lo, _rel_hi = getattr(cfg, "couple_release_range_deg", (100.0, 140.0))
-        self.couple_release_lo = _rel_lo * math.pi / 180.0   # combined-frame rad
-        self.couple_release_hi = _rel_hi * math.pi / 180.0
         self.couple_dir_deadband = getattr(cfg, "couple_dir_deadband", 0.002)  # rad
         n_coupled = len(self.coupled_driver_indices)
         # combined-frame split point (rad): J2 owns [0, j2_upper], J1 owns the rest.
         self._couple_j2_top = self.robot_joint_pos_upper_limits[self.coupled_driver_indices].clone()    # (3,) ~100°
         self._couple_j1_span = self.robot_joint_pos_upper_limits[self.coupled_dependent_indices].clone() # (3,) ~80°
         self._couple_m_top = self._couple_j2_top + self._couple_j1_span                                  # (3,) ~180°
-        self.couple_release = torch.full((self.num_envs, n_coupled), self.couple_release_hi, device=self.device)  # latched/episode
+        # Backlash unlock angle R is FIXED per finger — real hardware has a constant
+        # mechanical backlash, not per-episode noise. couple_release_deg is a scalar
+        # (same R for all 3 fingers) or a per-finger tuple in coupled order (FF,MF,RF).
+        _rel = getattr(cfg, "couple_release_deg", 120.0)
+        if isinstance(_rel, (int, float)):
+            _rel = (float(_rel),) * n_coupled
+        self._couple_release_fixed = torch.tensor(_rel, dtype=torch.float, device=self.device) * (math.pi / 180.0)  # (k,) rad
+        # kept so the bound-checks in the backlash test scripts still pass (R ∈ [lo,hi]).
+        self.couple_release_lo = float(self._couple_release_fixed.min())
+        self.couple_release_hi = float(self._couple_release_fixed.max())
+        # per-env buffer, initialised to the fixed R (the viewer can still override it live)
+        self.couple_release = self._couple_release_fixed.unsqueeze(0).expand(self.num_envs, n_coupled).clone()
         self.prev_m         = torch.zeros((self.num_envs, n_coupled), device=self.device)
         self.couple_dir     = torch.ones((self.num_envs, n_coupled), device=self.device)   # +1 curl / -1 uncurl
         self.j1_state       = torch.zeros((self.num_envs, n_coupled), device=self.device)
@@ -269,33 +277,42 @@ class RotoEnv(DirectRLEnv):
             self.robot_joint_pos_upper_limits[self.control_dof_indices],
         )
 
-        # Snapshot the stateful-coupling buffers so the settle phase can freeze them:
-        # while the hand is held in its catch pose, the policy's curl proxy must NOT
-        # advance the backlash state (otherwise J1/J2 drift away from the open hand and
-        # hand over a corrupt state when the policy takes over).
         sc = getattr(self, "settle_counter", None)
-        settling = (sc > 0) if sc is not None else None
-        snap = None
-        if settling is not None and self.couple_asymmetric_backward and settling.any():
-            snap = (self.prev_m.clone(), self.couple_dir.clone(), self.j1_state.clone(),
-                    self.couple_frozen_flag.clone(), self.couple_frozen_val.clone())
+        if sc is not None:
+            # Build mask on GPU — never call .any() to avoid CPU↔GPU sync every step.
+            settling = sc > 0  # (num_envs,) bool CUDA tensor
 
-        # fill the 3 coupled J1 commands from the J2 drivers
-        self._handle_coupled_joints()
+            # Snapshot coupling buffers unconditionally (cheap N×3 clones, no sync).
+            if self.couple_asymmetric_backward:
+                snap_prev_m             = self.prev_m.clone()
+                snap_couple_dir         = self.couple_dir.clone()
+                snap_j1_state           = self.j1_state.clone()
+                snap_couple_frozen_flag = self.couple_frozen_flag.clone()
+                snap_couple_frozen_val  = self.couple_frozen_val.clone()
 
-        # Settle phase: hold the default catch pose while balls drop into the palm.
-        # BaodingMixin sets self.settle_counter on each reset; we check generically so
-        # other envs (no balls) are unaffected.
-        if settling is not None and settling.any():
-            self.joint_pos_cmd[settling] = self.robot.data.default_joint_pos[settling]
-            if snap is not None:
-                # restore the frozen coupling state for the settling envs only
-                self.prev_m[settling]             = snap[0][settling]
-                self.couple_dir[settling]         = snap[1][settling]
-                self.j1_state[settling]           = snap[2][settling]
-                self.couple_frozen_flag[settling] = snap[3][settling]
-                self.couple_frozen_val[settling]  = snap[4][settling]
-            self.settle_counter[settling] -= 1
+            # fill the 3 coupled J1 commands from the J2 drivers
+            self._handle_coupled_joints()
+
+            # Override pose for settling envs (no-op when settling is all-False).
+            s_col = settling.unsqueeze(1)  # (num_envs, 1) broadcasts over joints
+            self.joint_pos_cmd = torch.where(
+                s_col, self.robot.data.default_joint_pos, self.joint_pos_cmd
+            )
+
+            # Restore coupling state for settling envs (branchless masked write).
+            if self.couple_asymmetric_backward:
+                s3 = settling.unsqueeze(1)  # (num_envs, 1) broadcasts over 3 fingers
+                self.prev_m             = torch.where(s3, snap_prev_m,             self.prev_m)
+                self.couple_dir         = torch.where(s3, snap_couple_dir,         self.couple_dir)
+                self.j1_state           = torch.where(s3, snap_j1_state,           self.j1_state)
+                self.couple_frozen_flag = torch.where(s3, snap_couple_frozen_flag, self.couple_frozen_flag)
+                self.couple_frozen_val  = torch.where(s3, snap_couple_frozen_val,  self.couple_frozen_val)
+
+            # Decrement branchlessly — floors at 0, no sync needed.
+            self.settle_counter = (sc - 1).clamp_(min=0)
+        else:
+            # fill the 3 coupled J1 commands from the J2 drivers
+            self._handle_coupled_joints()
 
 
     def _handle_coupled_joints(self) -> None:
@@ -428,17 +445,15 @@ class RotoEnv(DirectRLEnv):
         return j2, j1
 
     def _sample_coupling_params(self, env_ids):
-        """Draw the per-episode latched backlash unlock R and clear coupling state.
+        """Reset the per-episode coupling state (R is a fixed hardware constant).
 
-        Called on reset (from ShadowLiteEnv._reset_idx). Each finger gets a fresh
-        R ~ U(release_lo, release_hi); direction, motor history, J1 state and the
-        freeze latch are reset so the new episode starts from a clean open hand.
+        Called on reset (from ShadowLiteEnv._reset_idx). R is NOT randomized — it is
+        a constant mechanical property per finger, so it is restored to the fixed
+        value; direction, motor history, J1 state and the freeze latch are cleared so
+        the new episode starts from a clean open hand.
         """
-        n = len(env_ids)
-        k = len(self.coupled_driver_indices)
-        self.couple_release[env_ids] = sample_uniform(
-            self.couple_release_lo, self.couple_release_hi, (n, k), self.device
-        )
+        # R stays constant per finger (no per-episode DR) — restore the fixed value.
+        self.couple_release[env_ids] = self._couple_release_fixed
         self.prev_m[env_ids]             = 0.0
         self.couple_dir[env_ids]         = 1.0
         self.j1_state[env_ids]           = 0.0
