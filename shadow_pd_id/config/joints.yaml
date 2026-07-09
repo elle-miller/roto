@@ -1,0 +1,187 @@
+# Joint definitions for the Shadow Hand Lite PD-gain identification project.
+#
+# WHY THIS FILE EXISTS: the sim side (roto/scripts/collect_traj_sim.py), the
+# hardware side (roto/scripts/collect_traj_hw.py, roto/run_shadow.py), and this
+# project all need to agree on joint order, limits, and coupling constants. Those
+# three roto/ scripts currently each hardcode their own copy of these arrays (and
+# they do agree, as of writing). Rather than adding a *fourth* hardcoded copy in
+# this project's Python files, everything in shadow_pd_id/src/ should load these
+# values from here. If you ever change a joint limit or the coupling split point,
+# change it here and it propagates to loading/sim-rollout/optimization/validation
+# consistently — the alternative (copy-pasting into every script) is exactly how
+# the roto/ scripts ended up with three separate copies in the first place.
+
+control_rate_hz: 60  # matches RL_HZ in collect_traj_hw.py / run_shadow.py
+
+# The 13 policy-controlled joints, in the order the trained policy expects.
+# Every trajectory log and every gains file in this project uses this order.
+policy_joint_order:
+  - rh_FFJ4
+  - rh_MFJ4
+  - rh_RFJ4
+  - rh_THJ5
+  - rh_FFJ3
+  - rh_MFJ3
+  - rh_RFJ3
+  - rh_THJ4
+  - rh_FFJ2   # coupled driver (J2) for first finger
+  - rh_MFJ2   # coupled driver (J2) for middle finger
+  - rh_RFJ2   # coupled driver (J2) for ring finger
+  - rh_THJ2
+  - rh_THJ1
+
+# Raw hardware /joint_states order (16 joints — includes the 3 J1 mimics, which
+# have no independent command and are NOT policy joints).
+hardware_joint_order:
+  - rh_FFJ1
+  - rh_FFJ2
+  - rh_FFJ3
+  - rh_FFJ4
+  - rh_MFJ1
+  - rh_MFJ2
+  - rh_MFJ3
+  - rh_MFJ4
+  - rh_RFJ1
+  - rh_RFJ2
+  - rh_RFJ3
+  - rh_RFJ4
+  - rh_THJ1
+  - rh_THJ2
+  - rh_THJ4
+  - rh_THJ5
+
+# NOTE: the subscriber-index -> policy-index reshuffle dict that collect_traj_hw.py
+# hardcodes (INDEX_RESHUFFLE_MAP) is deliberately NOT duplicated here. It's fully
+# determined by the two joint-order lists above (reshuffle[hardware_joint_order.index(j)]
+# = policy_joint_order.index(j) for j in policy_joint_order). Deriving it at load
+# time means there's one source of truth (the name lists) instead of two things
+# (name lists + a hand-written index dict) that could silently drift apart.
+
+# Coupled joint groups. On the real hand, ONE actuator (ffj0/mfj0/rfj0) drives a
+# combined range covering both the "driver" joint (J2, the one the policy
+# commands) and its mechanically-mimicked partner (J1, never commanded
+# independently). J1's motion is a deterministic function of J2 — see
+# roto_env._handle_coupled_joints (sim side) and _coupling() in
+# collect_traj_sim.py. Every excitation trajectory and every gains fit MUST
+# treat each of these 3 groups as a single degree of freedom, never split into
+# independent J1/J2 commands.
+coupled_groups:
+  - driver_joint: rh_FFJ2       # policy index 8
+    mimic_joint: rh_FFJ1
+    hw_controller: ffj0         # topic: /sh_rh_ffj0_position_controller/command
+    hw_command_scale: 2.0       # hw command = 2.0 * policy driver proxy (hw combines J1+J2 into one 0..pi actuator)
+    coupling_theta_rad: 0.785   # below theta: only J2 moves; above theta: J2 holds, J1 ramps
+  - driver_joint: rh_MFJ2       # policy index 9
+    mimic_joint: rh_MFJ1
+    hw_controller: mfj0
+    hw_command_scale: 2.0
+    coupling_theta_rad: 0.785
+  - driver_joint: rh_RFJ2       # policy index 10
+    mimic_joint: rh_RFJ1
+    hw_controller: rfj0
+    hw_command_scale: 2.0
+    coupling_theta_rad: 0.785
+
+# Per-joint position limits, keyed by name, radians. Copied verbatim from
+# LOWER_LIMITS / UPPER_LIMITS in collect_traj_hw.py / collect_traj_sim.py.
+# For the 3 coupled driver joints (FFJ2/MFJ2/RFJ2) these bound the J2 "proxy"
+# value the policy outputs, NOT the physical hw actuator's own range (which is
+# [0, 2 * upper] on ffj0/mfj0/rfj0 — see hw_command_scale above).
+joint_limits_rad:
+  rh_FFJ4: {lower: -0.3491, upper: 0.3491}
+  rh_MFJ4: {lower: -0.3491, upper: 0.3491}
+  rh_RFJ4: {lower: -0.3491, upper: 0.3491}
+  rh_THJ5: {lower: -1.0472, upper: 1.0472}
+  rh_FFJ3: {lower: -0.2618, upper: 1.5708}
+  rh_MFJ3: {lower: -0.2618, upper: 1.5708}
+  rh_RFJ3: {lower: -0.2618, upper: 1.5708}
+  rh_THJ4: {lower: 0.0,     upper: 1.2217}
+  rh_FFJ2: {lower: 0.0,     upper: 1.5708}   # proxy range
+  rh_MFJ2: {lower: 0.0,     upper: 1.5708}   # proxy range
+  rh_RFJ2: {lower: 0.0,     upper: 1.5708}   # proxy range
+  rh_THJ2: {lower: -0.6981, upper: 0.6981}
+  rh_THJ1: {lower: -0.2618, upper: 1.5708}
+
+  # The 3 coupled MIMIC joints (J1) are not policy joints -- they're never
+  # commanded independently, so they were originally left out of this table.
+  # But their own position limit (distinct from their driver J2's limit
+  # above, e.g. FFJ2 upper=1.5708 vs FFJ1 upper=1.396) IS needed to clamp
+  # the mimic side of the coupling split (see sim_rollout.py's
+  # _resolve_pose_to_target / rollout, and _coupling in collect_traj_sim.py).
+  # Values read directly from the live Isaac Sim asset's own joint table
+  # (captured during this project's Isaac Sim smoke testing, 2026-07-08),
+  # not guessed.
+  rh_FFJ1: {lower: 0.0, upper: 1.396}
+  rh_MFJ1: {lower: 0.0, upper: 1.396}
+  rh_RFJ1: {lower: 0.0, upper: 1.396}
+
+# Per-joint velocity limits, keyed by name, rad/s. collect_traj_hw.py doesn't
+# define its own (it stays safe by keeping freq/cycles/amplitude conservative
+# by hand); these come from VEL_LIMITS_NORM in run_shadow.py, which is the
+# closest thing to an authoritative hardware velocity spec in this repo. The
+# chirp trajectory generator in Step 0.5 needs an explicit number to make sure
+# it never proposes a frequency/amplitude combination that exceeds this.
+joint_velocity_limits_rad_s:
+  rh_FFJ4: 2.0
+  rh_MFJ4: 2.0
+  rh_RFJ4: 2.0
+  rh_THJ5: 4.0
+  rh_FFJ3: 2.0
+  rh_MFJ3: 2.0
+  rh_RFJ3: 2.0
+  rh_THJ4: 4.0
+  rh_FFJ2: 2.0
+  rh_MFJ2: 2.0
+  rh_RFJ2: 2.0
+  rh_THJ2: 2.0
+  rh_THJ1: 4.0
+
+# Hardware position-controller topics for all 13 controllers (independent +
+# coupled), for reference. Format: /sh_rh_<name>_position_controller/command
+hw_controllers:
+  - ffj0   # coupled (FFJ1+FFJ2)
+  - ffj3
+  - ffj4
+  - mfj0   # coupled (MFJ1+MFJ2)
+  - mfj3
+  - mfj4
+  - rfj0   # coupled (RFJ1+RFJ2)
+  - rfj3
+  - rfj4
+  - thj1
+  - thj2
+  - thj4
+  - thj5
+
+safe_default_pose: zero  # all 13 policy joints at 0.0 = fully open hand. Used for the
+                          # initial full-hand park and final return-to-zero around every
+                          # collection run. NOT used as the per-joint baseline during
+                          # excitation itself anymore -- see parked_finger_pose below.
+
+# During single-joint excitation, the three fingers NOT being tested are parked fully
+# out of the way (curled toward the palm) instead of held at zero. WHY: a neighboring
+# finger sitting straight (zero) at the same height as the excited finger's own range of
+# motion is exactly what caused real-hardware finger-finger collisions (observed
+# 2026-07-08 -- see DECISIONS.md). Curling the non-excited fingers out of the way avoids
+# this without touching the excited joint's own trajectory (make_trajectories.py's
+# amplitude logic is unchanged) or needing precise clearance-angle tuning: a full curl is
+# safe by inspection, not by a small computed margin.
+#
+# Rule: when the excited joint belongs to finger F, every joint whose name does NOT start
+# with F's prefix (FF/MF/RF/TH) takes its value from that finger's entry below; joints on
+# finger F itself (other than the one being excited) stay at 0, matching safe_default_pose.
+# This resolved 13-vector is computed once by make_trajectories.py and embedded in every
+# generated command .npz as `default_pose`, so collect_traj_hw.py (which runs in a
+# separate ROS/docker environment with no access to this file) and collect_traj_sim.py /
+# sim_rollout.py all read the identical baseline from the file they already load, rather
+# than needing a second copy of this table.
+#
+# Magnitudes are a firm curl (~90% of each joint's own flexion range), not a measured
+# clearance angle -- verify with a one-time visual sim check (see README.md) before
+# trusting on real hardware, and dial back here + regenerate if parked fingers crowd
+# each other or the excited finger.
+parked_finger_pose:
+  FF: {rh_FFJ4: 0.0, rh_FFJ3: 1.4, rh_FFJ2: 1.4}
+  MF: {rh_MFJ4: 0.0, rh_MFJ3: 1.4, rh_MFJ2: 1.4}
+  RF: {rh_RFJ4: 0.0, rh_RFJ3: 1.4, rh_RFJ2: 1.4}
+  TH: {rh_THJ5: 0.3, rh_THJ4: 1.2, rh_THJ2: 0.5, rh_THJ1: 1.4}
