@@ -179,7 +179,7 @@ class ShadowLiteEnvCfg(RotoEnvCfg):
     # to match real hardware). Scalar = same R for all 3 fingers, or a per-finger
     # (FF, MF, RF) tuple. R=100 -> no backlash; larger R -> more slop. Set to the
     # measured hardware backlash.
-    couple_release_deg: tuple[float, float, float] = (120.0, 120.0, 120.0)
+    couple_release_deg: tuple[float, float, float] = (140.0, 125.0, 100.0)
     couple_dir_deadband: float = 0.002   # rad; |Δm| below this latches direction
 
     # Hand mounting tilt. (lo, hi) equal -> fixed mount (no DR), which is the default:
