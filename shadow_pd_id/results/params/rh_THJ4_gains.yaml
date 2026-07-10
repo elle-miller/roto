@@ -1,0 +1,18 @@
+joint_name: rh_THJ4
+kp: 9.465111328750226
+kd: 1.8569126333555643
+fc: 0.08073173474688636
+fv: 0.0
+loss: 0.046936114568779226
+loss_by_type:
+  chirp: 0.049589024068788054
+  ramp: 0.007501516090901198
+  step: 0.08371780354664843
+n_candidates_evaluated: 40
+n_stable: 40
+types_used:
+- chirp
+- ramp
+- step
+note: Selected by src/optimize.py from a batch sampled by collect_rollouts.py (offline
+  collect-then-select design, not a live adaptive optimizer -- see DECISIONS.md).

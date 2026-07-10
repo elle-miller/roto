@@ -1,0 +1,18 @@
+joint_name: rh_RFJ3
+kp: 17.71433573497565
+kd: 1.1835128865052809
+fc: 0.04510476249339799
+fv: 0.0
+loss: 0.01520480462627996
+loss_by_type:
+  chirp: 0.01580301550724306
+  ramp: 0.0012365571020034765
+  step: 0.028574841269593344
+n_candidates_evaluated: 40
+n_stable: 40
+types_used:
+- chirp
+- ramp
+- step
+note: Selected by src/optimize.py from a batch sampled by collect_rollouts.py (offline
+  collect-then-select design, not a live adaptive optimizer -- see DECISIONS.md).

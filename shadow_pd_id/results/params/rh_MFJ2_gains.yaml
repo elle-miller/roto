@@ -1,0 +1,18 @@
+joint_name: rh_MFJ2
+kp: 16.475702366567763
+kd: 0.009363608721021446
+fc: 0.12766127115639145
+fv: 0.0
+loss: 0.08436004460939521
+loss_by_type:
+  chirp: 0.17686368773136624
+  ramp: 0.023800795292103206
+  step: 0.05241565080471616
+n_candidates_evaluated: 40
+n_stable: 40
+types_used:
+- chirp
+- ramp
+- step
+note: Selected by src/optimize.py from a batch sampled by collect_rollouts.py (offline
+  collect-then-select design, not a live adaptive optimizer -- see DECISIONS.md).
