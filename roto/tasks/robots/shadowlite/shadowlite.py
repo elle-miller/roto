@@ -158,8 +158,8 @@ class ShadowLiteEnvCfg(RotoEnvCfg):
     }
 
     # J2 must reach this angle (rad) before J1 starts moving.
-    # 0.785 rad = 45°: first half of J2's range drives J2, second half drives J1.
-    coupling_theta: float = 0.785
+    # 0.8727 rad = 50° (corrected from 45° per user), matched to the real coupling split.
+    coupling_theta: float = 0.8727
 
     # Route-2 sequencing: gate the J1 mimic on MEASURED J2 so J1 can't lead its
     # driver. J1's commanded curl is scaled by how close measured J2 is to its
@@ -174,7 +174,9 @@ class ShadowLiteEnvCfg(RotoEnvCfg):
     # uncurl J2 unlocks early at a per-episode random angle R (combined ffj0 frame,
     # degrees), J1 unwinds to 0 at 100°, and reversing inside (100°,R) freezes J1
     # until the motor returns to R. See RotoEnv._asymmetric_backlash.
-    couple_asymmetric_backward: bool = True
+    # Disabled per user decision -- falls back to the couple_gate_j1_on_measured
+    # path above (simpler, no per-episode latched state).
+    couple_asymmetric_backward: bool = False
     couple_release_range_deg: tuple[float, float] = (100.0, 140.0)
     couple_dir_deadband: float = 0.002   # rad; |Δm| below this latches direction
 

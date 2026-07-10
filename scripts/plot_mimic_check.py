@@ -7,14 +7,14 @@ IDEAL behaviour = SEQUENTIAL coupling (the sim "theta-split" in
 _handle_coupled_joints, roto_env.py): one curl proxy per finger drives J2 to its
 90 deg max FIRST, and only once J2 is maxed does J1 start moving. The combined
 hardware actuator (ffj0) spans 2x90 = 180 deg, so the J2->J1 handover at ffj0=90
-deg lands at proxy = 45 deg = theta = 0.785 rad. This tool checks whether the sim
+deg lands at proxy = 50 deg = theta = 0.8727 rad. This tool checks whether the sim
 actually follows that ideal sequential law, and overlays a proportional (J1=J2)
 curve only as a NOT-ideal contrast.
 
 Usage:
     python plot_mimic_check.py --rec mimic_recording.npz
     python plot_mimic_check.py --rec mimic_recording.npz --out mimic.png
-    python plot_mimic_check.py --rec mimic_recording.npz --theta 0.785 --j2_upper 1.5708 --j1_upper 1.5708
+    python plot_mimic_check.py --rec mimic_recording.npz --theta 0.8727 --j2_upper 1.5708 --j1_upper 1.5708
 """
 
 import argparse
@@ -40,7 +40,7 @@ def main():
     parser = argparse.ArgumentParser(description="Check the J1/J2 coupled-finger mimic in sim.")
     parser.add_argument("--rec", required=True, help="record_policy.py npz")
     parser.add_argument("--out", default="mimic.png", help="Output figure base (PNG or PDF).")
-    parser.add_argument("--theta", type=float, default=0.785, help="coupling_theta (rad).")
+    parser.add_argument("--theta", type=float, default=0.8727, help="coupling_theta (rad).")
     parser.add_argument("--j2_upper", type=float, default=1.5708, help="J2 upper limit (rad).")
     parser.add_argument("--j1_upper", type=float, default=1.5708, help="J1 upper limit (rad).")
     parser.add_argument("--j1_eps", type=float, default=0.01,
