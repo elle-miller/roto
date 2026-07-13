@@ -32,10 +32,10 @@ import torch
 
 # The 6 joints that are NOT independently driven on hardware -- each pair's
 # combined motor ("J0" in the recording's actuator_order, e.g. "rh_FFJ0")
-# drives both DOFs via a tendon. There is no independently-causal setpoint
-# for either DOF, so their PD target is taken from the *measured* position
-# instead of a commanded one -- see AlignedTrajectoryDataset's docstring
-# "COUPLED_JOINTS" section for the full reasoning.
+# drives both DOFs via a tendon. There is no independently-recorded setpoint
+# for either DOF individually, only the shared motor's single combined
+# command -- see AlignedTrajectoryDataset's docstring for how that combined
+# value is split back into individual J1/J2 targets.
 COUPLED_JOINT_PAIRS = {
     "rh_FF": ("rh_FFJ1", "rh_FFJ2"),
     "rh_MF": ("rh_MFJ1", "rh_MFJ2"),
@@ -59,27 +59,46 @@ class AlignedTrajectoryDataset:
     name (independently-driven joints -- their PD target is `action`, the
     real commanded setpoint). The remaining 3 are the combined "J0" channels
     for the FF/MF/RF coupled pairs (see `COUPLED_JOINT_PAIRS`) -- there is no
-    independent setpoint for either DOF of those pairs on real hardware, so
-    their PD target uses the *measured* position (`gt_pos`) instead; this is
-    a deliberate, documented approximation (see DESIGN NOTE below), not a
-    bug -- there is nothing else on hardware to use as their target.
+    per-DOF setpoint for those pairs on real hardware, only the shared
+    motor's single combined command; it is split back into individual J1/J2
+    targets (see DESIGN NOTE below), so PD keeps a real, physically-in-range
+    setpoint to chase for every one of the 16 joints, direct or coupled.
 
     q_torque = gt_effort (uncalibrated motor effort, 16-dim). Never used as a
     network *input* by task.py -- only ever as an optional, calibration-free
     reward term (correlation/sign-based, not magnitude-based) -- see task.py.
 
-    DESIGN NOTE on the coupled-pair target: `action`'s combined-channel value
-    (e.g. "rh_FFJ0") is on the *combined* J1+J2 angle scale (empirically
-    verified: correlates >0.88 with gt_pos[J1]+gt_pos[J2] across the initial
-    recordings), which does not match the *individual*-joint scale roto's own
-    `RotoEnv._handle_coupled_joints` expects as input (it expects a proxy
-    pre-scaled to a single joint's own limit). Reusing that method unmodified
-    on this data would silently apply the wrong transform. Rather than
-    reverse-engineer an unvalidated re-scaling, the measured position is used
-    directly as the coupled pair's PD target -- always available, requires no
-    assumptions about the real coupling law, and is a reasonable substitute
-    since the coupled DOFs mechanically track each other on real hardware
-    regardless of what commanded them.
+    DESIGN NOTE on splitting the coupled-pair command: `action`'s combined
+    channel (e.g. "rh_FFJ0") is on the *combined* J1+J2 angle scale, not
+    roto's own internal `RotoEnv._handle_coupled_joints` "compact proxy"
+    scale (which compresses both joints' travel into a single joint's own
+    limit range via a tuned `coupling_theta` split point) -- confirmed
+    empirically against the real recordings: e.g. one FF episode's
+    "rh_FFJ0" action ranges [0.06, 1.74] rad, matching rh_FFJ2's own upper
+    limit (1.745 rad); one MF episode's "rh_MFJ0" ranges up to 2.92 rad and
+    one RF episode's "rh_RFJ0" up to 3.03 rad, both well past a single
+    joint's own ~1.4-1.75 rad limit and consistent with the *combined-sum*
+    scale (J2_upper + J1_upper = 1.745 + 1.396 = 3.141 rad = pi). Reusing
+    `_handle_coupled_joints`'s tuned `coupling_theta` constant unmodified on
+    this data would therefore silently apply the wrong transform (it assumes
+    a compact [0, J2_upper] input domain, not a combined-sum one).
+
+    The split law's *shape* is still reused, though -- it is the same
+    "J2 saturates first, then J1 takes over" two-segment law
+    `RotoEnv._asymmetric_backlash` already uses for its stateless "curl"
+    case, just reparameterized on the combined-sum scale the real data is
+    actually recorded on, with the split point at J2's own physical upper
+    limit (the physically meaningful place for it to saturate) rather than
+    an arbitrary tuned theta:
+
+        combined = action[:, "<pair>J0"]                          # (T,)
+        j2_cmd = clip(combined,            0, j2_upper)            # ramps first
+        j1_cmd = clip(combined - j2_upper, 0, j1_upper)            # then this
+
+    `joint_upper_limits` (a plain name->float dict, no Isaac dependency)
+    supplies J2_upper/J1_upper for this split; the caller (task.py) reads
+    them from the loaded articulation's own joint limits, so this uses
+    exactly the same physical bounds the sim itself enforces.
     """
 
     def __init__(
@@ -87,6 +106,7 @@ class AlignedTrajectoryDataset:
         paths: str | list[str],
         joint_names: list[str],
         device: torch.device | str,
+        joint_upper_limits: dict[str, float],
         min_horizon: int = 1,
         glob_pattern: str = "*.aligned.npz",
     ) -> None:
@@ -135,7 +155,7 @@ class AlignedTrajectoryDataset:
             meas_vel = gt_vel[:, joint_perm]
             torque = gt_effort[:, joint_perm]
 
-            cmd = _build_cmd_from_action(action, actuator_order, self.joint_names, meas, path)
+            cmd = _build_cmd_from_action(action, actuator_order, self.joint_names, joint_upper_limits, path)
 
             n = cmd.shape[0]
             # Segment this file on (a) seg_id changes and (b) valid==False gaps;
@@ -251,25 +271,57 @@ def _name_permutation(source_names: list[str], target_names: list[str], path: st
     return [name_to_col[n] for n in target_names]
 
 
+def _split_coupled_command(combined: np.ndarray, j2_upper: float, j1_upper: float) -> tuple[np.ndarray, np.ndarray]:
+    """Split one pair's combined motor command into individual J2/J1 targets.
+
+    Two-segment law (see AlignedTrajectoryDataset's DESIGN NOTE): J2 ramps
+    from 0 to its own upper limit first; only once J2 has saturated does the
+    remainder drive J1. Both outputs are always within their own joint's
+    physical range by construction (clip), so PD always has an in-bounds
+    target to chase, whatever the recorded combined value does.
+    """
+    j2_cmd = np.clip(combined, 0.0, j2_upper)
+    j1_cmd = np.clip(combined - j2_upper, 0.0, j1_upper)
+    return j2_cmd, j1_cmd
+
+
 def _build_cmd_from_action(
     action: np.ndarray,
     actuator_order: list[str],
     joint_names: list[str],
-    meas: np.ndarray,
+    joint_upper_limits: dict[str, float],
     path: str,
 ) -> np.ndarray:
     """Build the 16-dim PD target: real setpoint for directly-driven joints,
-    measured position for the 6 coupled-pair DOFs (see class docstring).
+    split real setpoint for the 6 coupled-pair DOFs (see class docstring).
     """
     actuator_col = {n: i for i, n in enumerate(actuator_order)}
-    coupled_names = {n for pair in COUPLED_JOINT_PAIRS.values() for n in pair}
+    name_to_col = {n: j for j, n in enumerate(joint_names)}
 
     n_rows = action.shape[0]
     cmd = np.zeros((n_rows, len(joint_names)), dtype=np.float64)
+    handled: set[str] = set()
+
+    for pair_key, (j1_name, j2_name) in COUPLED_JOINT_PAIRS.items():
+        motor_name = f"{pair_key}J0"
+        if motor_name not in actuator_col:
+            raise KeyError(f"{path}: coupled motor '{motor_name}' not found in actuator_order {actuator_order}.")
+        for name in (j1_name, j2_name):
+            if name not in joint_upper_limits:
+                raise KeyError(f"{path}: joint_upper_limits is missing required coupled joint '{name}'.")
+        combined = action[:, actuator_col[motor_name]]
+        j2_cmd, j1_cmd = _split_coupled_command(combined, joint_upper_limits[j2_name], joint_upper_limits[j1_name])
+        if j1_name in name_to_col:
+            cmd[:, name_to_col[j1_name]] = j1_cmd
+            handled.add(j1_name)
+        if j2_name in name_to_col:
+            cmd[:, name_to_col[j2_name]] = j2_cmd
+            handled.add(j2_name)
+
     for j, name in enumerate(joint_names):
-        if name in coupled_names:
-            cmd[:, j] = meas[:, j]
-        elif name in actuator_col:
+        if name in handled:
+            continue
+        if name in actuator_col:
             cmd[:, j] = action[:, actuator_col[name]]
         else:
             raise KeyError(

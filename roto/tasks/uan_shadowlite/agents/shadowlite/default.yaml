@@ -56,39 +56,19 @@ uan:
     - joint_pos_error
     - action
 
-  # The network's 16 torque outputs play two different roles depending on the joint:
-  #
-  #   10 directly-driven joints (FFJ3/FFJ4/MFJ3/MFJ4/RFJ3/RFJ4/THJ1/THJ2/THJ4/THJ5):
-  #     a small RESIDUAL correction on top of PhysX's own PD, which chases the real
-  #     commanded setpoint for these joints.
-  #       residual = clamp(action * action_scale, -residual_clip, residual_clip)
-  #     Scalar or a list of exactly 10 floats. Small by default -- correcting an
-  #     already-identified PD (see roto/assets/shadow_hand_lite.py's shadow_pd_id gains).
+  # A small RESIDUAL correction on top of PhysX's own PD, uniform across all 16 actuated
+  # joints -- PD (unchanged KP/KD) chases a real, physically in-range setpoint for every
+  # joint, direct or coupled. The 6 mechanically-coupled DOFs (FFJ1/FFJ2, MFJ1/MFJ2,
+  # RFJ1/RFJ2) share one motor each on real hardware, which only records a single
+  # combined command -- dataset.py splits that back into individual J1/J2 targets (see
+  # its DESIGN NOTE), so PD has a genuine setpoint to chase there too, and keeps its own
+  # restoring force near either joint's limit exactly as it already does for the 10
+  # directly-driven joints. No separate joint-limit handling is needed as a result.
+  #   residual = clamp(action * action_scale, -residual_clip, residual_clip)
+  # Scalar or a list of exactly 16 floats. Small by default -- correcting an
+  # already-identified PD (see roto/assets/shadow_hand_lite.py's shadow_pd_id gains).
   action_scale: 0.05
   residual_clip: 0.3
-
-  #   6 mechanically-coupled DOFs (FFJ1/FFJ2, MFJ1/MFJ2, RFJ1/RFJ2 -- each pair shares
-  #     one motor, no independent setpoint exists for either joint on real hardware):
-  #     the network's output IS the (near-)entire commanded torque, not a small
-  #     correction -- PhysX's PD is neutralized for these (its position-error term
-  #     goes to ~0 since its target tracks current position; only its small damping
-  #     term still contributes). Needs a much bigger range than action_scale/
-  #     residual_clip since it has to span a meaningful torque, not a small delta.
-  #       torque = clamp(action * full_torque_scale, -full_torque_clip, full_torque_clip)
-  #     Scalar or a list of exactly 6 floats. Defaults are a conservative starting point,
-  #     well under the 30 N*m sim effort ceiling -- tune once real training is underway.
-  full_torque_scale: 2.0
-  full_torque_clip: 10.0
-
-  #   Safety envelope for those same 6 coupled joints: with PD's position-error term
-  #     neutralized (see above), nothing else pulls a coupled joint back from a limit if
-  #     the network pushes outward, and PhysX's own limit enforcement is a soft
-  #     constraint under continuous torque rather than a rigid wall. Within
-  #     `joint_limit_margin` radians of either physical limit, outward-pushing torque is
-  #     smoothly scaled to 0 (linearly across the margin band); inward/recovery torque
-  #     is never touched. Applied only to the 6 coupled joints (see reward.py::
-  #     soft_limit_avoidance).
-  joint_limit_margin: 0.1
 
   # Random valid trajectory point per reset (recommended for training coverage).
   reset_to_random: true

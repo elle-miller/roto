@@ -31,12 +31,22 @@ ACTUATOR_ORDER_13 = [
     "rh_RFJ0", "rh_RFJ3", "rh_RFJ4",
     "rh_THJ1", "rh_THJ2", "rh_THJ4", "rh_THJ5",
 ]
+# Round test values (not the real hand's actual limits) so the split-law arithmetic in
+# tests is easy to check by hand: J2_upper=1.0, J1_upper=0.5 for every coupled pair.
+JOINT_UPPER_LIMITS = {
+    "rh_FFJ1": 0.5, "rh_FFJ2": 1.0,
+    "rh_MFJ1": 0.5, "rh_MFJ2": 1.0,
+    "rh_RFJ1": 0.5, "rh_RFJ2": 1.0,
+}
 
 
-def _write_aligned_npz(path, n, seg_id=None, valid=None, rate=60.0, seed=0):
+def _write_aligned_npz(path, n, seg_id=None, valid=None, rate=60.0, seed=0, action_override=None):
     rng = np.random.default_rng(seed)
     t = np.arange(n, dtype=np.float64) / rate
     action = rng.uniform(-1, 1, (n, 13))
+    if action_override:
+        for name, col in action_override.items():
+            action[:, ACTUATOR_ORDER_13.index(name)] = col
     command = rng.uniform(-500, 500, (n, 13))
     act_pos = action + rng.normal(0, 0.01, (n, 13))
     act_err = rng.normal(0, 0.01, (n, 13))
@@ -63,7 +73,7 @@ def _write_aligned_npz(path, n, seg_id=None, valid=None, rate=60.0, seed=0):
 def test_aligned_directly_driven_joints_use_action_as_target(tmp_path):
     path = tmp_path / "ep1.aligned.npz"
     raw = _write_aligned_npz(path, 20)
-    ds = AlignedTrajectoryDataset(str(path), TARGET_NAMES_16, device="cpu")
+    ds = AlignedTrajectoryDataset(str(path), TARGET_NAMES_16, device="cpu", joint_upper_limits=JOINT_UPPER_LIMITS)
 
     # rh_FFJ3 is directly driven (in both actuator_order and joint_order) -> q_cmd == action
     ffj3_act_col = ACTUATOR_ORDER_13.index("rh_FFJ3")
@@ -72,22 +82,35 @@ def test_aligned_directly_driven_joints_use_action_as_target(tmp_path):
     assert torch.allclose(ds.q_cmd[:, ffj3_joint_col], torch.tensor(expected, dtype=torch.float32), atol=1e-5)
 
 
-def test_aligned_coupled_joints_use_measured_position_as_target(tmp_path):
+def test_aligned_coupled_joints_split_combined_command_into_j1_j2(tmp_path):
+    # J2_upper=1.0, J1_upper=0.5 (JOINT_UPPER_LIMITS). Three rows exercising both
+    # segments of the split law: below the split point (only J2 moves), just past it
+    # (J2 saturated, J1 starts), and beyond both joints' combined range (both clamped).
+    combined = np.array([0.4, 1.2, 2.0])
     path = tmp_path / "ep1.aligned.npz"
-    raw = _write_aligned_npz(path, 20)
-    ds = AlignedTrajectoryDataset(str(path), TARGET_NAMES_16, device="cpu")
+    _write_aligned_npz(path, 3, action_override={"rh_FFJ0": combined})
+    ds = AlignedTrajectoryDataset(str(path), TARGET_NAMES_16, device="cpu", joint_upper_limits=JOINT_UPPER_LIMITS)
 
-    # rh_FFJ1/rh_FFJ2 are the coupled pair (not directly in actuator_order) -> q_cmd == gt_pos
-    for name in ["rh_FFJ1", "rh_FFJ2"]:
-        j = TARGET_NAMES_16.index(name)
-        expected = raw["gt_pos"][:, j]
-        assert torch.allclose(ds.q_cmd[:, j], torch.tensor(expected, dtype=torch.float32), atol=1e-5)
+    j1 = TARGET_NAMES_16.index("rh_FFJ1")
+    j2 = TARGET_NAMES_16.index("rh_FFJ2")
+    expected_j2 = torch.tensor([0.4, 1.0, 1.0])
+    expected_j1 = torch.tensor([0.0, 0.2, 0.5])
+    assert torch.allclose(ds.q_cmd[:, j2], expected_j2, atol=1e-5)
+    assert torch.allclose(ds.q_cmd[:, j1], expected_j1, atol=1e-5)
+
+
+def test_aligned_missing_coupled_joint_in_upper_limits_raises(tmp_path):
+    path = tmp_path / "ep1.aligned.npz"
+    _write_aligned_npz(path, 10)
+    incomplete = {k: v for k, v in JOINT_UPPER_LIMITS.items() if k != "rh_FFJ2"}
+    with pytest.raises(KeyError):
+        AlignedTrajectoryDataset(str(path), TARGET_NAMES_16, device="cpu", joint_upper_limits=incomplete)
 
 
 def test_aligned_q_meas_and_q_torque_are_gt_pos_and_gt_effort(tmp_path):
     path = tmp_path / "ep1.aligned.npz"
     raw = _write_aligned_npz(path, 20)
-    ds = AlignedTrajectoryDataset(str(path), TARGET_NAMES_16, device="cpu")
+    ds = AlignedTrajectoryDataset(str(path), TARGET_NAMES_16, device="cpu", joint_upper_limits=JOINT_UPPER_LIMITS)
     assert torch.allclose(ds.q_meas, torch.tensor(raw["gt_pos"], dtype=torch.float32), atol=1e-5)
     assert torch.allclose(ds.q_torque, torch.tensor(raw["gt_effort"], dtype=torch.float32), atol=1e-5)
 
@@ -95,7 +118,9 @@ def test_aligned_q_meas_and_q_torque_are_gt_pos_and_gt_effort(tmp_path):
 def test_aligned_directory_glob_finds_all_files(tmp_path):
     for i in range(3):
         _write_aligned_npz(tmp_path / f"ep{i}.aligned.npz", 15, seed=i)
-    ds = AlignedTrajectoryDataset(str(tmp_path), TARGET_NAMES_16, device="cpu", min_horizon=1)
+    ds = AlignedTrajectoryDataset(
+        str(tmp_path), TARGET_NAMES_16, device="cpu", joint_upper_limits=JOINT_UPPER_LIMITS, min_horizon=1
+    )
     assert len(ds.paths) == 3
     assert ds.num_steps == 45
     assert ds.traj_starts.tolist() == [0, 15, 30]
@@ -106,13 +131,15 @@ def test_aligned_missing_joint_in_joint_order_raises(tmp_path):
     path = tmp_path / "ep1.aligned.npz"
     _write_aligned_npz(path, 10)
     with pytest.raises(KeyError):
-        AlignedTrajectoryDataset(str(path), TARGET_NAMES_16 + ["rh_NOPE"], device="cpu")
+        AlignedTrajectoryDataset(
+            str(path), TARGET_NAMES_16 + ["rh_NOPE"], device="cpu", joint_upper_limits=JOINT_UPPER_LIMITS
+        )
 
 
 def test_aligned_dataset_rate_becomes_rl_dt(tmp_path):
     path = tmp_path / "ep1.aligned.npz"
     _write_aligned_npz(path, 10, rate=60.0)
-    ds = AlignedTrajectoryDataset(str(path), TARGET_NAMES_16, device="cpu")
+    ds = AlignedTrajectoryDataset(str(path), TARGET_NAMES_16, device="cpu", joint_upper_limits=JOINT_UPPER_LIMITS)
     assert ds.rl_dt == pytest.approx(1.0 / 60.0)
 
 
@@ -124,7 +151,9 @@ def test_aligned_segments_on_seg_id_change_and_valid_gaps(tmp_path):
     valid[10:12] = False  # a gap inside segment 0
     path = tmp_path / "ep1.aligned.npz"
     _write_aligned_npz(path, n, seg_id=seg_id, valid=valid)
-    ds = AlignedTrajectoryDataset(str(path), TARGET_NAMES_16, device="cpu", min_horizon=1)
+    ds = AlignedTrajectoryDataset(
+        str(path), TARGET_NAMES_16, device="cpu", joint_upper_limits=JOINT_UPPER_LIMITS, min_horizon=1
+    )
     # segment 0 gets trimmed to [0,9] (stopping before the invalid gap at 10-11),
     # segment 1 [12,14] is the remainder before seg_id changes at 15,
     # segment 2 [15,29] is the seg_id==1 run.
@@ -137,14 +166,16 @@ def test_aligned_mismatched_dataset_rate_raises(tmp_path):
     _write_aligned_npz(p1, 10, rate=60.0)
     _write_aligned_npz(p2, 10, rate=30.0)
     with pytest.raises(ValueError):
-        AlignedTrajectoryDataset([str(p1), str(p2)], TARGET_NAMES_16, device="cpu")
+        AlignedTrajectoryDataset([str(p1), str(p2)], TARGET_NAMES_16, device="cpu", joint_upper_limits=JOINT_UPPER_LIMITS)
 
 
 def test_aligned_glob_pattern_path(tmp_path):
     for i in range(2):
         _write_aligned_npz(tmp_path / f"ep{i}.aligned.npz", 10, seed=i)
     pattern = str(tmp_path / "*.aligned.npz")
-    ds = AlignedTrajectoryDataset(pattern, TARGET_NAMES_16, device="cpu", min_horizon=1)
+    ds = AlignedTrajectoryDataset(
+        pattern, TARGET_NAMES_16, device="cpu", joint_upper_limits=JOINT_UPPER_LIMITS, min_horizon=1
+    )
     assert ds.num_steps == 20
 
 

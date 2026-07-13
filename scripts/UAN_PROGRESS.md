@@ -23,19 +23,22 @@ fixed (see §9). The actuator-net input spec was then corrected per your follow-
 spec is `joint_pos(16) + joint_vel(13) + joint_pos_error(16) + action(13)` = 58-dim/frame,
 re-verified end-to-end (§12). `obs_stack` raised 8→20 (§13). **Everything through §13 is
 now pushed** to `origin/s2r-test-sysid` (§14 — merged with a concurrent push carrying new
-system-identified PD gains, one real conflict resolved). **Since that push**, the network's
-output was split by joint role (§15): the 10 directly-driven joints still get a small
-residual on top of PD; the 6 mechanically-coupled joints now get the (near-)entire torque
-command instead of a residual, with PD neutralized for them via a new `pd_drive_target`
-buffer — re-verified end-to-end, **not yet committed/pushed**. That neutralization turned out
-to remove the only restoring force keeping the 6 coupled joints within their physical limits,
-which you caught directly ("it should stick to joint limits") — fixed via a new
-`soft_limit_avoidance` safety envelope (§16) that smoothly zeroes outward-pushing torque near
-a limit while never touching inward/recovery torque; `soft_limit_avoidance` and
-`compute_uan_reward` were also extracted into a new Isaac-free `reward.py` module (matching
-`dataset.py`/`features.py`'s CPU-testable pattern) so the safety-critical boundary math has
-real unit tests, not just "didn't crash once." 33/33 CPU unit tests pass; re-verified live in
-Isaac Sim. **§15 and §16 together are not yet committed/pushed** — waiting on your review.
+system-identified PD gains, one real conflict resolved). **Since that push**, §15 gave the
+6 mechanically-coupled joints the (near-)entire torque command and neutralized PD for
+them (reasoning no real per-joint setpoint existed for them); this removed PD's own
+restoring force near a limit and caused real joint-limit violations, which you caught
+directly ("it should stick to joint limits") — §16 patched the symptom with a
+`soft_limit_avoidance` safety envelope. **§17 then rolled both back**, per your direct
+fix: the coupled joints' shared motor DOES have one real recorded command (just not a
+per-joint one), and it can be split into legitimate individual J1/J2 setpoints -- the same
+"J2 saturates first, then J1" law `shadowlite.py`'s own coupling machinery already uses
+elsewhere, reparameterized on the real data's actual (combined-sum) scale, confirmed
+empirically against real recordings before implementing. With a real setpoint restored for
+every one of the 16 joints, PD (unchanged KP/KD) chases it uniformly everywhere, keeping
+its own restoring force near any limit exactly as it always has for the 10 direct
+joints — no more separate torque budget, no more safety envelope needed. 26/26 CPU unit
+tests pass; re-verified live in Isaac Sim (clean boot, reward 3.0988, 1194+ stable steps).
+**§17 (net: §15/§16 fully reverted) is not yet committed/pushed** — waiting on your review.
 
 ---
 
@@ -881,3 +884,145 @@ New file: `tests/uan_shadowlite/test_reward.py`, 12 tests:
 
 **Not committed or pushed.** Waiting on your review, consistent with how §14/§15 were each
 committed only after separate, explicit confirmation.
+
+## 17. Follow-up — rolled back §15/§16; coupled joints now split their real command and
+    keep PD/KP/KD like every other joint
+
+Reported directly, after §16's `soft_limit_avoidance` patch: still going beyond the limit.
+Your fix, verbatim: *"roll back to the old all joints Kp kd mode. then i need you to learn
+residual torque for all. for the q_cmd what i need you to do is split the command like how
+it is in shadowlite.py and use that for torque for each... that should solve it i think."*
+(A follow-up question about whether to also drop `joint_vel` from the reward/features was
+clarified as "ignore this" -- the 58-dim feature set and reward are unchanged.)
+
+### Why §15/§16 is gone
+
+§15 gave the network the (near-)entire torque for the 6 coupled joints and neutralized
+PD's position-error term for them (target tracked current position, not a real setpoint),
+reasoning that no independently-recorded per-joint setpoint existed on real hardware for
+FFJ1/FFJ2 etc. §16 patched the resulting joint-limit violations with a safety envelope.
+Both are removed now: §16's `soft_limit_avoidance` (now dead code once nothing calls it)
+and §15's full-torque/PD-neutralization split. The premise -- "no real setpoint exists for
+the coupled joints" -- turned out to be only half true: there's no *per-joint* setpoint,
+but there IS a real, single *combined* setpoint (the shared motor's own recorded command),
+and it can be split into two legitimate per-joint setpoints (see below). Once that exists,
+there's no more reason to treat the 6 coupled joints differently from the other 10 -- one
+uniform control law for all 16 is both simpler and (per your diagnosis) actually fixes the
+joint-limit problem, rather than papering over it.
+
+### The fix: split the coupled joints' real command, same as `shadowlite.py` does
+
+Confirmed empirically first (not assumed): loaded a real `free_space_50` episode and
+checked the "rh_FFJ0"/"rh_MFJ0"/"rh_RFJ0" `action` columns (the shared motor's recorded
+command for each coupled pair) against the joints' own physical limits (from the hand's
+URDF: FFJ1/MFJ1/RFJ1 upper = 1.396 rad, FFJ2/MFJ2/RFJ2 upper = 1.745 rad):
+
+| pair | action range (one episode) | fits [0, J2_upper=1.745]? |
+|---|---|---|
+| rh_FFJ0 | [0.06, 1.74] | yes (episode didn't curl past J2's own range) |
+| rh_MFJ0 | [1.74, 2.92] | **no** -- exceeds 1.745, consistent with J2_upper+J1_upper=3.141 (=pi) |
+| rh_RFJ0 | [0.10, 3.03] | **no** -- same, close to the full combined-sum range |
+
+This rules out reusing `RotoEnv._handle_coupled_joints`'s existing `coupling_theta=0.8727`
+constant unmodified -- that constant is tuned for roto's own internal "compact proxy"
+representation (both joints' travel compressed into a single joint's own limit range), a
+*different* scale than the real recorded command, which is on the *combined-sum* scale
+(J1+J2, up to ~pi). Using the wrong scale would silently misinterpret the real setpoint.
+
+What IS reused is the underlying *law*, not the constant: the same "J2 saturates first,
+then J1 takes over" two-segment shape `RotoEnv._asymmetric_backlash` already uses for its
+stateless "curl" case, elsewhere in `shadowlite.py`'s coupling machinery -- just
+reparameterized on the combined-sum scale the real data is actually on, with the natural
+physical split point (J2's own upper limit) instead of a proxy-scale-tuned theta:
+
+```python
+combined = action[:, "<pair>J0"]                 # the real recorded command, one value/pair
+j2_cmd = clip(combined,            0, j2_upper)   # J2 ramps 0 -> its own limit first
+j1_cmd = clip(combined - j2_upper, 0, j1_upper)   # then J1 ramps 0 -> its own limit
+```
+
+Implemented in `dataset.py` as `_split_coupled_command`, called once per coupled pair
+inside `_build_cmd_from_action` (replacing the old measured-position fallback). Both
+outputs are always within their own joint's physical range by construction (the `clip`),
+so this always hands PD a genuine, in-bounds setpoint to chase -- for the 6 coupled joints
+exactly as it always has for the 10 direct ones.
+
+`AlignedTrajectoryDataset` now takes a required `joint_upper_limits: dict[str, float]` arg
+(plain name->float, still zero Isaac dependency) supplying J2_upper/J1_upper for the
+split; `task.py` builds it once from the loaded articulation's own
+`robot_joint_pos_upper_limits`, so the split always uses exactly the same physical bounds
+the sim itself enforces -- no separately-maintained constants to drift out of sync.
+
+### task.py: back to one control law for all 16 joints
+
+- `_pre_physics_step`: `self.residual = clamp(actions * action_scale, -residual_clip,
+  residual_clip)` computed uniformly over all 16 -- no more `direct_local_idx`/
+  `coupled_local_idx` split, no `full_torque_scale`/`full_torque_clip`, no
+  `soft_limit_avoidance` call.
+- `_apply_action`: back to sending `joint_pos_cmd` straight to
+  `set_joint_position_target` (the `pd_drive_target` buffer that tracked current position
+  for the coupled joints is gone entirely -- nothing needs it once every joint has a real
+  setpoint). PhysX's PD (KP=1.0/KD=0.1, completely unchanged) chases that real setpoint for
+  every joint, exactly as the project's original hard constraint always required.
+- `action_scale`/`residual_clip` are now sized 16 (uniform), not 10+6 split; `uan.yaml`'s
+  `full_torque_scale`/`full_torque_clip`/`joint_limit_margin` keys are removed --
+  everything now goes through the same knobs the 10 direct joints always used.
+- Reward logging: back to one `mean_abs_residual` (16-dim mean), replacing the
+  `mean_abs_residual_direct`/`mean_abs_torque_coupled` split (no longer meaningful once
+  both groups share the same scale).
+- `reward.py`: `soft_limit_avoidance` removed (dead code, nothing calls it); it stays
+  available in git history (the §16 commit) if a joint-limit safety net is ever needed
+  again for some other reason. `compute_uan_reward` is unchanged.
+
+### On `q_dot` for the coupled joints' Kd term (asked directly mid-fix)
+
+PD's damping term never came from the dataset or from anything UAN computes -- it's
+PhysX's own simulated joint velocity, read fresh from the physics state every substep,
+identical for all 16 joints. UAN only ever calls `set_joint_position_target` (never
+`set_joint_velocity_target`), so PD's implicit velocity target is 0 and the damping term
+is `-Kd * current_vel` -- pure damping toward zero velocity, same mechanism regardless of
+joint or coupling. The split law above only produces a derived *position* target; there
+was never a separate "velocity target" to derive for Kd, before or after this change.
+
+### Verification
+
+- Rewrote `tests/uan_shadowlite/test_dataset.py`'s coupled-joint test: given three rows of
+  a synthetic combined command (0.4, 1.2, 2.0 against test limits J2_upper=1.0/
+  J1_upper=0.5), asserts the split lands exactly on both segments of the law (`[0.4, 0.0]`,
+  `[1.0, 0.2]`, `[1.0, 0.5]` for J2/J1) plus a new error-path test for a missing coupled
+  joint in `joint_upper_limits`. Removed `test_reward.py`'s 8 `soft_limit_avoidance` tests
+  (function deleted). **26/26 tests pass** (11 dataset + 9 features + 6 reward; was 33 --
+  net -7 from removing the now-dead safety-envelope tests, +2 new dataset tests).
+- Re-ran `train_uan.py --headless --num_envs 4 --device cuda:1`: booted clean, no
+  traceback, first-update reward **3.0988** (up from §15's -1.1456 -- consistent with PD
+  now tracking a real, always-achievable trajectory for every joint instead of fighting a
+  non-causal proxy target for 6 of them), ran 1194+ steps stably, killed intentionally,
+  GPU memory confirmed freed via `nvidia-smi` (`0 MiB` on both GPUs).
+
+## 18. Follow-up — machine-portable hardcoded paths
+
+Requested directly: the USD asset path (`roto/assets/shadow_hand_lite.py`) and the UAN
+dataset recording paths (`default.yaml`'s `dataset.paths`) are absolute paths hardcoded
+against one machine's checkout location (`/home/ayush/icra/roto`), requiring hand-editing
+every time you switch to a machine where the repo lives elsewhere (e.g.
+`/home/ayush/Desktop/real_to_sim/roto`, the other machine's known location from an earlier
+merge conflict, §14).
+
+New tiny utility, `roto/assets/path_resolve.py::resolve_path(path)`: returns `path`
+unchanged if it exists; otherwise, if `path` starts with one of a small hardcoded
+`KNOWN_ROTO_ROOTS` list, retries every other known root substituted for that prefix and
+returns the first one that exists, raising `FileNotFoundError` (listing everything tried)
+if none do. Wired in at both call sites: `shadow_hand_lite.py`'s `usd_path=` and
+`task.py`'s dataset-path resolution (each configured path in `ds_cfg["paths"]`, before
+constructing `AlignedTrajectoryDataset`/`TrajectoryDataset`). yaml/asset files keep one
+canonical hardcoded path each; no schema change. 4 new CPU unit tests
+(`tests/uan_shadowlite/test_path_resolve.py`, monkeypatching `KNOWN_ROTO_ROOTS` so they
+don't depend on either real machine's filesystem): unchanged-if-exists, falls back to the
+other root, raises listing every candidate when none exist, a path outside every known
+root raises with just itself. **30/30 tests pass.** Re-verified live in Isaac Sim: clean
+boot through the new `resolve_path()` call in the USD spawn cfg, reward printed at update 0
+(3.0988, matching §17's baseline exactly -- confirms this change altered no runtime
+behavior on this machine, only added a fallback path for others).
+
+**Not committed or pushed.** Waiting on your review before committing this rollback + the
+path-portability addition together.

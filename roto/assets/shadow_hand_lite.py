@@ -21,6 +21,8 @@ from isaaclab.actuators.actuator_cfg import ImplicitActuatorCfg
 from isaaclab.assets.articulation import ArticulationCfg
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
 
+from roto.assets.path_resolve import resolve_path
+
 ##
 # Configuration
 ##
@@ -28,7 +30,7 @@ from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
 
 
 _SHADOW_LITE_SPAWN = sim_utils.UsdFileCfg(
-    usd_path=f"/home/ayush/icra/roto/roto/assets/shadow_lite/shadow_touchlab_col.usd",
+    usd_path=resolve_path("/home/ayush/icra/roto/roto/assets/shadow_lite/shadow_touchlab_col.usd"),
     activate_contact_sensors=True,
     rigid_props=sim_utils.RigidBodyPropertiesCfg(
         disable_gravity=True,
