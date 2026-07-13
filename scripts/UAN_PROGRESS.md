@@ -21,8 +21,13 @@ more real bugs** beyond the three found in the previous iteration — both diagn
 fixed (see §9). The actuator-net input spec was then corrected per your follow-up feedback:
 `joint_vel`/`action` are 13-dim (per physical motor), not 16-dim (per kinematic DOF) — final
 spec is `joint_pos(16) + joint_vel(13) + joint_pos_error(16) + action(13)` = 58-dim/frame,
-re-verified end-to-end (§12). Nothing under `roto/` other than the new UAN files was
-modified. Waiting on your review before `git add`/`commit`/`push`.
+re-verified end-to-end (§12). `obs_stack` raised 8→20 (§13). **Everything through §13 is
+now pushed** to `origin/s2r-test-sysid` (§14 — merged with a concurrent push carrying new
+system-identified PD gains, one real conflict resolved). **Since that push**, the network's
+output was split by joint role (§15): the 10 directly-driven joints still get a small
+residual on top of PD; the 6 mechanically-coupled joints now get the (near-)entire torque
+command instead of a residual, with PD neutralized for them via a new `pd_drive_target`
+buffer — re-verified end-to-end, **not yet committed/pushed**.
 
 ---
 
@@ -638,5 +643,129 @@ deliberately left to roto's existing `FrameStack` wrapper rather than built by h
 `Linear(in_features=1160, out_features=256, ...)` -- `1160 = 58 (per-frame feature width,
 §12) × 20 (obs_stack)`, exactly as expected, no traceback. A real, finite first-step reward
 printed (`11.79`, no NaN/crash) before the process was stopped intentionally; GPU memory
-confirmed freed via `nvidia-smi` afterward. Nothing committed or pushed; still waiting on
-your review.
+confirmed freed via `nvidia-smi` afterward.
+
+**Since this section was written, everything through §13 was committed and pushed** to
+`origin/s2r-test-sysid` (merge commit `5d67a96`, combined with a concurrent push from
+another session that carried new system-identified PD gains -- see §14 for that history).
+§15 below is new, uncommitted work on top of that push.
+
+---
+
+## 14. Push to GitHub
+
+Committed (`cf70780`) and pushed to `origin/s2r-test-sysid`, at your explicit instruction
+("push and only push aligned"). Staged: the full `roto/tasks/uan_shadowlite/` package,
+`scripts/{train_uan,play_uan}.py`, `scripts/UAN_PROGRESS.md`, `tests/uan_shadowlite/`,
+your pre-existing `shadow_hand_lite.py` path fix, and `roto/data/data/aligned/` (248 MB,
+89 real recordings) -- **not** `roto/data/data/raw/` (2.7 GB of unused ROS bags) or
+`roto/data/data/dataset/` (empty placeholder), both added to `.gitignore` so a future
+`git add -A` can't pull them in by accident.
+
+The push hit a real conflict: `origin/s2r-test-sysid` had moved (commit `c3b13c2`, "Full-hand
+sim-vs-real validation: gains, coupling, and replay tooling") since the branch was last
+checked, from another session. Both that commit and this work's carried-over path fix edited
+the same line in `shadow_hand_lite.py`'s `usd_path` differently (the remote kept an old
+`/home/ayush/Desktop/...` path with just the filename fixed; the local version pointed at
+`/home/ayush/icra/...`, matching where this machine actually has the repo). Resolved per your
+explicit choice: kept the `icra` path, and merged in the remote's other changes --
+substantial new per-joint PD gains from `shadow_pd_id` system identification (replacing the
+old uniform `stiffness=1.0/damping=0.1` placeholder with per-joint identified values, plus a
+uniform 30 N·m effort ceiling replacing the old ~0.9-2.4 N·m per-joint limits) -- via a normal
+`git merge` (not rebase, not force-push), one conflict, cleanly resolved, merge commit
+`5d67a96`, pushed successfully.
+
+**Post-merge re-verification**: re-ran `train_uan.py` against the newly-merged gains from
+the final in-`roto` location -- booted clean, real finite reward (`12.39`), no errors. UAN's
+design was never coupled to specific KP/KD values (it only ever adds a residual on top of
+whatever PD roto currently runs), so the new gains required zero code changes.
+
+---
+
+## 15. Follow-up — coupled joints get the full torque command, not a residual
+
+Requested directly: for the 6 mechanically-coupled DOFs (FFJ1/FFJ2, MFJ1/MFJ2, RFJ1/RFJ2),
+stop treating the network's output as a small correction on top of PD -- have it output the
+(near-)entire commanded torque instead. The other 10 directly-driven joints are unchanged
+(small residual on top of PD-toward-real-setpoint, exactly as before).
+
+### Why this is well-motivated (not just requested, but justified)
+
+Recall from D5: these 6 joints have no independently-causal setpoint on real hardware (one
+shared motor drives each finger's J1+J2 pair via a tendon), so their PD target was always a
+*proxy* (the measured position, `gt_pos`) rather than a genuine commanded intention. Asking
+the network to learn a small *correction* on top of a PD baseline that's chasing a proxy
+target is a shakier proposition than for the other 10 joints, where PD chases a real,
+causally-meaningful setpoint (and, since §14, PD gains for those 10 are now genuinely
+system-identified from real hardware). For the 6 coupled joints, the PD baseline itself isn't
+trustworthy in the same way -- the newly-merged gains commit's own comment on this is
+telling: `rh_FFJ1`'s Kp/Kd were set equal to `rh_FFJ2`'s "since shadow_pd_id never
+excited/identified them directly" (no independent command exists to excite them with in the
+first place). Letting the network own the full torque for these 6 removes the dependency on
+a PD baseline that was never independently validated for them, and lets the network learn
+whatever torque profile is actually needed to reproduce the real coupled motion, unconstrained
+by that baseline's correctness.
+
+### Mechanism
+
+Two changes, both scoped precisely to the 6 coupled joints (identified via
+`dataset.COUPLED_JOINT_PAIRS`, imported into `task.py` rather than duplicated, so the two
+decisions -- which joints get measured-position-as-PD-target in the dataset loader, and which
+get full-torque-instead-of-residual in the env -- can never drift out of sync):
+
+1. **Torque budget.** `_pre_physics_step` now builds the 16-dim effort-target output
+   (`self.residual`, name kept for continuity though it's no longer "residual" for 6 of the
+   16 slots) in two pieces:
+   ```python
+   torque[:, direct_local_idx]  = clamp(actions[:, direct_local_idx]  * action_scale,      -residual_clip,    residual_clip)
+   torque[:, coupled_local_idx] = clamp(actions[:, coupled_local_idx] * full_torque_scale, -full_torque_clip, full_torque_clip)
+   ```
+   `full_torque_scale`/`full_torque_clip` (new `uan.*` yaml keys, defaults `2.0`/`10.0`) are
+   deliberately much larger than `action_scale`/`residual_clip` (`0.05`/`0.3`) -- a correction
+   only needs to nudge an already-good PD response, but a full torque command needs to span a
+   meaningful range on its own. Defaults are a conservative starting point, comfortably under
+   the sim's `30 N·m` effort ceiling (§14) -- not claimed-optimal, meant to be tuned once real
+   training is underway, same as `action_scale`/`residual_clip` always were.
+
+2. **Neutralizing PD for those 6 joints.** PhysX's implicit PD is not disabled (that would mean
+   touching the shared actuator config in `shadow_hand_lite.py`, affecting every other roto
+   task) -- instead, its *target* is changed so its contribution becomes negligible. A new
+   `self.pd_drive_target` buffer (separate from `self.joint_pos_cmd`, which is untouched and
+   still feeds reward/features/the `action` feature for all 16 joints) is what's actually sent
+   to `set_joint_position_target`: identical to `joint_pos_cmd` for the 10 direct joints, but
+   for the 6 coupled joints it tracks the *current simulated position*
+   (`self.joint_pos[:, actuated_dof_indices][:, coupled_local_idx]`, captured once per RL step
+   in `_pre_physics_step`, consistent with `joint_pos_cmd` also being fixed for the whole
+   4-substep decimation loop rather than re-measured per substep). With target ≈ current
+   position, PD's `KP·(target−pos)` term is ≈0 for these joints -- **not exactly zero**: PD's
+   `−KD·velocity` damping term still contributes, since damping only depends on velocity, not
+   position error. This is treated as an acceptable, even mildly beneficial, leftover (a small
+   passive-damping-like effect) rather than something requiring a roto actuator-cfg edit to
+   eliminate entirely.
+
+3. **Diagnostic logging split accordingly.** `mean_abs_residual` (previously one averaged
+   number across all 16, misleading once the two groups operate on wildly different scales --
+   0.3 max vs. 10.0 max) is now two separate keys in `extras["log"]`:
+   `mean_abs_residual_direct` (10 joints) and `mean_abs_torque_coupled` (6 joints).
+
+### What did NOT change
+- The 10 directly-driven joints: identical mechanism to before (small residual, real-setpoint
+  PD target, `action_scale`/`residual_clip`).
+- `joint_pos_cmd`, the reward, and all four input features: untouched. `pd_drive_target` is a
+  purely internal, PD-drive-only quantity -- `joint_pos_error` (a feature) still reflects
+  `joint_pos_cmd − actual` for all 16 joints, including the 6 coupled ones, so the network
+  still sees "how far is sim from the real/measured trajectory" for those joints as an input,
+  even though that same quantity no longer drives PD's position term for them.
+
+### Verification
+
+19/21 -> still 21/21 unit tests pass (this change doesn't touch dataset.py/features.py, only
+task.py's control logic, so no new tests were required to keep the existing suite green -- the
+qualitative behavior change here is inherently a live-simulation concern, not something the
+CPU-only fixtures exercise). Re-ran `train_uan.py --headless --num_envs 4 --device cuda:1`
+against the real aligned data from the merged, in-`roto` location: booted clean, no traceback,
+a real finite first-update reward (`-1.1456`) printed, process stopped intentionally, GPU
+memory confirmed freed via `nvidia-smi` afterward.
+
+**Not committed or pushed.** §14's push already happened; this is new work on top of it --
+waiting on your review before committing this separately.
