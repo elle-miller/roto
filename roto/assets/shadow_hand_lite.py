@@ -361,27 +361,56 @@ SHADOW_HAND_LITE_CFG = ArticulationCfg(
         "fingers": ImplicitActuatorCfg(
             # All 16 joints actuated: FF/MF/RF J1-J4 + thumb J1,J2,J4,J5
             joint_names_expr=["rh_[MRF]FJ[1-4]", "rh_THJ[1245]"],
-            effort_limit_sim={
-                # Finger flexion (incl. coupled J1/J2) — raised 0.7245/0.9 -> 2.5
-                # so the joint can follow the steep coupled ramps without saturating.
-                "rh_[MRF]FJ1": .9,
-                "rh_[MRF]FJ[23]": .9,
-                # Knuckle abduction/adduction — barely moves, left at baseline
-                "rh_[MRF]FJ4": 0.9,
-                # Thumb Base
-                "rh_THJ5": 2.3722,
-                "rh_THJ4": 1.45,
-                # Thumb Fingers
-                "rh_THJ[12]": 0.99,
-            },
+            # Uniform 30 N·m effort limit across all 16 actuated joints (per-joint-group
+            # limits of ~0.9-2.4 N·m removed at user's request) -- applies to every joint
+            # matched by joint_names_expr above since ImplicitActuatorCfg accepts a plain
+            # float here, not just a dict.
+            effort_limit_sim=30.0,
             stiffness={
-                "rh_[MRF]FJ[1-4]": 1.0,
-                "rh_THJ[1245]": 1.0,
+                # Identified from real hardware via shadow_pd_id (sim-in-the-loop
+                # Kp/Kd/Fc fit against real command/response logs, see
+                # shadow_pd_id/results/params/*_gains.yaml + DECISIONS.md). Fit
+                # only against training excitation (chirp/ramp/step) -- the
+                # held-out-trajectory check (validate.py) was never run live, so
+                # these are the best offline fit, not independently validated.
+                "rh_FFJ4": 19.3834,
+                "rh_MFJ4": 19.3834,
+                "rh_RFJ4": 19.3834,
+                "rh_THJ5": 2.1784,
+                "rh_FFJ3": 17.7143,
+                "rh_MFJ3": 17.7143,
+                "rh_RFJ3": 17.7143,
+                "rh_THJ4": 9.4651,
+                "rh_FFJ2": 16.4757,
+                "rh_MFJ2": 16.4757,
+                "rh_RFJ2": 18.5329,
+                "rh_THJ2": 2.1784,
+                "rh_THJ1": 14.3495,
+                # J1 mimic joints have no independent command, so shadow_pd_id never
+                # excited/identified them directly -- per user decision, given the same
+                # Kp as their driver J2 (same finger, same physical actuator/tendon
+                # driving both) rather than the old generic placeholder (Kp=1.0).
+                "rh_FFJ1": 16.4757,  # = rh_FFJ2
+                "rh_MFJ1": 16.4757,  # = rh_MFJ2
+                "rh_RFJ1": 18.5329,  # = rh_RFJ2
             },
             damping={
-                "rh_[MRF]FJ[12]": 0.1,
-                "rh_[MRF]FJ[34]": 0.1,
-                "rh_THJ[1245]": 0.1,
+                "rh_FFJ4": 1.7063,
+                "rh_MFJ4": 1.7063,
+                "rh_RFJ4": 1.7063,
+                "rh_THJ5": 0.0770,
+                "rh_FFJ3": 1.1835,
+                "rh_MFJ3": 1.1835,
+                "rh_RFJ3": 1.1835,
+                "rh_THJ4": 1.8569,
+                "rh_FFJ2": 0.0094,
+                "rh_MFJ2": 0.0094,
+                "rh_RFJ2": 0.6777,
+                "rh_THJ2": 0.0770,
+                "rh_THJ1": 0.7221,
+                "rh_FFJ1": 0.0094,  # = rh_FFJ2
+                "rh_MFJ1": 0.0094,  # = rh_MFJ2
+                "rh_RFJ1": 0.6777,  # = rh_RFJ2
             },
             # velocity_limit_sim={
             #     # Override the URDF's 2.0 rad/s cap (which was saturating the

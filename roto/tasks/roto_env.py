@@ -307,10 +307,10 @@ class RotoEnv(DirectRLEnv):
           proxy ∈ [0,     theta]:  J2 ramps 0 → J2_max,  J1 = 0
           proxy ∈ [theta, J2_max]: J2 = J2_max (held),   J1 ramps 0 → J1_max
 
-        With coupling_theta = pi/4 (0.785 rad = 45°) and J2_max = J1_max = pi/2 (90°):
-          proxy = 0.785 (45°) → J2 = 90°, J1 =  0°
-          proxy = 1.31  (75°) → J2 = 90°, J1 = 60°
-          proxy = 1.57  (90°) → J2 = 90°, J1 = 90°
+        With coupling_theta = 0.8727 rad (50°) and J2_max = J1_max = pi/2 (90°):
+          proxy = 0.8727 (50°) → J2 = 90°, J1 =  0°
+          proxy = 1.2217 (70°) → J2 = 90°, J1 = 45°
+          proxy = 1.5708 (90°) → J2 = 90°, J1 = 90°
         """
         # proxy = what _pre_physics_step wrote for J2, in [0, J2_upper]
         proxy   = self.joint_pos_cmd[:, self.coupled_driver_indices]          # (N, 3)

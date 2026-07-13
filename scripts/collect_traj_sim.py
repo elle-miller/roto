@@ -91,7 +91,7 @@ UPPER_LIMITS = np.array([
 
 # Coupled J1 joint names corresponding to policy indices 8, 9, 10
 COUPLED_J1_NAMES = {8: "rh_FFJ1", 9: "rh_MFJ1", 10: "rh_RFJ1"}
-COUPLING_THETA = 0.785   # rad — matches roto_env._handle_coupled_joints
+COUPLING_THETA = 0.8727  # rad = 50 deg — matches roto_env._handle_coupled_joints / shadowlite.py's coupling_theta
 
 
 def _coupling(proxy, upper):

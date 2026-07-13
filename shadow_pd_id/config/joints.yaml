@@ -70,17 +70,17 @@ coupled_groups:
     mimic_joint: rh_FFJ1
     hw_controller: ffj0         # topic: /sh_rh_ffj0_position_controller/command
     hw_command_scale: 2.0       # hw command = 2.0 * policy driver proxy (hw combines J1+J2 into one 0..pi actuator)
-    coupling_theta_rad: 0.785   # below theta: only J2 moves; above theta: J2 holds, J1 ramps
+    coupling_theta_rad: 0.8727  # 50 deg (corrected from 45 deg per user); below theta only J2 moves, above it J2 holds and J1 ramps
   - driver_joint: rh_MFJ2       # policy index 9
     mimic_joint: rh_MFJ1
     hw_controller: mfj0
     hw_command_scale: 2.0
-    coupling_theta_rad: 0.785
+    coupling_theta_rad: 0.8727  # 50 deg (corrected from 45 deg per user)
   - driver_joint: rh_RFJ2       # policy index 10
     mimic_joint: rh_RFJ1
     hw_controller: rfj0
     hw_command_scale: 2.0
-    coupling_theta_rad: 0.785
+    coupling_theta_rad: 0.8727  # 50 deg (corrected from 45 deg per user)
 
 # Per-joint position limits, keyed by name, radians. Copied verbatim from
 # LOWER_LIMITS / UPPER_LIMITS in collect_traj_hw.py / collect_traj_sim.py.
