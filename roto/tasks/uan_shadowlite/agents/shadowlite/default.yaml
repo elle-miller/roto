@@ -80,6 +80,16 @@ uan:
   full_torque_scale: 2.0
   full_torque_clip: 10.0
 
+  #   Safety envelope for those same 6 coupled joints: with PD's position-error term
+  #     neutralized (see above), nothing else pulls a coupled joint back from a limit if
+  #     the network pushes outward, and PhysX's own limit enforcement is a soft
+  #     constraint under continuous torque rather than a rigid wall. Within
+  #     `joint_limit_margin` radians of either physical limit, outward-pushing torque is
+  #     smoothly scaled to 0 (linearly across the margin band); inward/recovery torque
+  #     is never touched. Applied only to the 6 coupled joints (see reward.py::
+  #     soft_limit_avoidance).
+  joint_limit_margin: 0.1
+
   # Random valid trajectory point per reset (recommended for training coverage).
   reset_to_random: true
 

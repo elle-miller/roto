@@ -59,6 +59,7 @@ from roto.tasks.robots.shadowlite.shadowlite import ShadowLiteEnv, ShadowLiteEnv
 from roto.tasks.roto_env import unscale
 from roto.tasks.uan_shadowlite.dataset import COUPLED_JOINT_PAIRS, AlignedTrajectoryDataset, DatasetKeys, TrajectoryDataset
 from roto.tasks.uan_shadowlite.features import DEFAULT_FEATURES, FeatureBuilder, FeatureContext
+from roto.tasks.uan_shadowlite.reward import compute_uan_reward, soft_limit_avoidance
 
 # ---------------------------------------------------------------------------
 # Config
@@ -103,6 +104,12 @@ _DEFAULT_UAN_CFG = {
     # (well under the 30 N*m sim effort ceiling) -- tune once real training is underway.
     "full_torque_scale": 2.0,
     "full_torque_clip": 10.0,
+    # Soft joint-limit avoidance for the 6 coupled joints (radians): outward torque
+    # (pushing further past whichever limit is close) is smoothly scaled to 0 as the
+    # joint gets within this margin of its lower/upper bound. Only applies to the
+    # coupled joints -- the 10 direct joints still have PD tracking a real setpoint
+    # within limits, which already keeps them off their bounds. See _pre_physics_step.
+    "joint_limit_margin": 0.1,
     "reset_to_random": True,
     "early_terminate": False,
     "max_joint_error": 0.35,
@@ -211,6 +218,17 @@ class UANShadowLiteEnv(ShadowLiteEnv):
         self.full_torque_clip = self._broadcast_per_joint(
             uan_cfg.get("full_torque_clip", 10.0), len(self.coupled_local_idx)
         )
+        # Cached joint limits at the 6 coupled indices (soft_joint_pos_limit_factor=1.0
+        # in SHADOW_HAND_LITE_CFG, so these are the joint's full physical range) -- used
+        # by the joint-limit safety envelope in _pre_physics_step. Necessary because PD's
+        # own restoring force is neutralized for these joints (pd_drive_target tracks
+        # current position), so nothing else pulls them back from a limit if the
+        # network's torque pushes outward -- PhysX's own limit enforcement is a soft
+        # constraint under continuous torque, not a rigid wall, and is not sufficient
+        # on its own once PD is no longer helping.
+        self.coupled_pos_lower = self.robot_joint_pos_lower_limits[self.actuated_dof_indices][self.coupled_local_idx]
+        self.coupled_pos_upper = self.robot_joint_pos_upper_limits[self.actuated_dof_indices][self.coupled_local_idx]
+        self.joint_limit_margin = float(uan_cfg.get("joint_limit_margin", 0.1))
         self.reset_to_random = bool(uan_cfg.get("reset_to_random", True))
         self.early_terminate = bool(uan_cfg.get("early_terminate", False))
         self.max_joint_error = float(uan_cfg.get("max_joint_error", 0.35))
@@ -289,6 +307,21 @@ class UANShadowLiteEnv(ShadowLiteEnv):
             -self.full_torque_clip,
             self.full_torque_clip,
         )
+
+        # Soft joint-limit avoidance, coupled joints only: PD's restoring force is
+        # neutralized for these (pd_drive_target below), so nothing else pulls them back
+        # from a limit if the network's torque pushes outward, and PhysX's own limit
+        # enforcement is a soft constraint under continuous torque, not guaranteed to
+        # hold on its own. See soft_limit_avoidance()'s own docstring for the math.
+        coupled_pos = self.joint_pos[:, self.actuated_dof_indices][:, self.coupled_local_idx]
+        torque[:, self.coupled_local_idx] = soft_limit_avoidance(
+            torque[:, self.coupled_local_idx],
+            coupled_pos,
+            self.coupled_pos_lower,
+            self.coupled_pos_upper,
+            self.joint_limit_margin,
+        )
+
         self.residual = torque
 
         # pd_drive_target: what actually gets sent to PhysX's position-target buffer.
@@ -463,59 +496,8 @@ class UANShadowLiteEnv(ShadowLiteEnv):
         return self.feature_builder.build(ctx)
 
 
-# ---------------------------------------------------------------------------
-# Reward
-# ---------------------------------------------------------------------------
-
-
-@torch.jit.script
-def compute_uan_reward(
-    q_real: torch.Tensor,
-    q_sim: torch.Tensor,
-    actions: torch.Tensor,
-    last_actions: torch.Tensor,
-    torque_sim: torch.Tensor,
-    torque_real: torch.Tensor,
-    survival: float,
-    l1: float,
-    exp_l2_loose: float,
-    coef_loose: float,
-    exp_l2: float,
-    coef_l2: float,
-    exp_l2_strict: float,
-    coef_strict: float,
-    exp_action_rate: float,
-    coef_action_rate: float,
-    torque_sign: float,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    """UAN reward: L1 + three exponential-of-negative-L2 tracking bonuses at
-    increasing sharpness + an action-rate smoothness bonus + survival, plus
-    an optional calibration-free torque-sign-agreement term.
-
-    The torque term compares sign(sim total torque) to sign(real uncalibrated
-    effort) per joint, never magnitude -- this is invariant to any positive
-    per-joint calibration scale factor (uncalibrated sensors report
-    tau_raw = a_j * tau_true with unknown, possibly per-joint-different a_j;
-    sign is invariant to a_j > 0). Weighted by `torque_sign` (0.0 = inert).
-    """
-    se = (q_real - q_sim).square()
-    ae = (q_real - q_sim).abs()
-    se_sum = se.sum(dim=1)
-    ae_sum = ae.sum(dim=1)
-    action_rate = torch.linalg.vector_norm(actions - last_actions, dim=1)
-    sign_agree = (torch.sign(torque_sim) == torch.sign(torque_real)).float().mean(dim=1)
-
-    reward = (
-        survival
-        + l1 * ae_sum
-        + exp_l2_loose * torch.exp(-coef_loose * se_sum)
-        + exp_l2 * torch.exp(-coef_l2 * se_sum)
-        + exp_l2_strict * torch.exp(-coef_strict * se_sum)
-        + exp_action_rate * torch.exp(-coef_action_rate * action_rate)
-        + torque_sign * sign_agree
-    )
-    return reward, se_sum, ae_sum
-
+# compute_uan_reward and soft_limit_avoidance now live in reward.py (Isaac-free, so they
+# can be unit-tested on CPU without booting Isaac Sim) -- imported at the top of this file.
 
 # ---------------------------------------------------------------------------
 # Registration

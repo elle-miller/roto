@@ -27,7 +27,15 @@ system-identified PD gains, one real conflict resolved). **Since that push**, th
 output was split by joint role (§15): the 10 directly-driven joints still get a small
 residual on top of PD; the 6 mechanically-coupled joints now get the (near-)entire torque
 command instead of a residual, with PD neutralized for them via a new `pd_drive_target`
-buffer — re-verified end-to-end, **not yet committed/pushed**.
+buffer — re-verified end-to-end, **not yet committed/pushed**. That neutralization turned out
+to remove the only restoring force keeping the 6 coupled joints within their physical limits,
+which you caught directly ("it should stick to joint limits") — fixed via a new
+`soft_limit_avoidance` safety envelope (§16) that smoothly zeroes outward-pushing torque near
+a limit while never touching inward/recovery torque; `soft_limit_avoidance` and
+`compute_uan_reward` were also extracted into a new Isaac-free `reward.py` module (matching
+`dataset.py`/`features.py`'s CPU-testable pattern) so the safety-critical boundary math has
+real unit tests, not just "didn't crash once." 33/33 CPU unit tests pass; re-verified live in
+Isaac Sim. **§15 and §16 together are not yet committed/pushed** — waiting on your review.
 
 ---
 
@@ -769,3 +777,107 @@ memory confirmed freed via `nvidia-smi` afterward.
 
 **Not committed or pushed.** §14's push already happened; this is new work on top of it --
 waiting on your review before committing this separately.
+
+## 16. Follow-up — joint-limit safety fix for the 6 coupled joints, and a `reward.py` extraction
+
+Reported directly, after §15 landed: the hand was not respecting joint limits. Narrowed by you
+to specifically the coupled joints.
+
+### Root cause
+
+§15's `pd_drive_target` mechanism (item 2 above) neutralizes PD's position-error term for the
+6 coupled joints by tracking their own current position instead of a real setpoint. That was
+intentional -- it's what lets the network's torque dominate for those joints instead of a
+proxy-target PD baseline. But it has a side effect that wasn't accounted for: with
+`KP·(target−pos) ≈ 0`, **nothing pulls a coupled joint back once it nears a physical limit**.
+For the 10 direct joints, PD is always chasing a real setpoint that itself stays in-range, so
+PD's own restoring force keeps them safe as a side effect. The 6 coupled joints have no such
+backstop -- PhysX's own joint-limit enforcement is a soft constraint under continuous applied
+torque (not a rigid wall), so if the network outputs a large outward torque near a limit,
+nothing in the loop stops it from being violated.
+
+### Fix — `soft_limit_avoidance`
+
+A new safety pass, applied only to the 6 coupled joints' torque, after the
+`full_torque_scale`/`full_torque_clip` clamp and before `set_joint_effort_target`. Within
+`joint_limit_margin` radians (new `uan.joint_limit_margin` yaml key, default `0.1`) of either
+physical limit, torque pushing *outward* (further past the limit) is scaled linearly down to
+0 exactly at the limit; torque pushing *inward* (back toward the safe range) is left
+completely untouched, at any distance from the limit, including already past it. This means
+the envelope can only ever prevent the network from making an out-of-range excursion worse --
+it never fights a recovery, and never touches the 10 direct joints (they don't need it; see
+Root cause).
+
+```python
+room_below = clamp((pos - lower) / margin, 0, 1)   # 1.0 when >= margin clear of lower bound
+room_above = clamp((upper - pos) / margin, 0, 1)   # 1.0 when >= margin clear of upper bound
+scale = where(torque < 0, room_below, room_above)  # only the outward-pushing sign is scaled
+return torque * scale
+```
+
+Wired into `task.py::_pre_physics_step`, immediately after the coupled joints' torque is
+computed:
+```python
+coupled_pos = self.joint_pos[:, self.actuated_dof_indices][:, self.coupled_local_idx]
+torque[:, self.coupled_local_idx] = soft_limit_avoidance(
+    torque[:, self.coupled_local_idx], coupled_pos,
+    self.coupled_pos_lower, self.coupled_pos_upper, self.joint_limit_margin,
+)
+```
+`self.coupled_pos_lower`/`self.coupled_pos_upper` are the same soft (factor=1.0, effectively
+hard) limits `roto_env` already exposes (`robot_joint_pos_lower_limits`/`upper_limits`),
+cached once at the coupled indices in `__init__` rather than re-sliced every step.
+
+### Why not other fixes
+
+- **Re-enabling PD's position term for the 6 coupled joints** would undo the entire point of
+  §15 (letting the network own the torque, not a proxy-target PD baseline) -- rejected.
+- **Hard-clamping joint *position* directly** (teleporting a joint back inside limits) is
+  physically implausible (real hardware can't teleport) and would corrupt the very trajectory
+  the network is being trained to reproduce -- rejected.
+- **A hard torque cutoff at the limit** (0 or full torque, no ramp) would create a
+  discontinuity right at the boundary that's harder for PPO to learn smoothly around, and
+  would still allow the joint to reach the limit at full outward torque one step before
+  clamping -- the linear ramp starting `margin` radians early gives the network (and PPO's
+  gradient signal) room to back off gradually instead. Chose a margin-based linear ramp
+  instead.
+
+### Refactor for testability: `reward.py`
+
+`soft_limit_avoidance` is safety-critical and boundary-condition-heavy (exact behavior at the
+limit, one margin away, past the limit, zero torque, inward vs. outward sign) -- "ran once in
+Isaac Sim and it didn't crash" isn't enough confidence for this kind of function. Rather than
+add Isaac-dependent tests, it was extracted (along with `compute_uan_reward`, unchanged
+behavior, moved verbatim) into a new Isaac-free module,
+`roto/tasks/uan_shadowlite/reward.py`, matching the existing `dataset.py`/`features.py`
+pattern of pure-`torch` modules that import zero Isaac Lab code and are CPU-testable via
+plain `pytest`. `task.py` now imports both functions from `reward.py` instead of defining them
+inline; behavior is identical, this is a pure code-motion refactor plus the new call to
+`soft_limit_avoidance`.
+
+New file: `tests/uan_shadowlite/test_reward.py`, 12 tests:
+- `soft_limit_avoidance` (8 tests): full torque passes through mid-range; outward torque
+  zeroed exactly at the limit; inward torque untouched even at the limit; linear scaling
+  partway through the margin band; scale=1 at exactly one margin away; torque already past
+  the limit clamps to 0 (not negative); zero torque unaffected; batched envs/joints.
+- `compute_uan_reward` (4 tests): perfect tracking gives the max bounded reward; the
+  torque-sign term is inert when its weight is 0; the torque-sign term rewards sign agreement
+  when enabled; larger position error gives lower reward.
+
+### Verification
+
+- `pytest tests/uan_shadowlite/ -v` (icra conda env; s2r env lacks pytest): **33/33 pass**
+  (12 dataset + 9 features + 12 reward).
+- Added `uan.joint_limit_margin: 0.1` to `default.yaml`, documented inline next to
+  `full_torque_scale`/`full_torque_clip`, consistent with how every other `uan.*` knob is
+  documented there (the Python default already existed via `uan_cfg.get(..., 0.1)`; this just
+  makes it visible/tunable from the yaml a user actually edits).
+- Re-ran `train_uan.py --headless --num_envs 4 --device cuda:1` from `roto/` after the
+  `reward.py` extraction (the import restructuring itself hadn't been live-verified before
+  this run): booted clean, no traceback, ran ~900 PPO steps with a real finite reward
+  (`-1.1456` at update 0, consistent with §15's last measurement -- confirms the refactor
+  didn't change runtime behavior), killed intentionally, GPU memory confirmed freed via
+  `nvidia-smi` afterward (`0 MiB` on both GPUs).
+
+**Not committed or pushed.** Waiting on your review, consistent with how §14/§15 were each
+committed only after separate, explicit confirmation.
