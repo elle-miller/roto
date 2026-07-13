@@ -1,0 +1,180 @@
+# UAN (Unsupervised Actuator Network) -- ShadowLite residual-torque config.
+#
+# Layout mirrors roto's other agent yamls (roto/roto/tasks/bounce/agents/shadowlite/*.yaml)
+# section-for-section, plus two new sections (`dataset`, `uan`). Single self-contained
+# file (no default+variant Hydra merge) -- scripts/train_uan.py loads exactly one yaml.
+# To make a variant: copy this file, edit, pass `--agent_cfg <path>`.
+
+seed: 42
+
+# --- Real-world trajectory data ---
+dataset:
+  # "aligned" = current recording format (roto/data/data/aligned/<episode>/*.aligned.npz,
+  #   one file per episode; act_pos/act_err/act_vel/action/command (13-dim, actuator-level)
+  #   + gt_pos/gt_vel/gt_effort/gt_tactile (16-dim, joint-level) + valid/seg_id).
+  # "legacy" = older single/few-file .npz format (joint_pos_cmd/joint_pos/actuated_names/
+  #   episode_ends/rl_dt, e.g. roto/mimic_recording.npz).
+  format: aligned
+
+  # Directory paths auto-glob every *.aligned.npz inside (non-recursive); explicit file
+  # paths and glob patterns also work. Multiple entries are concatenated.
+  # ADJUST to whichever recording set(s) you want to train on.
+  paths:
+    - /home/ayush/icra/roto/roto/data/data/aligned/free_space_50
+    - /home/ayush/icra/roto/roto/data/data/aligned/free_space_continous_50
+    - /home/ayush/icra/roto/roto/data/data/aligned/free_space_10_13072026
+
+  # Minimum steps that must remain before a trajectory boundary for a row to be usable
+  # as a reset/start index.
+  min_horizon: 8
+
+  # legacy-format-only: field names inside the .npz (ignored when format: aligned).
+  keys:
+    cmd: joint_pos_cmd
+    meas: joint_pos
+    names: actuated_names
+    ends: episode_ends
+    dt: rl_dt
+
+# --- UAN-specific behavior: features, residual-torque scaling, reward ---
+uan:
+  # Actuator-net input, one frame (roto's FrameStack via observations.obs_stack below
+  # stacks N of these for temporal history):
+  #   joint_pos (16, per kinematic DOF, roto-normalized via unscale())
+  #   joint_vel (13, per physical motor -- ShadowLite has 16 DOFs but only 13
+  #              independent motors; the 3 coupled finger pairs share one motor each,
+  #              and hardware doesn't report their J1/J2 velocity independently)
+  #   joint_pos_error (16, per kinematic DOF, raw/unnormalized -- matches roto)
+  #   action (13, per physical motor -- the control-level command implied by the
+  #           current joint_pos_cmd, back-solved via unscale(); during a future
+  #           downstream-policy embedding this is literally that policy's own
+  #           13-dim action, so the input contract doesn't change between contexts)
+  # Total: 16 + 13 + 16 + 13 = 58-dim per frame.
+  features:
+    - joint_pos
+    - joint_vel
+    - joint_pos_error
+    - action
+
+  # Residual torque = clamp(action * action_scale, -residual_clip, residual_clip), in N*m.
+  # Scalar (all 16 joints) or a list of exactly 16 floats (sorted-articulation-index order).
+  # Small by default -- added on top of an already-tuned PD controller.
+  action_scale: 0.05
+  residual_clip: 0.3
+
+  # Random valid trajectory point per reset (recommended for training coverage).
+  reset_to_random: true
+
+  # Off by default, matching the reference implementation -- large tracking error is
+  # penalized by the reward, not used to end the episode (the residual net needs to see
+  # how it recovers).
+  early_terminate: false
+  max_joint_error: 0.35
+
+  # null = track all 16 actuated joints (default). Set to a list of joint names to track
+  # a subset instead; the network still always outputs 16 residual torques regardless.
+  tracked_joint_names: null
+
+  # Reward = survival + l1*L1 + exp_l2_loose*exp(-coef_loose*L2) + exp_l2*exp(-coef_l2*L2)
+  #                    + exp_l2_strict*exp(-coef_strict*L2) + exp_action_rate*exp(-coef_action_rate*||da||)
+  #                    + torque_sign*mean(sign(tau_sim)==sign(tau_real))
+  # L1/L2 = summed absolute/squared position error over tracked joints, vs the *measured*
+  # real trajectory (gt_pos for "aligned" format). torque_sign compares SIGN only (never
+  # magnitude) against the recording's uncalibrated motor effort (gt_effort) -- calibration-
+  # free by construction; 0.0 = inert until you explicitly want it.
+  reward:
+    survival: 0.0
+    l1: -1.5
+    exp_l2_loose: 4.0
+    coef_loose: 100.0
+    exp_l2: 4.0
+    coef_l2: 300.0
+    exp_l2_strict: 5.0
+    coef_strict: 1000.0
+    exp_action_rate: 0.5
+    coef_action_rate: 0.5
+    torque_sign: 0.0
+
+# --- Observation plumbing (consumed by roto's make_env / FrameStack) ---
+observations:
+  obs_list:
+    - prop
+  obs_stack: 20   # temporal history length fed to the policy (58-dim/frame -> 1160-dim input)
+
+# --- Encoder: fuses the (stacked) prop observation into a latent z ---
+encoder:
+  method: early
+  hiddens:
+    - 256
+    - 128
+  activations:
+    - elu
+    - elu
+  layernorm: true
+  state_preprocessor: True
+
+# --- Policy MLP: z -> 16 residual-torque action means (this IS the actuator net) ---
+policy:
+  clip_log_std: true
+  initial_log_std: -1.0
+  min_log_std: -20.0
+  max_log_std: 2.0
+  hiddens:
+    - 128
+    - 64
+  activations:
+    - elu
+    - elu
+    - identity
+
+# --- Value MLP ---
+value:
+  hiddens:
+    - 128
+    - 64
+  activations:
+    - elu
+    - elu
+    - identity
+
+# --- PPO hyperparameters (multimodal_rl.rl.ppo.PPO), same keys roto uses ---
+agent:
+  rollouts: 24
+  learning_epochs: 5
+  mini_batches: 8
+  discount_factor: 0.99
+  lambda: 0.95
+  learning_rate: 3.0e-4
+  grad_norm_clip: 1.0
+  ratio_clip: 0.2
+  value_clip: 0.2
+  entropy_loss_scale: 0.0
+  value_loss_scale: 1.0
+  kl_threshold: 0
+  learning_rate_scheduler: "KLAdaptiveLR"
+  learning_rate_scheduler_kwargs:
+    kl_threshold: 0.01
+    min_lr: 1e-6
+    max_lr: 1e-2
+    kl_factor: 2
+    lr_factor: 1.5
+    apply_to_all: true
+
+experiment:
+  directory: uan_shadowlite
+  experiment_name: uan_default
+  debug: 0
+  upload_videos: 0
+  save_checkpoints: 1
+  tb_log: 1
+  wandb: 0
+  wandb_kwargs:
+    project: uan_roto
+    entity: in60seconds-shorts-the-university-of-edinburgh
+    group: uan_shadowlite
+    name: default
+
+trainer:
+  num_eval_envs: 1
+  max_global_timesteps_M: 20
+  environment_info: log

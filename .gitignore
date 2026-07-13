@@ -198,3 +198,8 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+
+# UAN hardware data: raw ROS bags are large (multi-GB) and not read by any code --
+# only roto/data/data/aligned/ (the processed .npz recordings) is meant to be tracked.
+roto/data/data/raw/
+roto/data/data/dataset/
