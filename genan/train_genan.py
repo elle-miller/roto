@@ -54,7 +54,7 @@ from dataset_loader import AlignedTrajectoryDataset
 from dynamics_cache import DynamicsCache
 from history import build_delta_history
 from joint_config import load_joint_config
-from losses import position_loss, torque_loss
+from losses import position_loss, torque_direction_loss, torque_loss
 from model import GenANEnsemble
 
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -116,8 +116,12 @@ def train(
     patience: int = 10,
     seed: int = 0,
     trial=None,
+    torque_loss_weight: float = 1.0,
+    torque_loss_direction: bool = False,
     position_loss_weight: float = 0.0,
     dyn_cache: DynamicsCache | None = None,
+    device: str = "cpu",
+    lr_decay: bool = False,
 ) -> tuple[GenANEnsemble, dict]:
     """Train a GenAN ensemble. `trial`, if given, is an `optuna.Trial`-like
     object (duck-typed: only `.report(value, step)` and `.should_prune()` are
@@ -126,13 +130,36 @@ def train(
     inside the `trial is not None` branch, so plain training never needs it
     installed.
 
-    `position_loss_weight`/`dyn_cache`: if `position_loss_weight > 0.0`,
-    `dyn_cache` must be provided (a `DynamicsCache`, see dynamics_cache.py)
-    and each member's total loss becomes
-    `torque_loss + position_loss_weight * position_loss` (module docstring).
-    Default `position_loss_weight=0.0` reproduces the exact previous
-    Torque-loss-only behavior bit-for-bit (the position term is never
-    computed at all when the weight is zero).
+    `torque_loss_weight`/`position_loss_weight`/`dyn_cache`: each member's
+    total loss is `torque_loss_weight * torque_loss + position_loss_weight *
+    position_loss` -- either term is skipped entirely (not just zero-weighted)
+    when its weight is `<= 0.0`. Defaults (`torque_loss_weight=1.0`,
+    `position_loss_weight=0.0`) reproduce the exact previous Torque-loss-only
+    behavior bit-for-bit. Set `torque_loss_weight=0.0` with
+    `position_loss_weight > 0.0` for PURE Position-loss training (the paper's
+    other loss variant, per DESIGN.md) -- `dyn_cache` (a `DynamicsCache`, see
+    dynamics_cache.py) is required whenever `position_loss_weight > 0.0`.
+    Raises if both weights are `<= 0.0` (nothing left to train against).
+
+    `torque_loss_direction`: if True, use `torque_direction_loss` (cosine
+    similarity -- calibration-free, direction-only) in place of `torque_loss`
+    (magnitude-sensitive MSE) for the torque term, wherever it's active.
+    Default `False` reproduces prior behavior exactly.
+
+    `device`: everything the network trains against (`x_train`/`y_train`/
+    `x_val`/`y_val`, the ensemble itself, and the position-loss tensors
+    pulled from `dyn_cache`) is moved to this device -- `dataset`/`dyn_cache`
+    themselves stay on CPU (index/RNG bookkeeping, cheap either way), only
+    the actual training tensors move. Default `"cpu"` matches all prior
+    behavior exactly; batch-index sampling still uses a CPU `torch.Generator`
+    for determinism (see `check` in `phase_a_tests.py`), then `.to(device)`s
+    the sampled indices before using them to index GPU tensors.
+
+    `lr_decay`: if True, each member's optimizer gets a
+    `CosineAnnealingLR(opt, T_max=epochs, eta_min=lr*0.01)` schedule, stepped
+    once per epoch (decaying from `lr` down to `lr*0.01` by the final epoch,
+    matched to the fixed `epochs` budget). Default `False` reproduces prior
+    behavior exactly (constant `lr` for the whole run).
     """
     train_t, val_t = split_segments(dataset, val_frac=val_frac, seed=seed)
     if train_t.numel() == 0 or val_t.numel() == 0:
@@ -141,16 +168,26 @@ def train(
         )
     if position_loss_weight > 0.0 and dyn_cache is None:
         raise ValueError("position_loss_weight > 0 requires a DynamicsCache (dyn_cache).")
+    if torque_loss_weight <= 0.0 and position_loss_weight <= 0.0:
+        raise ValueError("At least one of torque_loss_weight/position_loss_weight must be > 0.")
+    torque_loss_fn = torque_direction_loss if torque_loss_direction else torque_loss
 
     x_train, y_train = build_inputs_and_labels(dataset, train_t, history_len, stride)
     x_val, y_val = build_inputs_and_labels(dataset, val_t, history_len, stride)
+    x_train, y_train = x_train.to(device), y_train.to(device)
+    x_val, y_val = x_val.to(device), y_val.to(device)
 
     input_dim = x_train.shape[1]
     ensemble = GenANEnsemble(input_dim, dataset.num_joints, ensemble_size=ensemble_size, seed=seed)
+    ensemble.to(device)
     ensemble.fit_scalers(x_train, y_train)
 
     optimizers = [torch.optim.Adam(m.parameters(), lr=lr) for m in ensemble.members]
     generators = [torch.Generator().manual_seed(seed + 1000 + i) for i in range(ensemble_size)]
+    schedulers = (
+        [torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=epochs, eta_min=lr * 0.01) for opt in optimizers]
+        if lr_decay else None
+    )
 
     best_val_loss = float("inf")
     best_state = None
@@ -165,15 +202,22 @@ def train(
         for _ in range(steps_per_epoch):
             step_losses = []
             for member, opt, gen in zip(ensemble.members, optimizers, generators):
-                idx = torch.randint(0, n_train, (batch_size,), generator=gen)
-                x = ensemble.input_scaler(x_train[idx], train=False)
-                y_std = ensemble.label_scaler(y_train[idx], train=False)
+                idx = torch.randint(0, n_train, (batch_size,), generator=gen)  # CPU, for determinism
+                idx_dev = idx.to(device)
+                x = ensemble.input_scaler(x_train[idx_dev], train=False)
                 pred_std = member(x)
-                loss = torque_loss(pred_std, y_std)
+                loss = None
+
+                if torque_loss_weight > 0.0:
+                    y_std = ensemble.label_scaler(y_train[idx_dev], train=False)
+                    loss = torque_loss_weight * torque_loss_fn(pred_std, y_std)
 
                 if position_loss_weight > 0.0:
-                    t_batch = train_t[idx]
+                    t_batch = train_t[idx]  # CPU: dataset/dyn_cache are CPU-resident
                     _, m_inv, C, G, q_t, qdot_t, q_next, valid = dyn_cache.position_targets(dataset, t_batch)
+                    valid = valid.to(device)
+                    m_inv, C, G = m_inv.to(device), C.to(device), G.to(device)
+                    q_t, qdot_t, q_next = q_t.to(device), qdot_t.to(device), q_next.to(device)
                     if valid.any():
                         # Differentiable physical-torque prediction -- explicit
                         # no_grad=False is required, see module docstring.
@@ -182,21 +226,35 @@ def train(
                             tau_pred_physical[valid], m_inv[valid], C[valid], G[valid],
                             q_t[valid], qdot_t[valid], q_next[valid], dataset.rl_dt,
                         )
-                        loss = loss + position_loss_weight * pos_loss
+                        pos_term = position_loss_weight * pos_loss
+                        loss = pos_term if loss is None else loss + pos_term
+
+                if loss is None:
+                    # Only reachable if this batch's `valid` mask was all-False
+                    # (every sampled row a segment boundary) AND torque_loss_weight
+                    # is 0 -- vanishingly rare, but skip the step rather than crash.
+                    continue
 
                 opt.zero_grad()
                 loss.backward()
                 opt.step()
                 step_losses.append(loss.item())
-            epoch_losses.append(sum(step_losses) / len(step_losses))
+            if step_losses:
+                epoch_losses.append(sum(step_losses) / len(step_losses))
 
         with torch.no_grad():
             preds_std_val = ensemble.forward_standardized(x_val)
-            y_std_val = ensemble.label_scaler(y_val, train=False)
-            val_loss_t = torque_loss(preds_std_val, y_std_val)
+            val_loss_t = None
+
+            if torque_loss_weight > 0.0:
+                y_std_val = ensemble.label_scaler(y_val, train=False)
+                val_loss_t = torque_loss_weight * torque_loss_fn(preds_std_val, y_std_val)
 
             if position_loss_weight > 0.0:
                 _, m_inv, C, G, q_t, qdot_t, q_next, valid = dyn_cache.position_targets(dataset, val_t)
+                valid = valid.to(device)
+                m_inv, C, G = m_inv.to(device), C.to(device), G.to(device)
+                q_t, qdot_t, q_next = q_t.to(device), qdot_t.to(device), q_next.to(device)
                 if valid.any():
                     # Ensemble-MEAN prediction for validation-time position loss
                     # (a monitoring/early-stopping signal, not a training
@@ -208,13 +266,18 @@ def train(
                         tau_pred_physical_val[valid], m_inv[valid], C[valid], G[valid],
                         q_t[valid], qdot_t[valid], q_next[valid], dataset.rl_dt,
                     )
-                    val_loss_t = val_loss_t + position_loss_weight * val_pos_loss
-            val_loss = val_loss_t.item()
+                    val_pos_term = position_loss_weight * val_pos_loss
+                    val_loss_t = val_pos_term if val_loss_t is None else val_loss_t + val_pos_term
+            val_loss = val_loss_t.item() if val_loss_t is not None else float("nan")
 
         train_loss = sum(epoch_losses) / len(epoch_losses)
         history_log["train_loss"].append(train_loss)
         history_log["val_loss"].append(val_loss)
         print(f"[epoch {epoch:4d}] train_loss={train_loss:.6f} val_loss={val_loss:.6f}")
+
+        if schedulers is not None:
+            for sch in schedulers:
+                sch.step()
 
         if trial is not None:
             import optuna
@@ -235,6 +298,10 @@ def train(
 
     if best_state is not None:
         ensemble.load_state_dict(best_state)
+    # Return a CPU-resident ensemble regardless of `device` -- callers (main()'s
+    # torch.save, sweep_genan.py, etc.) have always assumed a CPU ensemble; only
+    # the training loop itself needs the GPU tensors.
+    ensemble.to("cpu")
     history_log["best_val_loss"] = best_val_loss
     return ensemble, history_log
 
@@ -259,11 +326,23 @@ def build_argparser() -> argparse.ArgumentParser:
     parser.add_argument("--min_horizon", type=int, default=None)
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--checkpoint", type=str, default=None, help="Override output checkpoint path.")
+    parser.add_argument("--torque_loss_weight", type=float, default=None,
+                         help="Weight for the Torque loss term (default 1.0). Set to 0.0 (together with "
+                              "--position_loss_weight > 0) for PURE Position-loss training.")
+    parser.add_argument("--torque_loss_direction", action="store_true", default=None,
+                         help="Use direction-only (cosine similarity) torque loss instead of magnitude MSE. "
+                              "Calibration-free, like uan_shadowlite/reward.py's torque_sign term. Default: off.")
     parser.add_argument("--position_loss_weight", type=float, default=None,
                          help="Weight for the Position loss term (default 0.0 = disabled). Requires "
                               "--preprocess_cache/--dynamics_cache (or the matching yaml keys) when > 0.")
     parser.add_argument("--preprocess_cache", type=str, default=None, help="preprocess.py's output .npz.")
     parser.add_argument("--dynamics_cache", type=str, default=None, help="compute_dynamics.py's output .npz.")
+    parser.add_argument("--device", type=str, default="cpu",
+                         help="Training device, e.g. 'cpu' (default) or 'cuda:0'. Dataset loading stays on "
+                              "CPU regardless; only the network/training tensors move.")
+    parser.add_argument("--lr_decay", action="store_true", default=None,
+                         help="Cosine-anneal lr from its initial value down to lr*0.01 over `epochs`. "
+                              "Default: off (constant lr).")
     return parser
 
 
@@ -306,6 +385,9 @@ def main() -> None:
     print(f"[INFO] Loaded {len(dataset.paths)} file(s), {dataset.num_steps} steps, "
           f"{dataset.traj_starts.shape[0]} trajectory segment(s).")
 
+    torque_loss_weight = args.torque_loss_weight if args.torque_loss_weight is not None else g.get("torque_loss_weight", 1.0)
+    torque_loss_direction = args.torque_loss_direction if args.torque_loss_direction is not None else g.get("torque_loss_direction", False)
+    lr_decay = args.lr_decay if args.lr_decay is not None else g.get("lr_decay", False)
     position_loss_weight = args.position_loss_weight if args.position_loss_weight is not None else g.get("position_loss_weight", 0.0)
     dyn_cache = None
     if position_loss_weight > 0.0:
@@ -331,8 +413,12 @@ def main() -> None:
         val_frac=g["val_frac"],
         patience=g["patience"],
         seed=seed,
+        torque_loss_weight=torque_loss_weight,
+        torque_loss_direction=torque_loss_direction,
         position_loss_weight=position_loss_weight,
         dyn_cache=dyn_cache,
+        device=args.device,
+        lr_decay=lr_decay,
     )
 
     torch.save(

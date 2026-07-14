@@ -64,15 +64,19 @@ genan:
 
   lr: 1.0e-3
   batch_size: 8192
-  epochs: 100
+  epochs: 200
   patience: 10
   val_frac: 0.2
 
   # --- Optional Position loss (train_genan.py/train_genan_single.py) ---
-  # 0.0 = disabled (default): exact previous Torque-loss-only behavior,
-  # bit-for-bit. See losses.py's position_loss/predict_next_position and
-  # roto/scripts/compute_dynamics.py. When > 0, both caches below are
-  # required (preprocess.py's and compute_dynamics.py's output .npz).
+  # position_loss_weight 0.0 = disabled (default): exact previous
+  # Torque-loss-only behavior, bit-for-bit. See losses.py's
+  # position_loss/predict_next_position and roto/scripts/compute_dynamics.py.
+  # When position_loss_weight > 0, both caches below are required
+  # (preprocess.py's and compute_dynamics.py's output .npz).
+  # torque_loss_weight defaults to 1.0 -- set to 0.0 (with position_loss_weight
+  # > 0) for PURE Position-loss training (the paper's other loss variant).
+  torque_loss_weight: 1.0
   position_loss_weight: 0.0
   preprocess_cache: null
   dynamics_cache: null

@@ -54,7 +54,7 @@ from dataset_loader import AlignedTrajectoryDataset
 from dynamics_cache import DynamicsCache
 from history import build_delta_history
 from joint_config import load_joint_config
-from losses import predict_next_position, torque_loss
+from losses import predict_next_position, torque_direction_loss, torque_loss
 from model import GenANEnsemble
 
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -122,12 +122,30 @@ def train(
     val_frac: float = 0.2,
     patience: int = 10,
     seed: int = 0,
+    torque_loss_weight: float = 1.0,
+    torque_loss_direction: bool = False,
     position_loss_weight: float = 0.0,
     dyn_cache: DynamicsCache | None = None,
+    device: str = "cpu",
+    lr_decay: bool = False,
 ) -> tuple[GenANEnsemble, dict]:
-    """`position_loss_weight`/`dyn_cache`: see module docstring's "isolated
-    single-joint Position loss" section. Default `position_loss_weight=0.0`
-    reproduces the exact previous Torque-loss-only behavior bit-for-bit.
+    """`torque_loss_weight`/`position_loss_weight`/`dyn_cache`: see module
+    docstring's "isolated single-joint Position loss" section, and
+    train_genan.py's `train()` docstring for the weight semantics (either
+    term skipped entirely, not just zero-weighted, when its weight is
+    `<= 0.0`). Defaults reproduce the exact previous Torque-loss-only
+    behavior bit-for-bit. Set `torque_loss_weight=0.0` with
+    `position_loss_weight > 0.0` for PURE Position-loss training.
+
+    `torque_loss_direction`: if True, use `torque_direction_loss` (cosine
+    similarity, calibration-free) instead of `torque_loss` (magnitude MSE)
+    for the torque term. Default `False` reproduces prior behavior exactly.
+
+    `device`: see train_genan.py's `train()` docstring -- same pattern,
+    dataset/dyn_cache stay CPU-resident, only training tensors move.
+
+    `lr_decay`: see train_genan.py's `train()` docstring -- same
+    CosineAnnealingLR(T_max=epochs, eta_min=lr*0.01) schedule, per member.
     """
     train_t, val_t = split_segments(dataset, val_frac=val_frac, seed=seed)
     if train_t.numel() == 0 or val_t.numel() == 0:
@@ -136,16 +154,26 @@ def train(
         )
     if position_loss_weight > 0.0 and dyn_cache is None:
         raise ValueError("position_loss_weight > 0 requires a DynamicsCache (dyn_cache).")
+    if torque_loss_weight <= 0.0 and position_loss_weight <= 0.0:
+        raise ValueError("At least one of torque_loss_weight/position_loss_weight must be > 0.")
+    torque_loss_fn = torque_direction_loss if torque_loss_direction else torque_loss
 
     x_train, y_train = build_inputs_and_labels(dataset, train_t, history_len, stride, joint_idx)
     x_val, y_val = build_inputs_and_labels(dataset, val_t, history_len, stride, joint_idx)
+    x_train, y_train = x_train.to(device), y_train.to(device)
+    x_val, y_val = x_val.to(device), y_val.to(device)
 
     input_dim = x_train.shape[1]
     ensemble = GenANEnsemble(input_dim, num_joints=1, ensemble_size=ensemble_size, seed=seed)
+    ensemble.to(device)
     ensemble.fit_scalers(x_train, y_train)
 
     optimizers = [torch.optim.Adam(m.parameters(), lr=lr) for m in ensemble.members]
     generators = [torch.Generator().manual_seed(seed + 1000 + i) for i in range(ensemble_size)]
+    schedulers = (
+        [torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=epochs, eta_min=lr * 0.01) for opt in optimizers]
+        if lr_decay else None
+    )
 
     best_val_loss = float("inf")
     best_state = None
@@ -160,15 +188,23 @@ def train(
         for _ in range(steps_per_epoch):
             step_losses = []
             for member, opt, gen in zip(ensemble.members, optimizers, generators):
-                idx = torch.randint(0, n_train, (min(batch_size, n_train),), generator=gen)
-                x = ensemble.input_scaler(x_train[idx], train=False)
-                y_std = ensemble.label_scaler(y_train[idx], train=False)
+                idx = torch.randint(0, n_train, (min(batch_size, n_train),), generator=gen)  # CPU, for determinism
+                idx_dev = idx.to(device)
+                x = ensemble.input_scaler(x_train[idx_dev], train=False)
                 pred_std = member(x)
-                loss = torque_loss(pred_std, y_std)
+                loss = None
+
+                if torque_loss_weight > 0.0:
+                    y_std = ensemble.label_scaler(y_train[idx_dev], train=False)
+                    loss = torque_loss_weight * torque_loss_fn(pred_std, y_std)
 
                 if position_loss_weight > 0.0:
-                    t_batch = train_t[idx]
+                    t_batch = train_t[idx]  # CPU: dataset/dyn_cache are CPU-resident
                     tau_target, m_inv, C, G, q_t, qdot_t, q_next, valid = dyn_cache.position_targets(dataset, t_batch)
+                    valid = valid.to(device)
+                    tau_target = tau_target.to(device)
+                    m_inv, C, G = m_inv.to(device), C.to(device), G.to(device)
+                    q_t, qdot_t, q_next = q_t.to(device), qdot_t.to(device), q_next.to(device)
                     if valid.any():
                         # Differentiable physical-torque prediction for the ONE
                         # tested joint -- explicit no_grad=False, see
@@ -181,21 +217,33 @@ def train(
                         tau_full[:, joint_idx] = tau_pred_physical.squeeze(-1)
                         q_next_pred = predict_next_position(tau_full, m_inv, C, G, q_t, qdot_t, dataset.rl_dt)
                         pos_loss = F.mse_loss(q_next_pred[valid, joint_idx], q_next[valid, joint_idx])
-                        loss = loss + position_loss_weight * pos_loss
+                        pos_term = position_loss_weight * pos_loss
+                        loss = pos_term if loss is None else loss + pos_term
+
+                if loss is None:
+                    continue  # all-boundary batch AND torque_loss_weight==0 -- vanishingly rare
 
                 opt.zero_grad()
                 loss.backward()
                 opt.step()
                 step_losses.append(loss.item())
-            epoch_losses.append(sum(step_losses) / len(step_losses))
+            if step_losses:
+                epoch_losses.append(sum(step_losses) / len(step_losses))
 
         with torch.no_grad():
             preds_std_val = ensemble.forward_standardized(x_val)
-            y_std_val = ensemble.label_scaler(y_val, train=False)
-            val_loss_t = torque_loss(preds_std_val, y_std_val)
+            val_loss_t = None
+
+            if torque_loss_weight > 0.0:
+                y_std_val = ensemble.label_scaler(y_val, train=False)
+                val_loss_t = torque_loss_weight * torque_loss_fn(preds_std_val, y_std_val)
 
             if position_loss_weight > 0.0:
                 tau_target, m_inv, C, G, q_t, qdot_t, q_next, valid = dyn_cache.position_targets(dataset, val_t)
+                valid = valid.to(device)
+                tau_target = tau_target.to(device)
+                m_inv, C, G = m_inv.to(device), C.to(device), G.to(device)
+                q_t, qdot_t, q_next = q_t.to(device), qdot_t.to(device), q_next.to(device)
                 if valid.any():
                     pred_std_mean_val = preds_std_val.mean(dim=0)
                     tau_pred_physical_val = ensemble.label_scaler(pred_std_mean_val, train=False, inverse=True)
@@ -203,13 +251,18 @@ def train(
                     tau_full_val[:, joint_idx] = tau_pred_physical_val.squeeze(-1)
                     q_next_pred_val = predict_next_position(tau_full_val, m_inv, C, G, q_t, qdot_t, dataset.rl_dt)
                     val_pos_loss = F.mse_loss(q_next_pred_val[valid, joint_idx], q_next[valid, joint_idx])
-                    val_loss_t = val_loss_t + position_loss_weight * val_pos_loss
-            val_loss = val_loss_t.item()
+                    val_pos_term = position_loss_weight * val_pos_loss
+                    val_loss_t = val_pos_term if val_loss_t is None else val_loss_t + val_pos_term
+            val_loss = val_loss_t.item() if val_loss_t is not None else float("nan")
 
         train_loss = sum(epoch_losses) / len(epoch_losses)
         history_log["train_loss"].append(train_loss)
         history_log["val_loss"].append(val_loss)
         print(f"[epoch {epoch:4d}] train_loss={train_loss:.6f} val_loss={val_loss:.6f}")
+
+        if schedulers is not None:
+            for sch in schedulers:
+                sch.step()
 
         if val_loss < best_val_loss:
             best_val_loss = val_loss
@@ -223,6 +276,7 @@ def train(
 
     if best_state is not None:
         ensemble.load_state_dict(best_state)
+    ensemble.to("cpu")  # see train_genan.py's train() -- callers always get a CPU-resident ensemble
     history_log["best_val_loss"] = best_val_loss
     return ensemble, history_log
 
@@ -248,11 +302,23 @@ def build_argparser() -> argparse.ArgumentParser:
     parser.add_argument("--min_horizon", type=int, default=None)
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--checkpoint", type=str, default=None, help="Override output checkpoint path.")
+    parser.add_argument("--torque_loss_weight", type=float, default=None,
+                         help="Weight for the Torque loss term (default 1.0). Set to 0.0 (together with "
+                              "--position_loss_weight > 0) for PURE Position-loss training.")
+    parser.add_argument("--torque_loss_direction", action="store_true", default=None,
+                         help="Use direction-only (cosine similarity) torque loss instead of magnitude MSE. "
+                              "Calibration-free, like uan_shadowlite/reward.py's torque_sign term. Default: off.")
     parser.add_argument("--position_loss_weight", type=float, default=None,
                          help="Weight for the isolated single-joint Position loss (default 0.0 = disabled). "
                               "Requires --preprocess_cache/--dynamics_cache (or the matching yaml keys) when > 0.")
     parser.add_argument("--preprocess_cache", type=str, default=None, help="preprocess.py's output .npz.")
     parser.add_argument("--dynamics_cache", type=str, default=None, help="compute_dynamics.py's output .npz.")
+    parser.add_argument("--device", type=str, default="cpu",
+                         help="Training device, e.g. 'cpu' (default) or 'cuda:0'. Dataset loading stays on "
+                              "CPU regardless; only the network/training tensors move.")
+    parser.add_argument("--lr_decay", action="store_true", default=None,
+                         help="Cosine-anneal lr from its initial value down to lr*0.01 over `epochs`. "
+                              "Default: off (constant lr).")
     return parser
 
 
@@ -287,6 +353,9 @@ def main() -> None:
     )
     os.makedirs(os.path.dirname(checkpoint_path), exist_ok=True)
 
+    torque_loss_weight = args.torque_loss_weight if args.torque_loss_weight is not None else g.get("torque_loss_weight", 1.0)
+    torque_loss_direction = args.torque_loss_direction if args.torque_loss_direction is not None else g.get("torque_loss_direction", False)
+    lr_decay = args.lr_decay if args.lr_decay is not None else g.get("lr_decay", False)
     position_loss_weight = args.position_loss_weight if args.position_loss_weight is not None else g.get("position_loss_weight", 0.0)
     dyn_cache = None
     if position_loss_weight > 0.0:
@@ -306,7 +375,11 @@ def main() -> None:
         history_len=g["history_len"], stride=g["stride"], ensemble_size=g["ensemble_size"],
         epochs=g["epochs"], batch_size=g["batch_size"], lr=g["lr"],
         val_frac=g["val_frac"], patience=g["patience"], seed=seed,
+        torque_loss_weight=torque_loss_weight,
+        torque_loss_direction=torque_loss_direction,
         position_loss_weight=position_loss_weight, dyn_cache=dyn_cache,
+        device=args.device,
+        lr_decay=lr_decay,
     )
 
     torch.save(

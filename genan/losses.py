@@ -90,3 +90,30 @@ def torque_loss(pred_std: torch.Tensor, label_std: torch.Tensor) -> torch.Tensor
     num_joints); `label_std` is broadcast against it.
     """
     return F.mse_loss(pred_std, label_std.expand_as(pred_std) if pred_std.dim() > label_std.dim() else label_std)
+
+
+def torque_direction_loss(pred_std: torch.Tensor, label_std: torch.Tensor) -> torch.Tensor:
+    """Direction-only (cosine-similarity) loss between predicted and labeled
+    torque, in place of magnitude-sensitive MSE.
+
+    Calibration-free by construction -- invariant to any positive scale
+    factor on either side, for the same reason `uan_shadowlite/reward.py`'s
+    `torque_sign` reward term compares sign, not magnitude (`gt_effort` is
+    uncalibrated -- see DESIGN.md, Decision 1). Cosine similarity is used
+    rather than a hard `sign()`/`==` comparison (as `reward.py` uses, fine
+    there since it's never backpropagated through) because `sign()` has zero
+    gradient almost everywhere -- unusable as a *training* loss. For a
+    single-joint (1-dim) prediction this reduces EXACTLY to sign agreement:
+    cosine similarity between two scalars is the product of their signs once
+    normalized, so this one function correctly covers both train_genan.py's
+    (num_joints-dim) and train_genan_single.py's (1-dim) case with no
+    special-casing.
+
+    `pred_std` may carry a leading ensemble dimension (ensemble_size, batch,
+    num_joints); `label_std` is broadcast against it, matching `torque_loss`.
+    Returns `1 - mean(cosine_similarity)` (0 = perfect direction agreement,
+    2 = perfectly opposed), summed over the last (joint) dimension.
+    """
+    label = label_std.expand_as(pred_std) if pred_std.dim() > label_std.dim() else label_std
+    cos_sim = F.cosine_similarity(pred_std, label, dim=-1, eps=1e-8)
+    return (1.0 - cos_sim).mean()

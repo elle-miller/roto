@@ -213,3 +213,6 @@ genan/checkpoints/
 # eval plots -- generated output, machine-specific, regeneratable.
 *.db
 genan_sim_vs_real.png
+
+# GenAN diagnostic plots (plot_single.py output) -- generated, regeneratable.
+genan/genan_plots/
