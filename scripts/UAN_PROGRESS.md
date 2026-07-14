@@ -1026,3 +1026,57 @@ behavior on this machine, only added a fallback path for others).
 
 **Not committed or pushed.** Waiting on your review before committing this rollback + the
 path-portability addition together.
+
+## 19. Follow-up — Optuna hyperparameter sweep + optuna-dashboard
+
+Requested directly: run a sweep for UAN and be able to view it in Optuna's dashboard.
+
+roto already has this infrastructure (`scripts/sweep.py`) for its other tasks (Bounce/
+Baoding/etc.), but that script's config loading goes through Isaac Lab's Hydra/
+ConfigStore task registration (`register_task_to_hydra`/`load_cfg_from_registry`), which
+`UAN_Shadowlite` deliberately isn't registered through (`train_uan.py` uses its own direct
+yaml loading instead -- see D6). Rather than force UAN into the Hydra registration path
+just to reuse `sweep.py` verbatim, new `scripts/sweep_uan.py` mirrors `sweep.py`'s Optuna
+machinery exactly (same `OptimisationRunner`, same PPO hyperparameters tuned --
+`rollouts`/`mini_batches`/`learning_epochs`/`learning_rate`/`entropy_loss_scale`/
+`value_loss_scale`/`ratio_clip`, same TPE sampler + median pruner, same "sweep at reduced
+length, then retrain the best trial on 6 seeds at full length" flow) but built on
+`train_uan.py`'s own env/agent_cfg construction. Everything below env/agent_cfg
+(`make_models`, `make_memory`, `make_trainer`, `PPO`, `Trainer.train(trial=...)`) is
+identical, unmodified roto/multimodal_rl code -- confirmed generic (no task-specific
+branching) by reading each function in `common_utils.py` before reusing it here.
+
+New `sweeper:` yaml block in `default.yaml` (same 3 keys `sweep.py` already expects
+elsewhere: `storage`, `warmup_timesteps_M`, `max_sweep_timesteps_M`), mirroring Bounce's
+own `sweeper:` block format exactly.
+
+Usage:
+```bash
+python scripts/sweep_uan.py --headless --num_envs 512 --study my_sweep --n_trials 40
+```
+View live (or after) in the browser:
+```bash
+optuna-dashboard sqlite:///roto_uan.db   # from the repo root -- matches sweeper.storage
+```
+`--rerun-trial N [--rerun-seeds ...]` loads a specific completed trial's hyperparameters
+back out of the study and retrains it on fresh seeds at full length, skipping the sweep
+(same option `sweep.py` already has).
+
+### Verification
+
+Ran a real, minimal end-to-end sweep (1 trial, `max_sweep_timesteps_M` overridden to
+0.001 via an `--agent_cfg` overlay, `sqlite:///` pointed at a scratch file) rather than
+just reading the code: `Starting trial: 0` printed, trial trained, completed with
+`Number of finished trials: 1`, `Best trial: 0 Value: 1.92058...`, no traceback. Then,
+independently of the training run, opened the resulting db two ways: (1)
+`optuna.load_study(...)` in a fresh Python process confirmed 1 `COMPLETE` trial with all 7
+PPO hyperparameters recorded; (2) launched `optuna-dashboard` against that same file and
+got back HTTP 302 (dashboard's normal redirect into its UI) -- confirms the storage format
+is exactly what the dashboard expects, not just that Optuna's own API can read it back.
+Killed the sweep process (only the one it launched, on `cuda:1`) and the dashboard process
+afterward; GPU 1 confirmed freed via `nvidia-smi` (GPU 0's usage throughout this
+verification belongs to a separate, already-running `train_uan.py` job on `cuda:0`, left
+untouched).
+
+**Not committed or pushed** (same as §17/§18) -- new files: `scripts/sweep_uan.py`, the
+`sweeper:` block in `default.yaml`.

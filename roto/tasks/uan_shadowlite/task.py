@@ -80,7 +80,7 @@ _DEFAULT_REWARD_CFG = {
     # Optional, calibration-free (sign-agreement, not magnitude) torque term.
     # 0.0 by default -- inert unless explicitly enabled in yaml. See
     # compute_uan_reward and DESIGN.md for why sign-agreement, not magnitude.
-    "torque_sign": 0.0,
+    "torque_sign": 10.0,
 }
 
 _DEFAULT_DATASET_CFG = {
@@ -97,8 +97,8 @@ _DEFAULT_UAN_CFG = {
     # setpoint for every one of the 16 actuated joints (direct AND coupled -- see
     # dataset.py's DESIGN NOTE for how the 6 coupled joints get a real, physically
     # in-range setpoint too, by splitting their shared motor's combined command).
-    "action_scale": 0.05,
-    "residual_clip": 0.3,
+    "action_scale": 0.5,
+    "residual_clip": 5,
     "reset_to_random": True,
     "early_terminate": False,
     "max_joint_error": 0.35,

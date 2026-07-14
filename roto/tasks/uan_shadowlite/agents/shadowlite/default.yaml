@@ -183,6 +183,12 @@ experiment:
     name: default
 
 trainer:
-  num_eval_envs: 1
-  max_global_timesteps_M: 20
+  num_eval_envs: 100
+  max_global_timesteps_M: 200
   environment_info: log
+
+# --- Optuna sweep (scripts/sweep_uan.py) ---
+sweeper:
+  storage: sqlite:///roto_uan_1.db  # relative -> anchored at repo root; open with `optuna-dashboard sqlite:///roto_uan.db`
+  warmup_timesteps_M: 200     # pruner: no pruning decisions before this many steps into a trial
+  max_sweep_timesteps_M: 500  # each sweep trial trains for this many steps, not the full trainer.max_global_timesteps_M

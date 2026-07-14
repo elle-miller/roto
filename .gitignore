@@ -203,3 +203,13 @@ cython_debug/
 # only roto/data/data/aligned/ (the processed .npz recordings) is meant to be tracked.
 roto/data/data/raw/
 roto/data/data/dataset/
+# GenAN: precomputed data caches (preprocess.py/compute_dynamics.py output,
+# hundreds of MB, regeneratable) and trained checkpoints -- not source, not
+# meant to be tracked.
+genan/cache/
+genan/checkpoints/
+
+# Optuna sweep sqlite storage (roto_uan.db, roto_genan.db, etc.) and one-off
+# eval plots -- generated output, machine-specific, regeneratable.
+*.db
+genan_sim_vs_real.png

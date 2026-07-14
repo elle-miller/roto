@@ -1,0 +1,106 @@
+# GenAN (Generalized Actuator Network) -- ShadowLite torque-loss config.
+#
+# Layout mirrors roto/roto/tasks/uan_shadowlite/agents/shadowlite/default.yaml
+# section-for-section (`dataset`, `sweeper`), but drops everything that's PPO/RL-
+# specific and doesn't apply to a supervised actuator net: no `encoder`/`policy`/
+# `value`/`agent` sections (there's no RL policy here, just a regression MLP --
+# its architecture is fixed per Table 1 of the paper, not yaml-configurable, see
+# `genan.hidden_dims` comment below) and no `observations`/`trainer` sections
+# (no Isaac env during training -- see DESIGN.md, this whole file is Isaac-free
+# except when `play_genan.py` reads its `dataset` section to build the eval env).
+# Single self-contained file (no default+variant Hydra merge) -- train_genan.py/
+# sweep_genan.py/play_genan.py each load exactly one yaml. To make a variant:
+# copy this file, edit, pass `--agent_cfg <path>`.
+
+seed: 0
+
+# --- Real-world trajectory data (IDENTICAL section to uan_shadowlite's -- same
+# recordings, same format, reused verbatim via roto/genan/dataset_loader.py) ---
+dataset:
+  paths:
+    - /home/ayush/icra/roto/roto/data/data/aligned/free_space_50
+    - /home/ayush/icra/roto/roto/data/data/aligned/free_space_continous_50
+    - /home/ayush/icra/roto/roto/data/data/aligned/free_space_10_13072026
+
+  # Minimum steps that must remain before a trajectory boundary for a row to be
+  # usable as a training start index (AlignedTrajectoryDataset's own knob).
+  min_horizon: 8
+
+# --- Observation plumbing (make_env/update_env_cfg's FrameStack wrapper needs
+# this section unconditionally to build UANShadowLiteEnv, even though GenAN's
+# own scripts never read the resulting stacked `prop` observation -- they build
+# their own delta-history input directly from roto/genan/history.py instead) ---
+observations:
+  obs_list:
+    - prop
+  obs_stack: 20
+
+# Also required unconditionally by make_env/update_env_cfg, for the same reason
+# as `observations` above -- play_genan.py's single-episode deterministic
+# rollout doesn't actually use eval envs or a timestep budget, but the shared
+# env-building code path still reads these keys.
+trainer:
+  num_eval_envs: 0
+  max_global_timesteps_M: 1
+  environment_info: log
+
+# --- GenAN-specific: history construction + training hyperparameters ---
+genan:
+  # Delta-history length/stride for both the q_meas and q_cmd streams (see
+  # DESIGN.md Decision 2/3). Table 1 of the paper: history_len=3, stride=1.
+  history_len: 10
+  stride: 2
+
+  # Ensemble size (Table 1: 5). NOT swept by sweep_genan.py -- it's a paper-
+  # specified value, not a hyperparameter being searched for a better fit.
+  ensemble_size: 5
+
+  # Fixed MLP architecture (Table 1: 2 hidden layers, 512 units, tanh), built
+  # in roto/genan/model.py via multimodal_rl.models.mlp.MLP. Not yaml-
+  # configurable today -- these are paper-specified constants, not a tunable
+  # knob sweep_genan.py searches over.
+  # hidden_dims: [512, 512]
+  # activations: [tanh, tanh]
+
+  lr: 1.0e-3
+  batch_size: 8192
+  epochs: 100
+  patience: 10
+  val_frac: 0.2
+
+  # --- Optional Position loss (train_genan.py/train_genan_single.py) ---
+  # 0.0 = disabled (default): exact previous Torque-loss-only behavior,
+  # bit-for-bit. See losses.py's position_loss/predict_next_position and
+  # roto/scripts/compute_dynamics.py. When > 0, both caches below are
+  # required (preprocess.py's and compute_dynamics.py's output .npz).
+  position_loss_weight: 0.0
+  preprocess_cache: null
+  dynamics_cache: null
+
+# Same fields UAN's yaml has (roto's shared Writer/make_env infrastructure reads
+# them regardless of RL vs supervised training) -- play_genan.py builds its eval
+# env through that same infrastructure, so these can't be dropped even though
+# train_genan.py/sweep_genan.py themselves never touch wandb/tensorboard.
+experiment:
+  directory: genan_shadowlite
+  experiment_name: genan_default
+  checkpoint_dir: /home/ayush/icra/roto/genan/checkpoints
+  debug: 0
+  upload_videos: 0
+  save_checkpoints: 0
+  tb_log: 0
+  wandb: 0
+  wandb_kwargs:
+    project: genan_roto
+    entity: in60seconds-shorts-the-university-of-edinburgh
+    group: genan_shadowlite
+    name: default
+
+# --- Optuna sweep (roto/genan/sweep_genan.py) ---
+sweeper:
+  storage: sqlite:///roto_genan.db  # relative -> anchored at repo root; open with `optuna-dashboard sqlite:///roto_genan.db`
+  n_startup_trials: 8
+  total_trials: 40
+  warmup_epochs: 20      # pruner: no pruning decisions before this many epochs into a trial
+  max_sweep_epochs: 100   # each sweep trial trains for this many epochs, not the full genan.epochs
+  test_seeds: [5, 6, 7, 8, 9, 10]  # multi-seed retrain of the best trial, after the sweep
