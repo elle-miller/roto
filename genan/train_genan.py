@@ -54,7 +54,7 @@ from dataset_loader import AlignedTrajectoryDataset
 from dynamics_cache import DynamicsCache
 from history import build_delta_history
 from joint_config import load_joint_config
-from losses import position_loss, torque_direction_loss, torque_loss
+from losses import position_loss, torque_direction_loss, torque_loss, torque_minmax_loss
 from model import GenANEnsemble
 
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -122,6 +122,7 @@ def train(
     dyn_cache: DynamicsCache | None = None,
     device: str = "cpu",
     lr_decay: bool = False,
+    torque_range: float | None = None,
 ) -> tuple[GenANEnsemble, dict]:
     """Train a GenAN ensemble. `trial`, if given, is an `optuna.Trial`-like
     object (duck-typed: only `.report(value, step)` and `.should_prune()` are
@@ -160,6 +161,17 @@ def train(
     once per epoch (decaying from `lr` down to `lr*0.01` by the final epoch,
     matched to the fixed `epochs` budget). Default `False` reproduces prior
     behavior exactly (constant `lr` for the whole run).
+
+    `torque_range`: if set, replaces the `RunningStandardScaler`-based
+    (data-driven) torque-label standardization with a FIXED min-max scheme
+    (`losses.torque_minmax_loss`) -- the ensemble's members get a `tanh`
+    output (`bounded_output=True`), architecturally guaranteed to stay in
+    (-1,1), trained via plain MSE against `label_raw / torque_range` (clamped
+    to [-1,1]). `torque_loss_direction`/`torque_loss_weight`'s underlying
+    function choice is IGNORED when `torque_range` is set --
+    `torque_minmax_loss` is always used for the torque term in this mode
+    (still scaled by `torque_loss_weight`). Default `None` reproduces prior
+    behavior exactly (unbounded output, data-driven standardization).
     """
     train_t, val_t = split_segments(dataset, val_frac=val_frac, seed=seed)
     if train_t.numel() == 0 or val_t.numel() == 0:
@@ -178,7 +190,10 @@ def train(
     x_val, y_val = x_val.to(device), y_val.to(device)
 
     input_dim = x_train.shape[1]
-    ensemble = GenANEnsemble(input_dim, dataset.num_joints, ensemble_size=ensemble_size, seed=seed)
+    ensemble = GenANEnsemble(
+        input_dim, dataset.num_joints, ensemble_size=ensemble_size, seed=seed,
+        bounded_output=(torque_range is not None), torque_range=torque_range,
+    )
     ensemble.to(device)
     ensemble.fit_scalers(x_train, y_train)
 
@@ -209,8 +224,11 @@ def train(
                 loss = None
 
                 if torque_loss_weight > 0.0:
-                    y_std = ensemble.label_scaler(y_train[idx_dev], train=False)
-                    loss = torque_loss_weight * torque_loss_fn(pred_std, y_std)
+                    if torque_range is not None:
+                        loss = torque_loss_weight * torque_minmax_loss(pred_std, y_train[idx_dev], torque_range)
+                    else:
+                        y_std = ensemble.label_scaler(y_train[idx_dev], train=False)
+                        loss = torque_loss_weight * torque_loss_fn(pred_std, y_std)
 
                 if position_loss_weight > 0.0:
                     t_batch = train_t[idx]  # CPU: dataset/dyn_cache are CPU-resident
@@ -247,8 +265,11 @@ def train(
             val_loss_t = None
 
             if torque_loss_weight > 0.0:
-                y_std_val = ensemble.label_scaler(y_val, train=False)
-                val_loss_t = torque_loss_weight * torque_loss_fn(preds_std_val, y_std_val)
+                if torque_range is not None:
+                    val_loss_t = torque_loss_weight * torque_minmax_loss(preds_std_val, y_val, torque_range)
+                else:
+                    y_std_val = ensemble.label_scaler(y_val, train=False)
+                    val_loss_t = torque_loss_weight * torque_loss_fn(preds_std_val, y_std_val)
 
             if position_loss_weight > 0.0:
                 _, m_inv, C, G, q_t, qdot_t, q_next, valid = dyn_cache.position_targets(dataset, val_t)
@@ -332,6 +353,11 @@ def build_argparser() -> argparse.ArgumentParser:
     parser.add_argument("--torque_loss_direction", action="store_true", default=None,
                          help="Use direction-only (cosine similarity) torque loss instead of magnitude MSE. "
                               "Calibration-free, like uan_shadowlite/reward.py's torque_sign term. Default: off.")
+    parser.add_argument("--torque_range", type=float, default=None,
+                         help="Fixed min-max torque normalization range (e.g. 900.0): bounds the network's "
+                              "output to (-1,1) via tanh and trains with plain MSE against label/torque_range, "
+                              "instead of the default RunningStandardScaler-based standardization. Default: "
+                              "unset (prior behavior).")
     parser.add_argument("--position_loss_weight", type=float, default=None,
                          help="Weight for the Position loss term (default 0.0 = disabled). Requires "
                               "--preprocess_cache/--dynamics_cache (or the matching yaml keys) when > 0.")
@@ -387,6 +413,7 @@ def main() -> None:
 
     torque_loss_weight = args.torque_loss_weight if args.torque_loss_weight is not None else g.get("torque_loss_weight", 1.0)
     torque_loss_direction = args.torque_loss_direction if args.torque_loss_direction is not None else g.get("torque_loss_direction", False)
+    torque_range = args.torque_range if args.torque_range is not None else g.get("torque_range", None)
     lr_decay = args.lr_decay if args.lr_decay is not None else g.get("lr_decay", False)
     position_loss_weight = args.position_loss_weight if args.position_loss_weight is not None else g.get("position_loss_weight", 0.0)
     dyn_cache = None
@@ -415,6 +442,7 @@ def main() -> None:
         seed=seed,
         torque_loss_weight=torque_loss_weight,
         torque_loss_direction=torque_loss_direction,
+        torque_range=torque_range,
         position_loss_weight=position_loss_weight,
         dyn_cache=dyn_cache,
         device=args.device,
@@ -431,6 +459,8 @@ def main() -> None:
             "stride": g["stride"],
             "joint_names": joint_names,
             "best_val_loss": history_log["best_val_loss"],
+            "torque_range": torque_range,
+            "bounded_output": torque_range is not None,
         },
         checkpoint_path,
     )

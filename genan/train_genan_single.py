@@ -54,8 +54,16 @@ from dataset_loader import AlignedTrajectoryDataset
 from dynamics_cache import DynamicsCache
 from history import build_delta_history
 from joint_config import load_joint_config
-from losses import predict_next_position, torque_direction_loss, torque_loss
+from losses import (
+    HARDWARE_EFFORT_TO_NM,
+    pd_baseline_torque,
+    predict_next_position,
+    torque_direction_loss,
+    torque_loss,
+    torque_minmax_loss,
+)
 from model import GenANEnsemble
+from pd_gains import load_pd_gains
 
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 _DEFAULT_CONFIG = os.path.join(_THIS_DIR, "agents", "shadowlite", "default.yaml")
@@ -98,15 +106,29 @@ def split_segments(
 
 
 def build_inputs_and_labels(
-    dataset: AlignedTrajectoryDataset, t: torch.Tensor, history_len: int, stride: int, joint_idx: int
+    dataset: AlignedTrajectoryDataset, t: torch.Tensor, history_len: int, stride: int, joint_idx: int,
+    residual_kp: float | None = None, residual_kd: float | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Same full-multi-joint input as train_genan.py's build_inputs_and_labels
     -- only the label column narrows to `joint_idx`.
+
+    `residual_kp`/`residual_kd`: if both set, the label becomes the RESIDUAL
+    `gt_effort/HARDWARE_EFFORT_TO_NM - pd_baseline_torque(...)` (both sides in
+    N*m -- see `losses.HARDWARE_EFFORT_TO_NM`/`pd_baseline_torque`) instead of
+    the raw recorded torque -- the network then only has to learn what the
+    known, fixed-gain PD term doesn't already explain, in N*m.
     """
     q_hist = build_delta_history(dataset.q_meas, t, history_len, stride, dataset)
     u_hist = build_delta_history(dataset.q_cmd, t, history_len, stride, dataset)
     raw_input = torch.cat([q_hist, u_hist], dim=-1)
-    torque_label = dataset.q_torque[dataset.clamp(t)][:, joint_idx : joint_idx + 1]
+    t_c = dataset.clamp(t)
+    torque_label = dataset.q_torque[t_c][:, joint_idx : joint_idx + 1]
+    if residual_kp is not None:
+        q_cmd = dataset.q_cmd[t_c][:, joint_idx : joint_idx + 1]
+        q_meas = dataset.q_meas[t_c][:, joint_idx : joint_idx + 1]
+        qdot_meas = dataset.q_meas_vel[t_c][:, joint_idx : joint_idx + 1]
+        label_calibrated_nm = torque_label / HARDWARE_EFFORT_TO_NM
+        torque_label = label_calibrated_nm - pd_baseline_torque(q_cmd, q_meas, qdot_meas, residual_kp, residual_kd)
     return raw_input, torque_label
 
 
@@ -128,6 +150,9 @@ def train(
     dyn_cache: DynamicsCache | None = None,
     device: str = "cpu",
     lr_decay: bool = False,
+    torque_range: float | None = None,
+    residual_kp: float | None = None,
+    residual_kd: float | None = None,
 ) -> tuple[GenANEnsemble, dict]:
     """`torque_loss_weight`/`position_loss_weight`/`dyn_cache`: see module
     docstring's "isolated single-joint Position loss" section, and
@@ -146,6 +171,24 @@ def train(
 
     `lr_decay`: see train_genan.py's `train()` docstring -- same
     CosineAnnealingLR(T_max=epochs, eta_min=lr*0.01) schedule, per member.
+
+    `torque_range`: see train_genan.py's `train()` docstring -- same fixed
+    min-max normalization + tanh-bounded output, in place of the default
+    RunningStandardScaler-based standardization. Overrides
+    `torque_loss_direction` when set (always uses `torque_minmax_loss` for
+    the torque term in this mode).
+
+    `residual_kp`/`residual_kd`: if both set, the Torque loss trains against
+    the RESIDUAL `gt_effort - pd_baseline_torque(...)` (see
+    `losses.pd_baseline_torque`, `pd_gains.load_pd_gains`) instead of the raw
+    recorded torque -- the network's own predicted value (whatever
+    `torque_range`/`ensemble.forward()` de-normalizes it to) is then this
+    RESIDUAL, not the absolute torque; callers that need absolute torque
+    (e.g. Position loss's dynamics step, or plotting against raw `gt_effort`)
+    must add `pd_baseline_torque(...)` back explicitly (see plot_single.py).
+    Mutually exclusive with `position_loss_weight > 0` for now -- the
+    position-loss dynamics step needs absolute torque and isn't residual-
+    aware yet (out of scope for this mode's first pass).
     """
     train_t, val_t = split_segments(dataset, val_frac=val_frac, seed=seed)
     if train_t.numel() == 0 or val_t.numel() == 0:
@@ -156,15 +199,27 @@ def train(
         raise ValueError("position_loss_weight > 0 requires a DynamicsCache (dyn_cache).")
     if torque_loss_weight <= 0.0 and position_loss_weight <= 0.0:
         raise ValueError("At least one of torque_loss_weight/position_loss_weight must be > 0.")
+    if (residual_kp is not None) and position_loss_weight > 0.0:
+        raise ValueError(
+            "residual_kp/residual_kd (residual-torque training) is not yet supported together with "
+            "position_loss_weight > 0 -- the Position loss's dynamics step needs absolute torque."
+        )
     torque_loss_fn = torque_direction_loss if torque_loss_direction else torque_loss
 
-    x_train, y_train = build_inputs_and_labels(dataset, train_t, history_len, stride, joint_idx)
-    x_val, y_val = build_inputs_and_labels(dataset, val_t, history_len, stride, joint_idx)
+    x_train, y_train = build_inputs_and_labels(
+        dataset, train_t, history_len, stride, joint_idx, residual_kp=residual_kp, residual_kd=residual_kd
+    )
+    x_val, y_val = build_inputs_and_labels(
+        dataset, val_t, history_len, stride, joint_idx, residual_kp=residual_kp, residual_kd=residual_kd
+    )
     x_train, y_train = x_train.to(device), y_train.to(device)
     x_val, y_val = x_val.to(device), y_val.to(device)
 
     input_dim = x_train.shape[1]
-    ensemble = GenANEnsemble(input_dim, num_joints=1, ensemble_size=ensemble_size, seed=seed)
+    ensemble = GenANEnsemble(
+        input_dim, num_joints=1, ensemble_size=ensemble_size, seed=seed,
+        bounded_output=(torque_range is not None), torque_range=torque_range,
+    )
     ensemble.to(device)
     ensemble.fit_scalers(x_train, y_train)
 
@@ -195,8 +250,11 @@ def train(
                 loss = None
 
                 if torque_loss_weight > 0.0:
-                    y_std = ensemble.label_scaler(y_train[idx_dev], train=False)
-                    loss = torque_loss_weight * torque_loss_fn(pred_std, y_std)
+                    if torque_range is not None:
+                        loss = torque_loss_weight * torque_minmax_loss(pred_std, y_train[idx_dev], torque_range)
+                    else:
+                        y_std = ensemble.label_scaler(y_train[idx_dev], train=False)
+                        loss = torque_loss_weight * torque_loss_fn(pred_std, y_std)
 
                 if position_loss_weight > 0.0:
                     t_batch = train_t[idx]  # CPU: dataset/dyn_cache are CPU-resident
@@ -235,8 +293,11 @@ def train(
             val_loss_t = None
 
             if torque_loss_weight > 0.0:
-                y_std_val = ensemble.label_scaler(y_val, train=False)
-                val_loss_t = torque_loss_weight * torque_loss_fn(preds_std_val, y_std_val)
+                if torque_range is not None:
+                    val_loss_t = torque_loss_weight * torque_minmax_loss(preds_std_val, y_val, torque_range)
+                else:
+                    y_std_val = ensemble.label_scaler(y_val, train=False)
+                    val_loss_t = torque_loss_weight * torque_loss_fn(preds_std_val, y_std_val)
 
             if position_loss_weight > 0.0:
                 tau_target, m_inv, C, G, q_t, qdot_t, q_next, valid = dyn_cache.position_targets(dataset, val_t)
@@ -308,6 +369,16 @@ def build_argparser() -> argparse.ArgumentParser:
     parser.add_argument("--torque_loss_direction", action="store_true", default=None,
                          help="Use direction-only (cosine similarity) torque loss instead of magnitude MSE. "
                               "Calibration-free, like uan_shadowlite/reward.py's torque_sign term. Default: off.")
+    parser.add_argument("--torque_range", type=float, default=None,
+                         help="Fixed min-max torque normalization range (e.g. 900.0): bounds the network's "
+                              "output to (-1,1) via tanh and trains with plain MSE against label/torque_range, "
+                              "instead of the default RunningStandardScaler-based standardization. Default: "
+                              "unset (prior behavior).")
+    parser.add_argument("--residual_torque", action="store_true", default=False,
+                         help="Train against the RESIDUAL torque (gt_effort minus the identified-PD baseline "
+                              "torque, using this joint's fixed Kp/Kd from shadow_pd_id/pd_gains.py) instead of "
+                              "raw gt_effort. Not yet supported together with --position_loss_weight > 0. "
+                              "Default: off (prior behavior).")
     parser.add_argument("--position_loss_weight", type=float, default=None,
                          help="Weight for the isolated single-joint Position loss (default 0.0 = disabled). "
                               "Requires --preprocess_cache/--dynamics_cache (or the matching yaml keys) when > 0.")
@@ -355,7 +426,13 @@ def main() -> None:
 
     torque_loss_weight = args.torque_loss_weight if args.torque_loss_weight is not None else g.get("torque_loss_weight", 1.0)
     torque_loss_direction = args.torque_loss_direction if args.torque_loss_direction is not None else g.get("torque_loss_direction", False)
+    torque_range = args.torque_range if args.torque_range is not None else g.get("torque_range", None)
     lr_decay = args.lr_decay if args.lr_decay is not None else g.get("lr_decay", False)
+    residual_torque = args.residual_torque or g.get("residual_torque", False)
+    residual_kp, residual_kd = (load_pd_gains(joint_name) if residual_torque else (None, None))
+    if residual_torque:
+        print(f"[INFO] Residual-torque training for {joint_name}: kp={residual_kp:.4f}, kd={residual_kd:.4f} "
+              f"(from shadow_pd_id, see pd_gains.py).")
     position_loss_weight = args.position_loss_weight if args.position_loss_weight is not None else g.get("position_loss_weight", 0.0)
     dyn_cache = None
     if position_loss_weight > 0.0:
@@ -377,9 +454,12 @@ def main() -> None:
         val_frac=g["val_frac"], patience=g["patience"], seed=seed,
         torque_loss_weight=torque_loss_weight,
         torque_loss_direction=torque_loss_direction,
+        torque_range=torque_range,
         position_loss_weight=position_loss_weight, dyn_cache=dyn_cache,
         device=args.device,
         lr_decay=lr_decay,
+        residual_kp=residual_kp,
+        residual_kd=residual_kd,
     )
 
     torch.save(
@@ -395,6 +475,11 @@ def main() -> None:
             "joint_name": joint_name,
             "single_joint": True,
             "best_val_loss": history_log["best_val_loss"],
+            "torque_range": torque_range,
+            "bounded_output": torque_range is not None,
+            "residual_torque": residual_torque,
+            "residual_kp": residual_kp,
+            "residual_kd": residual_kd,
         },
         checkpoint_path,
     )

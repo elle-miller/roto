@@ -48,7 +48,7 @@ trainer:
 genan:
   # Delta-history length/stride for both the q_meas and q_cmd streams (see
   # DESIGN.md Decision 2/3). Table 1 of the paper: history_len=3, stride=1.
-  history_len: 10
+  history_len: 4
   stride: 2
 
   # Ensemble size (Table 1: 5). NOT swept by sweep_genan.py -- it's a paper-
@@ -80,6 +80,16 @@ genan:
   position_loss_weight: 0.0
   preprocess_cache: null
   dynamics_cache: null
+
+  # --- Optional fixed min-max torque normalization (train_genan.py/
+  # train_genan_single.py) ---
+  # torque_range null = disabled (default): exact previous
+  # RunningStandardScaler-based (data-driven) standardization, bit-for-bit.
+  # When set (e.g. 900.0), the network's output is bounded to (-1,1) via
+  # tanh and trained with plain MSE against label/torque_range (clamped to
+  # [-1,1]) -- see losses.py's torque_minmax_loss. Verified against real
+  # data: global |gt_effort| max is ~679, so 900.0 has headroom.
+  torque_range: null
 
 # Same fields UAN's yaml has (roto's shared Writer/make_env infrastructure reads
 # them regardless of RL vs supervised training) -- play_genan.py builds its eval

@@ -35,12 +35,17 @@ import torch
 from dataset_loader import AlignedTrajectoryDataset
 from history import build_delta_history
 from joint_config import load_joint_config
+from losses import HARDWARE_EFFORT_TO_NM, pd_baseline_torque
 from model import GenANEnsemble
 
 
 def load_ensemble(checkpoint_path: str) -> tuple[GenANEnsemble, dict]:
     ckpt = torch.load(checkpoint_path, map_location="cpu")
-    ensemble = GenANEnsemble(ckpt["input_dim"], ckpt["num_joints"], ensemble_size=ckpt["ensemble_size"])
+    torque_range = ckpt.get("torque_range")
+    ensemble = GenANEnsemble(
+        ckpt["input_dim"], ckpt["num_joints"], ensemble_size=ckpt["ensemble_size"],
+        bounded_output=(torque_range is not None), torque_range=torque_range,
+    )
     ensemble.load_state_dict(ckpt["ensemble_state_dict"])
     ensemble.eval()
     return ensemble, ckpt
@@ -66,26 +71,53 @@ def plot_segment(
     t = torch.arange(t_start, t_end + 1)
 
     x = build_single_joint_input(dataset, t, ckpt["history_len"], ckpt["stride"])
-    label = dataset.q_torque[dataset.clamp(t)][:, joint_idx]
+    t_c = dataset.clamp(t)
+    label_raw = dataset.q_torque[t_c][:, joint_idx]
+    torque_range = ckpt.get("torque_range")
 
-    with torch.no_grad():
-        preds = ensemble(x)  # (ensemble_size, len(t), 1)
-    mean_pred = preds.mean(dim=0).squeeze(-1)
-    std_pred = preds.std(dim=0).squeeze(-1)
+    if torque_range is not None:
+        # Plot exactly what the loss compares (losses.torque_minmax_loss):
+        # tanh(network output), already in (-1,1), against
+        # clamp(label/torque_range, -1,1) -- NOT the de-normalized physical
+        # value. `ensemble.forward_standardized` is the pred_std path used
+        # for the loss itself (model.py), unlike `ensemble(x)` which
+        # de-normalizes by *torque_range.
+        with torch.no_grad():
+            preds_norm = ensemble.forward_standardized(x)  # (ensemble_size, len(t), 1), already in (-1,1)
+        mean_pred = preds_norm.mean(dim=0).squeeze(-1)
+        std_pred = preds_norm.std(dim=0).squeeze(-1)
+
+        if ckpt.get("residual_torque"):
+            q_cmd = dataset.q_cmd[t_c][:, joint_idx]
+            q_meas = dataset.q_meas[t_c][:, joint_idx]
+            qdot_meas = dataset.q_meas_vel[t_c][:, joint_idx]
+            tau_pd = pd_baseline_torque(q_cmd, q_meas, qdot_meas, ckpt["residual_kp"], ckpt["residual_kd"])
+            label_torque = label_raw / HARDWARE_EFFORT_TO_NM - tau_pd  # same residual the label was trained against
+        else:
+            label_torque = label_raw
+        label = (label_torque / torque_range).clamp(-1.0, 1.0)
+        ylabel = f"normalized torque (label/torque_range={torque_range:g}, clamped to [-1,1])"
+    else:
+        with torch.no_grad():
+            preds = ensemble(x)  # (ensemble_size, len(t), 1), raw/uncalibrated scale (prior behavior)
+        mean_pred = preds.mean(dim=0).squeeze(-1)
+        std_pred = preds.std(dim=0).squeeze(-1)
+        label = label_raw
+        ylabel = "torque (uncalibrated scale)"
 
     mse = torch.mean((mean_pred - label) ** 2).item()
-    print(f"[segment {seg_idx}] t=[{t_start},{t_end}] raw-scale MSE={mse:.6f}")
+    print(f"[segment {seg_idx}] t=[{t_start},{t_end}] MSE={mse:.6f} ({'normalized [-1,1]' if torque_range is not None else 'raw scale'})")
 
     fig, ax = plt.subplots(figsize=(9, 4))
-    ax.plot(t.numpy(), label.numpy(), label="recorded (gt_effort)", linewidth=1.4)
+    ax.plot(t.numpy(), label.numpy(), label="recorded (target)", linewidth=1.4)
     ax.plot(t.numpy(), mean_pred.numpy(), label="predicted (ensemble mean)", linewidth=1.4)
     if ensemble.ensemble_size > 1:
-        ax.fill_between(
-            t.numpy(), (mean_pred - std_pred).numpy(), (mean_pred + std_pred).numpy(),
-            alpha=0.2, label="ensemble ±1 std",
-        )
+        lo, hi = (mean_pred - std_pred), (mean_pred + std_pred)
+        ax.fill_between(t.numpy(), lo.numpy(), hi.numpy(), alpha=0.2, label="ensemble ±1 std")
+    if torque_range is not None:
+        ax.set_ylim(-1.05, 1.05)
     ax.set_xlabel("timestep")
-    ax.set_ylabel("torque (uncalibrated scale)")
+    ax.set_ylabel(ylabel)
     ax.set_title(f"joint {joint_idx} ({joint_name}) -- segment {seg_idx}, MSE={mse:.4f}")
     ax.legend()
     fig.tight_layout()
