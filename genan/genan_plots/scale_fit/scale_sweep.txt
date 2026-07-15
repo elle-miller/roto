@@ -1,0 +1,88 @@
+rh_FFJ3:
+  scale=19.098  rmse=0.067409
+  scale=30.902  rmse=0.090457
+  scale=11.803  rmse=0.064084
+  scale=12.543  rmse=0.064274
+  scale= 7.295  rmse=0.060943
+  scale= 4.508  rmse=0.059353
+  scale= 2.786  rmse=0.056426
+  scale= 1.722  rmse=0.053548
+  scale= 1.064  rmse=0.051564
+  scale= 0.658  rmse=0.049788
+  scale= 0.407  rmse=0.052853
+  scale= 0.774  rmse=0.051376
+  scale= 0.562  rmse=0.049529
+  scale= 0.583  rmse=0.050255
+  scale= 0.502  rmse=0.049176
+  scale= 0.466  rmse=0.049807
+  scale= 0.525  rmse=0.050697
+  scale= 0.488  rmse=0.048644
+  scale= 0.480  rmse=0.049153
+  scale= 0.491  rmse=0.051790
+  scale= 0.485  rmse=0.049428
+  scale= 0.487  rmse=0.050109
+  scale= 0.489  rmse=0.051799
+  scale= 0.488  rmse=0.049504
+  scale= 0.489  rmse=0.050104
+  scale= 0.488  rmse=0.050613
+  scale= 0.489  rmse=0.052327
+  scale= 0.488  rmse=0.049313
+  scale= 0.489  rmse=0.049505
+  scale= 0.488  rmse=0.050282
+  scale= 0.489  rmse=0.050140
+  scale= 0.488  rmse=0.049749
+  scale= 0.489  rmse=0.050051
+  scale= 0.488  rmse=0.051345
+  scale= 0.489  rmse=0.048614
+rh_FFJ1:
+  scale=19.098  rmse=0.086173
+  scale=30.902  rmse=0.085608
+  scale=38.197  rmse=0.085735
+  scale=31.996  rmse=0.086078
+  scale=26.393  rmse=0.085305
+  scale=23.607  rmse=0.085620
+  scale=27.288  rmse=0.086246
+  scale=26.393  rmse=0.085956
+  scale=26.735  rmse=0.085616
+  scale=26.524  rmse=0.086156
+  scale=26.443  rmse=0.085667
+  scale=26.412  rmse=0.085414
+  scale=26.400  rmse=0.085776
+  scale=26.396  rmse=0.085762
+  scale=26.394  rmse=0.085844
+  scale=26.394  rmse=0.086295
+  scale=26.393  rmse=0.086099
+  scale=26.393  rmse=0.086070
+  scale=26.393  rmse=0.085635
+  scale=26.393  rmse=0.086333
+  scale=26.393  rmse=0.085663
+rh_FFJ2:
+  scale=19.098  rmse=3.555259
+  scale=30.902  rmse=2.670866
+  scale=38.197  rmse=2.986886
+  scale=31.051  rmse=2.921497
+  scale=26.393  rmse=3.577036
+  scale=29.180  rmse=1.912212
+  scale=29.708  rmse=2.967170
+  scale=29.180  rmse=4.433045
+  scale=29.382  rmse=2.396466
+  scale=29.257  rmse=3.303923
+  scale=29.209  rmse=3.548236
+  scale=29.191  rmse=1.851378
+  scale=29.198  rmse=2.638154
+  scale=29.187  rmse=3.436036
+  scale=29.194  rmse=2.293797
+  scale=29.189  rmse=2.504514
+  scale=29.192  rmse=3.114938
+  scale=29.190  rmse=2.959838
+  scale=29.191  rmse=2.427829
+  scale=29.191  rmse=2.338021
+  scale=29.191  rmse=2.501256
+  scale=29.191  rmse=2.796803
+  scale=29.191  rmse=1.816570
+  scale=29.191  rmse=2.812194
+  scale=29.191  rmse=2.779570
+  scale=29.191  rmse=4.007585
+  scale=29.191  rmse=2.605016
+  scale=29.191  rmse=3.027749
+  scale=29.191  rmse=2.075847
