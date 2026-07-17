@@ -22,11 +22,14 @@ unmodified model.py architecture, see model.py's own docstring), supervised
 against an ACTIVITY-WEIGHTED per-share pseudo-label
 (`losses.coupled_pair_activity_loss`/`coupled_pair_activity_weights`): the
 one shared `gt_effort` label is split between the two shares in proportion
-to how much each joint actually displaced over a lookback window (NOT
-single-step velocity -- `dataset.q_meas_vel` for J1/J2 is motor-level, not a
-faithful per-joint signal, same issue as `gt_effort` itself; a windowed
-position diff is trustworthy since `q_meas` position IS independently
-faithful per-DOF, see DESIGN.md). This directly attributes torque to
+to how much each joint actually displaces over a FORWARD-looking window (NOT
+single-step velocity, and NOT a backward window -- `dataset.q_meas_vel` for
+J1/J2 is motor-level, not a faithful per-joint signal, same issue as
+`gt_effort` itself; a windowed position diff is trustworthy since `q_meas`
+position IS independently faithful per-DOF, see DESIGN.md; the window looks
+forward because a torque label's physical effect is the motion it causes
+NEXT, not whatever preceded it -- see `losses.coupled_pair_activity_weights`
+docstring). This directly attributes torque to
 whichever joint is actually moving (locked joint at a hard stop -> ~0 of the
 shared torque credited to it). Per user decision, a hinge-style direction
 penalty (`--direction_penalty_weight`, `losses.coupled_pair_hinge_direction_
@@ -94,25 +97,29 @@ def build_inputs_and_labels(
 def build_activity_inputs(
     dataset: AlignedTrajectoryDataset, t: torch.Tensor, window: int, joint_a_idx: int, joint_b_idx: int,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-    """`(q_a_now, q_a_past, q_b_now, q_b_past)` for `losses.
-    coupled_pair_activity_weights` -- `past` is `window` steps back, clipped
-    to THIS ROW'S OWN trajectory segment start (`dataset.segment_start`, same
-    per-row boundary bound `history.build_delta_history` uses) so it never
-    silently reads into a different, unrelated episode that happens to sit
-    right before this one in the concatenated arrays. At/near a segment's own
-    start, `past` collapses toward `now` (zero displacement on both sides),
-    which is the correct fallback -- there's no real motion history to read
-    yet, so `coupled_pair_activity_weights`'s `eps` stabilizer default the
-    split to ~50/50.
+    """`(q_a_now, q_a_future, q_b_now, q_b_future)` for `losses.
+    coupled_pair_activity_weights` -- `future` is `window` steps AHEAD,
+    clipped to THIS ROW'S OWN trajectory segment end (`dataset.segment_end`,
+    mirroring the per-row boundary bound `history.build_delta_history` uses
+    for the backward case) so it never silently reads into a different,
+    unrelated episode that happens to sit right after this one in the
+    concatenated arrays. At/near a segment's own end, `future` collapses
+    toward `now` (zero displacement on both sides), which is the correct
+    fallback -- there's no real motion left to read, so
+    `coupled_pair_activity_weights`'s `eps` stabilizer defaults the split to
+    ~50/50. Looks FORWARD (not backward) because the activity split needs to
+    reflect the motion THIS torque sample causes, not whatever preceded it
+    -- see `losses.coupled_pair_activity_weights`'s docstring for the full
+    causal-attribution reasoning.
     """
     t_c = dataset.clamp(t)
-    seg_start = dataset.segment_start(t_c)
-    t_past = dataset.clamp(torch.maximum(t_c - window, seg_start))
+    seg_end = dataset.segment_end(t_c)
+    t_future = dataset.clamp(torch.minimum(t_c + window, seg_end))
     q_a_now = dataset.q_meas[t_c][:, joint_a_idx : joint_a_idx + 1]
-    q_a_past = dataset.q_meas[t_past][:, joint_a_idx : joint_a_idx + 1]
+    q_a_future = dataset.q_meas[t_future][:, joint_a_idx : joint_a_idx + 1]
     q_b_now = dataset.q_meas[t_c][:, joint_b_idx : joint_b_idx + 1]
-    q_b_past = dataset.q_meas[t_past][:, joint_b_idx : joint_b_idx + 1]
-    return q_a_now, q_a_past, q_b_now, q_b_past
+    q_b_future = dataset.q_meas[t_future][:, joint_b_idx : joint_b_idx + 1]
+    return q_a_now, q_a_future, q_b_now, q_b_future
 
 
 def train(
@@ -135,11 +142,11 @@ def train(
     lr_decay: bool = False,
 ) -> tuple[GenANEnsemble, dict]:
     """`torque_range`: required (not optional, unlike train_genan_single.py --
-    this mode has no non-bounded fallback). `activity_window`: lookback (in
+    this mode has no non-bounded fallback). `activity_window`: look-AHEAD (in
     steps) for `losses.coupled_pair_activity_weights`'s windowed displacement
     -- defaults to `history_len * stride` (see module docstring: reuses the
-    same "how far back is history" span the network's own input already
-    looks at, rather than a second independent hyperparameter).
+    same span size the network's own input history looks BACKWARD at, just
+    applied forward here, rather than a second independent hyperparameter).
     `direction_penalty_weight`: weight for the hinge direction-agreement
     safety net on top of the activity loss (see `losses.coupled_pair_loss`).
 
@@ -162,10 +169,10 @@ def train(
 
     # Activity weights for the FULL val set, computed once (network-independent,
     # unlike train's per-step random batches -- see the training loop below).
-    val_q_a_now, val_q_a_past, val_q_b_now, val_q_b_past = build_activity_inputs(
+    val_q_a_now, val_q_a_future, val_q_b_now, val_q_b_future = build_activity_inputs(
         dataset, val_t, activity_window, joint_a_idx, joint_b_idx
     )
-    val_activity_a, val_activity_b = coupled_pair_activity_weights(val_q_a_now, val_q_a_past, val_q_b_now, val_q_b_past)
+    val_activity_a, val_activity_b = coupled_pair_activity_weights(val_q_a_now, val_q_a_future, val_q_b_now, val_q_b_future)
     val_activity_a, val_activity_b = val_activity_a.to(device), val_activity_b.to(device)
 
     input_dim = x_train.shape[1]
@@ -202,10 +209,10 @@ def train(
                 pred_std = member(x)  # (batch, 2), each column tanh-bounded (-1,1)
 
                 t_batch = train_t[idx]  # CPU: dataset is CPU-resident
-                q_a_now, q_a_past, q_b_now, q_b_past = build_activity_inputs(
+                q_a_now, q_a_future, q_b_now, q_b_future = build_activity_inputs(
                     dataset, t_batch, activity_window, joint_a_idx, joint_b_idx
                 )
-                activity_a, activity_b = coupled_pair_activity_weights(q_a_now, q_a_past, q_b_now, q_b_past)
+                activity_a, activity_b = coupled_pair_activity_weights(q_a_now, q_a_future, q_b_now, q_b_future)
                 activity_a, activity_b = activity_a.to(device), activity_b.to(device)
                 loss = coupled_pair_loss(
                     pred_std, y_train[idx_dev], torque_range, activity_a, activity_b, direction_penalty_weight

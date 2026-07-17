@@ -182,29 +182,41 @@ def torque_minmax_loss(pred_bounded: torch.Tensor, label_raw: torch.Tensor, torq
 
 
 def coupled_pair_activity_weights(
-    q_a_now: torch.Tensor, q_a_past: torch.Tensor, q_b_now: torch.Tensor, q_b_past: torch.Tensor, eps: float = 1e-3,
+    q_a_now: torch.Tensor, q_a_future: torch.Tensor, q_b_now: torch.Tensor, q_b_future: torch.Tensor, eps: float = 1e-3,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Soft per-joint "activity" weights for a tendon-coupled J1/J2 mimic
-    pair, derived from WINDOWED position displacement (`q_*_now - q_*_past`,
-    `past` some steps back -- NOT single-step velocity). Per user decision:
-    `dataset.q_meas_vel` for J1/J2 is motor-level, not a faithful per-joint
-    signal (same issue as `gt_effort` being duplicated across both columns --
-    see `coupled_pair_activity_loss`), so a single-step finite difference
-    doesn't reliably show which joint actually moved. Displacement over a
-    longer window does: `q_meas` (position) itself IS asserted independently
-    faithful per-DOF (DESIGN.md), so a windowed diff of it is a legitimate
-    per-joint "how much did this joint move" signal even though the
-    single-step derivative isn't trustworthy.
+    pair, derived from WINDOWED position displacement (`q_*_future - q_*_now`,
+    `future` some steps AHEAD -- NOT single-step velocity, and NOT a backward
+    window). Per user decision:
+
+    1. `dataset.q_meas_vel` for J1/J2 is motor-level, not a faithful
+       per-joint signal (same issue as `gt_effort` being duplicated across
+       both columns -- see `coupled_pair_activity_loss`), so a single-step
+       finite difference doesn't reliably show which joint actually moved.
+       Displacement over a longer window does: `q_meas` (position) itself IS
+       asserted independently faithful per-DOF (DESIGN.md), so a windowed
+       diff of it is a legitimate per-joint "how much did this joint move"
+       signal even though the single-step derivative isn't trustworthy.
+
+    2. The window looks FORWARD, not backward, because the `gt_effort` label
+       at time `t` is the torque APPLIED at `t` -- its physical effect is the
+       motion from `t` onward, not whatever motion preceded `t`. A backward
+       window answers "how has this joint been moving recently," which can
+       misattribute activity right at the two-segment law's handoff/
+       hysteresis boundary (`roto_env.py`'s `_handle_coupled_joints`): it
+       might show one joint moving up to `t` while the CURRENT torque sample
+       is already driving the OTHER joint's motion from `t` onward. A
+       forward window ties the split to the motion THIS torque sample
+       actually causes -- the causally correct target for a torque label.
 
     Returns `(activity_a, activity_b)`, each `>= 0` and summing to exactly 1
     -- when one joint is locked (near-zero displacement) and the other moves,
     activity concentrates almost entirely on the moving joint; when both move
-    (the hysteresis/backlash window between the two-segment law's handoff,
-    see `roto_env.py`'s `_handle_coupled_joints`), it splits proportionally
-    to how much each actually displaced.
+    (the hysteresis/backlash window above), it splits proportionally to how
+    much each actually displaced.
     """
-    disp_a = (q_a_now - q_a_past).abs()
-    disp_b = (q_b_now - q_b_past).abs()
+    disp_a = (q_a_future - q_a_now).abs()
+    disp_b = (q_b_future - q_b_now).abs()
     total = disp_a + disp_b + eps
     return disp_a / total, disp_b / total
 
@@ -263,6 +275,38 @@ def coupled_pair_activity_loss(
     """
     mse_a, mse_b = coupled_pair_activity_loss_terms(pred_bounded, label_raw, torque_range, activity_a, activity_b)
     return mse_a + mse_b
+
+
+def single_share_activity_loss(
+    pred_bounded: torch.Tensor, label_raw: torch.Tensor, torque_range: float, activity: torch.Tensor,
+) -> torch.Tensor:
+    """Loss for training ONE independent single-output network as one half of
+    a tendon-coupled J1/J2 mimic pair -- e.g. a standalone rh_FFJ1 model,
+    trained completely separately from rh_FFJ2's own model (own optimizer,
+    own backward pass -- NOT the shared-trunk two-head network
+    `coupled_pair_activity_loss` trains). Supervises ONLY this network's own
+    activity-weighted share of the one real shared `gt_effort` signal --
+    `target = activity * label_norm` -- with no cross-network sum term tying
+    the two training runs together. Because nothing here enforces
+    `target_a + target_b == label_norm` on this network's gradients (unlike
+    `coupled_pair_activity_loss_terms`, whose two returned MSEs both flow
+    into ONE shared-trunk model's backward pass), each network's own
+    deployment-time scale (`fit_torque_scale.py`) is free to be genuinely
+    independent -- there's no jointly-learned ratio a mismatched scale could
+    distort, only each network's own training-calibration to correct for.
+
+    `pred_bounded`: (..., 1), tanh-bounded (-1,1) (`GenAN(bounded_output=True,
+    num_joints=1)`). `label_raw`: (..., 1), the shared real `gt_effort`
+    value (either joint's `q_torque` column -- verified identical). `activity`:
+    (..., 1), EITHER `activity_a` OR `activity_b` from
+    `coupled_pair_activity_weights` (unchanged, still needs BOTH joints'
+    position histories to compute "how much did THIS joint move relative to
+    the other," even though the two networks train independently from here).
+    """
+    label_norm = (label_raw / torque_range).clamp(-1.0, 1.0)
+    target = activity * label_norm
+    target = target.expand_as(pred_bounded) if pred_bounded.dim() > target.dim() else target
+    return F.mse_loss(pred_bounded, target)
 
 
 def coupled_pair_hinge_direction_loss(pred_bounded: torch.Tensor) -> torch.Tensor:

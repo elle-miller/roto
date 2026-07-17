@@ -234,6 +234,9 @@ class AlignedTrajectoryDataset:
     def segment_start(self, t: torch.Tensor) -> torch.Tensor:
         return self.traj_starts[self._segment_id[t]]
 
+    def segment_end(self, t: torch.Tensor) -> torch.Tensor:
+        return self.traj_ends[self._segment_id[t]]
+
     def is_at_boundary(self, t: torch.Tensor) -> torch.Tensor:
         return t >= self.traj_ends[self._segment_id[t.clamp(max=self.num_steps - 1)]]
 

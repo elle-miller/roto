@@ -36,6 +36,25 @@ from model import GenANEnsemble
 from train_genan_pair import build_activity_inputs
 
 
+def val_segment_indices(dataset: AlignedTrajectoryDataset, val_frac: float, seed: int) -> list[int]:
+    """Reproduces train_genan_single.py's `split_segments()` SEGMENT-level
+    permutation (same algorithm, same default seed/val_frac train_genan_pair.py
+    uses unless overridden at training time -- see that script's `main()`:
+    `seed = args.seed if args.seed is not None else cfg["seed"]`,
+    `g["val_frac"]` from default.yaml) but returns just the SEGMENT INDICES
+    that landed in val, rather than `split_segments`'s flat per-timestep
+    index tensor -- what `plot_segment` needs to plot specific segments.
+    Pass the SAME `--seed`/`--val_frac` the checkpoint was actually trained
+    with (via this script's own CLI flags) if they were overridden from the
+    yaml defaults, or this reconstructs the wrong split.
+    """
+    n_seg = dataset.traj_starts.shape[0]
+    g = torch.Generator().manual_seed(seed)
+    perm = torch.randperm(n_seg, generator=g)
+    n_val = max(1, round(n_seg * val_frac)) if n_seg > 1 else 0
+    return perm[:n_val].tolist()
+
+
 def load_ensemble(checkpoint_path: str) -> tuple[GenANEnsemble, dict]:
     ckpt = torch.load(checkpoint_path, map_location="cpu")
     torque_range = ckpt["torque_range"]
@@ -58,12 +77,15 @@ def build_pair_input(
 
 
 def plot_segment(
-    dataset: AlignedTrajectoryDataset, ensemble: GenANEnsemble, ckpt: dict, seg_idx: int, out_dir: str
+    dataset: AlignedTrajectoryDataset, ensemble: GenANEnsemble, ckpt: dict, seg_idx: int, out_dir: str,
+    max_steps: int | None = None,
 ) -> str:
     joint_a_idx, joint_b_idx = ckpt["joint_pair_idx"]
     joint_a_name, joint_b_name = ckpt["joint_pair_names"]
     torque_range = ckpt["torque_range"]
     t_start, t_end = int(dataset.traj_starts[seg_idx]), int(dataset.traj_ends[seg_idx])
+    if max_steps is not None:
+        t_end = min(t_end, t_start + max_steps - 1)
     t = torch.arange(t_start, t_end + 1)
 
     x = build_pair_input(dataset, t, ckpt["history_len"], ckpt["stride"])
@@ -72,8 +94,8 @@ def plot_segment(
     label = (label_raw / torque_range).clamp(-1.0, 1.0)
 
     activity_window = ckpt.get("activity_window", ckpt["history_len"] * ckpt["stride"])  # old checkpoints lack this key
-    q_a_now, q_a_past, q_b_now, q_b_past = build_activity_inputs(dataset, t, activity_window, joint_a_idx, joint_b_idx)
-    activity_a, activity_b = coupled_pair_activity_weights(q_a_now, q_a_past, q_b_now, q_b_past)
+    q_a_now, q_a_future, q_b_now, q_b_future = build_activity_inputs(dataset, t, activity_window, joint_a_idx, joint_b_idx)
+    activity_a, activity_b = coupled_pair_activity_weights(q_a_now, q_a_future, q_b_now, q_b_future)
     target_a = (activity_a.squeeze(-1) * label)
     target_b = (activity_b.squeeze(-1) * label)
 
@@ -127,6 +149,20 @@ def main() -> None:
     parser.add_argument("--min_horizon", type=int, default=1)
     parser.add_argument("--traj_idx", type=int, default=0, help="Which trajectory segment to plot.")
     parser.add_argument("--all_segments", action="store_true", help="Plot every segment instead of just --traj_idx.")
+    parser.add_argument(
+        "--val_only", action="store_true",
+        help="Plot only the segments that landed in the VALIDATION split at training time (reconstructed via "
+             "the same seed/val_frac split_segments() used -- see --seed/--val_frac below), instead of "
+             "--traj_idx/--all_segments. This is what you want to see genuine held-out generalization, not "
+             "segments the model was directly trained on.",
+    )
+    parser.add_argument("--seed", type=int, default=0, help="Must match the seed the checkpoint was trained with "
+                         "(train_genan_pair.py's --seed, default 0) -- only used with --val_only.")
+    parser.add_argument("--val_frac", type=float, default=0.2, help="Must match the val_frac the checkpoint was "
+                         "trained with (default.yaml's genan.val_frac, default 0.2) -- only used with --val_only.")
+    parser.add_argument("--max_steps", type=int, default=None,
+                         help="Zoom in on only the first N timesteps of each plotted segment, instead of the "
+                              "whole thing (e.g. 10000). Default: plot the full segment.")
     parser.add_argument("--out_dir", type=str, default="genan_plots")
     args = parser.parse_args()
 
@@ -140,9 +176,16 @@ def main() -> None:
     print(f"[INFO] Loaded checkpoint for pair {joint_a_name}/{joint_b_name}, "
           f"ensemble_size={ckpt['ensemble_size']}, best_val_loss={ckpt['best_val_loss']:.6f}")
 
-    segments = range(dataset.traj_starts.shape[0]) if args.all_segments else [args.traj_idx]
+    if args.val_only:
+        segments = val_segment_indices(dataset, args.val_frac, args.seed)
+        print(f"[INFO] Plotting VAL-split segments only (seed={args.seed}, val_frac={args.val_frac}): {segments}")
+    elif args.all_segments:
+        segments = range(dataset.traj_starts.shape[0])
+    else:
+        segments = [args.traj_idx]
+
     for seg_idx in segments:
-        out_path = plot_segment(dataset, ensemble, ckpt, seg_idx, args.out_dir)
+        out_path = plot_segment(dataset, ensemble, ckpt, seg_idx, args.out_dir, max_steps=args.max_steps)
         print(f"[INFO] Saved {out_path}")
 
 
