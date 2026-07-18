@@ -71,16 +71,29 @@ coupled_groups:
     hw_controller: ffj0         # topic: /sh_rh_ffj0_position_controller/command
     hw_command_scale: 2.0       # hw command = 2.0 * policy driver proxy (hw combines J1+J2 into one 0..pi actuator)
     coupling_theta_rad: 0.8727  # 50 deg (corrected from 45 deg per user); below theta only J2 moves, above it J2 holds and J1 ramps
+    # Real physical/sim upper limit for the driver joint (rh_FFJ2), read
+    # directly from SHADOW_TOUCHLAB.urdf's <joint name="rh_FFJ2"> <limit>
+    # tag -- this is what task.py's live UANShadowLiteEnv uses
+    # (self.robot_joint_pos_upper_limits) to split a recorded combined
+    # command into per-joint q_cmd (dataset.py's _split_coupled_command).
+    # DELIBERATELY DIFFERENT from joint_limits_rad.rh_FFJ2.upper (1.5708,
+    # the hardware-excitation "proxy range" -- see that field's own comment)
+    # -- that one stays as-is for shadow_pd_id's excitation-trajectory
+    # scripts; this one is what genan/joint_config.py uses to match
+    # deployment's split point (see load_joint_config()).
+    driver_joint_sim_upper_rad: 1.745
   - driver_joint: rh_MFJ2       # policy index 9
     mimic_joint: rh_MFJ1
     hw_controller: mfj0
     hw_command_scale: 2.0
     coupling_theta_rad: 0.8727  # 50 deg (corrected from 45 deg per user)
+    driver_joint_sim_upper_rad: 1.745  # SHADOW_TOUCHLAB.urdf <joint name="rh_MFJ2">, same as FFJ2
   - driver_joint: rh_RFJ2       # policy index 10
     mimic_joint: rh_RFJ1
     hw_controller: rfj0
     hw_command_scale: 2.0
     coupling_theta_rad: 0.8727  # 50 deg (corrected from 45 deg per user)
+    driver_joint_sim_upper_rad: 1.745  # SHADOW_TOUCHLAB.urdf <joint name="rh_RFJ2">, same as FFJ2
 
 # Per-joint position limits, keyed by name, radians. Copied verbatim from
 # LOWER_LIMITS / UPPER_LIMITS in collect_traj_hw.py / collect_traj_sim.py.
