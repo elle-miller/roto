@@ -81,6 +81,11 @@ class ShadowLiteEnvCfg(RotoEnvCfg):
                 "rh_THJ5":  0.4,     # rotate thumb inward ~23°
                 "rh_THJ4":  0.5,     # abduct across palm ~29°
                 "rh_THJ2":  0.35,    # flex ~20°
+                # ── Locked coupled-dependent joints — pinned at 0, see
+                #    lock_coupled_dependent_at_zero below ─────────────────────────
+                "rh_FFJ1":  0.0,
+                "rh_MFJ1":  0.0,
+                "rh_RFJ1":  0.0,
             },
 
         #     joint_pos = {
@@ -157,9 +162,15 @@ class ShadowLiteEnvCfg(RotoEnvCfg):
         "rh_RFJ1": "rh_RFJ2",
     }
 
+    # Hard-lock the coupled dependent joints (FF/MF/RF J1) at 0 rad: their commanded
+    # position is always zero regardless of the J2-derived coupling law below. J2's
+    # own command/state-machine bookkeeping is untouched, so J2 dynamics stay
+    # identical — only J1's actual motion is disabled.
+    lock_coupled_dependent_at_zero: bool = True
+
     # J2 must reach this angle (rad) before J1 starts moving.
     # 0.785 rad = 45°: first half of J2's range drives J2, second half drives J1.
-    coupling_theta: float = 0.785
+    coupling_theta: float = 0.875
 
     # Route-2 sequencing: gate the J1 mimic on MEASURED J2 so J1 can't lead its
     # driver. J1's commanded curl is scaled by how close measured J2 is to its
@@ -174,7 +185,7 @@ class ShadowLiteEnvCfg(RotoEnvCfg):
     # uncurl J2 unlocks early at a FIXED per-finger angle R (combined ffj0 frame,
     # degrees), J1 unwinds to 0 at 100°, and reversing inside (100°,R) freezes J1
     # until the motor returns to R. See RotoEnv._asymmetric_backlash.
-    couple_asymmetric_backward: bool = True
+    couple_asymmetric_backward: bool = False
     # R is a constant mechanical property per finger (no per-episode randomization,
     # to match real hardware). Scalar = same R for all 3 fingers, or a per-finger
     # (FF, MF, RF) tuple. R=100 -> no backlash; larger R -> more slop. Set to the

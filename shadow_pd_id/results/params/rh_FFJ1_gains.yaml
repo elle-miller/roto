@@ -1,0 +1,24 @@
+joint_name: rh_FFJ1
+kp: 22.03710799517533
+kd: 0.8425350134760673
+fc: 0.0
+fv: 0.0
+loss: 0.0507985105854963
+loss_by_type:
+  free_space: 0.0507985105854963
+held_out_loss: 0.1504917619888383
+reference_j2_alias_loss: 0.051074593942930194
+n_candidates_evaluated: 24
+n_stable: 24
+fit_traj_idx:
+- 0
+- 1
+- 2
+- 3
+- 4
+test_traj_idx:
+- 5
+- 6
+note: 'Selected by fit_j1_gains.py: sim-rollout position-matching on free-space multi-joint
+  data (J1 cannot be excited in isolation), scored on this joint''s own position column
+  only. Fc fixed at 0.0 (not fit -- see module docstring).'

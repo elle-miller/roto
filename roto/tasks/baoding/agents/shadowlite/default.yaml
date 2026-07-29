@@ -5,7 +5,7 @@ seed: 42
 observations:
   obs_list:
   - prop
-  - tactile
+  #- tactile
   obs_stack: 4
   tactile_cfg:
     binary_tactile: true
@@ -64,4 +64,4 @@ trainer:
 sweeper:
   storage: sqlite:///shadowlite_baoding_dr_pt_fd.db #nomimic_bao is terminal1
   warmup_timesteps_M: 100
-  max_sweep_timesteps_M: 350
+  max_sweep_timesteps_M: 250

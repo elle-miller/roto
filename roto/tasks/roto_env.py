@@ -367,6 +367,9 @@ class RotoEnv(DirectRLEnv):
             )
             j1_cmd = j1_cmd * gate
 
+        if getattr(self.cfg, "lock_coupled_dependent_at_zero", False):
+            j1_cmd = torch.zeros_like(j1_cmd)
+
         self.joint_pos_cmd[:, self.coupled_driver_indices]    = j2_cmd
         self.joint_pos_cmd[:, self.coupled_dependent_indices] = j1_cmd
 
@@ -605,12 +608,15 @@ class RotoEnv(DirectRLEnv):
             env_ids: Environment indices to reset.
             joint_pos_noise: Standard deviation of noise added to joint positions.
         """
-        joint_pos = self.robot.data.default_joint_pos[env_ids] + sample_uniform(
+        noise = sample_uniform(
             -joint_pos_noise,
             joint_pos_noise,
             (len(env_ids), self.robot.num_joints),
             self.device,
         )
+        if getattr(self.cfg, "lock_coupled_dependent_at_zero", False):
+            noise[:, self.coupled_dependent_indices] = 0.0
+        joint_pos = self.robot.data.default_joint_pos[env_ids] + noise
         joint_pos = torch.clamp(joint_pos, self.robot_joint_pos_lower_limits, self.robot_joint_pos_upper_limits)
         joint_vel = torch.zeros_like(joint_pos)
         self.robot.set_joint_position_target(joint_pos, env_ids=env_ids)
