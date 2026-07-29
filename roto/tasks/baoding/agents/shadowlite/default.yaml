@@ -64,4 +64,4 @@ trainer:
 sweeper:
   storage: sqlite:///shadowlite_baoding_dr_pt_fd.db #nomimic_bao is terminal1
   warmup_timesteps_M: 100
-  max_sweep_timesteps_M: 350
+  max_sweep_timesteps_M: 250
