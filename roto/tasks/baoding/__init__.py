@@ -19,6 +19,10 @@ from .baoding import (
     BaodingShadowEnv,
     BaodingShadowLiteCfg,
     BaodingShadowLiteEnv,
+    BaodingShadowLitePadTacCfg,
+    BaodingShadowLitePadTacEnv,
+    BaodingShadowLitePadTacBTCfg,
+    BaodingShadowLitePadTacBTEnv,
 )
 
 _AGENTS_DIR = os.path.dirname(agents.__file__)
@@ -35,6 +39,16 @@ _SHADOW_VARIANT_FILES = {
     "tac_dynamics": "tac_dynamics.yaml",
 }
 
+# PadTac / PadTac+BT agent configs live alongside the classic shadowlite ones in
+# agents/shadowlite/.
+_SHADOWLITE_PADTAC_VARIANT_FILES = {
+    "default_cfg": "default.yaml",
+    "rl_only_pt_padtac": "rl_only_pt_padtac.yaml",
+    "rl_only_pt_padtac_bt": "rl_only_pt_padtac_bt.yaml",
+    "rl_only_pt_padtac_bt_sweep": "rl_only_pt_padtac_bt_sweep.yaml",
+    "forward_dynamics_padtac_bt": "forward_dynamics_padtac_bt.yaml",
+}
+
 
 def _variant_paths(robot_subdir: str, variant_files: dict[str, str]) -> dict[str, str]:
     base = os.path.join(_AGENTS_DIR, robot_subdir)
@@ -43,13 +57,22 @@ def _variant_paths(robot_subdir: str, variant_files: dict[str, str]) -> dict[str
 
 def baoding_make_env(cfg, render_mode: str | None = None, **kwargs):
     """Instantiate the correct env class from the config type (set from ``--robot`` in training scripts)."""
-    reg_keys = set(_SHADOW_VARIANT_FILES) | {"env_cfg_entry_point"}
+    reg_keys = (
+        set(_SHADOW_VARIANT_FILES)
+        | set(_SHADOWLITE_PADTAC_VARIANT_FILES)
+        | {"env_cfg_entry_point"}
+    )
     for k in reg_keys:
         kwargs.pop(k, None)
     if isinstance(cfg, BaodingOrcaCfg):
         return BaodingOrcaEnv(cfg=cfg, render_mode=render_mode, **kwargs)
     if isinstance(cfg, BaodingAllegroCfg):
         return BaodingAllegroEnv(cfg=cfg, render_mode=render_mode, **kwargs)
+    # NOTE: check the BT subclass BEFORE its PadTac parent (isinstance would match both).
+    if isinstance(cfg, BaodingShadowLitePadTacBTCfg):
+        return BaodingShadowLitePadTacBTEnv(cfg=cfg, render_mode=render_mode, **kwargs)
+    if isinstance(cfg, BaodingShadowLitePadTacCfg):
+        return BaodingShadowLitePadTacEnv(cfg=cfg, render_mode=render_mode, **kwargs)
     if isinstance(cfg, BaodingShadowLiteCfg):
         return BaodingShadowLiteEnv(cfg=cfg, render_mode=render_mode, **kwargs)
     return BaodingShadowEnv(cfg=cfg, render_mode=render_mode, **kwargs)
@@ -73,6 +96,26 @@ gym.register(
     kwargs={
         "env_cfg_entry_point": BaodingShadowLiteCfg,
         **_variant_paths("shadowlite", _SHADOW_VARIANT_FILES),
+    },
+)
+
+gym.register(
+    id="Baoding_Shadowlite_PadTac",
+    entry_point=baoding_make_env,
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": BaodingShadowLitePadTacCfg,
+        **_variant_paths("shadowlite", _SHADOWLITE_PADTAC_VARIANT_FILES),
+    },
+)
+
+gym.register(
+    id="Baoding_Shadowlite_PadTacBT",
+    entry_point=baoding_make_env,
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": BaodingShadowLitePadTacBTCfg,
+        **_variant_paths("shadowlite", _SHADOWLITE_PADTAC_VARIANT_FILES),
     },
 )
 

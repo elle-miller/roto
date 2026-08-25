@@ -33,6 +33,11 @@ def resolve_gym_env_id(task: str | None, robot: str | None) -> str:
         raise ValueError("Task Find only supports robot franka.")
     if task in ("Bounce", "Baoding"):
         r = normalize_hand_robot(robot)
+        if r in ("shadowlite_padtac", "shadowlite_padtac_bt"):
+            if task != "Baoding":
+                raise ValueError(f"Robot {r!r} is only supported for Baoding, got task {task!r}.")
+            suffix = "PadTacBT" if r == "shadowlite_padtac_bt" else "PadTac"
+            return f"Baoding_Shadowlite_{suffix}"
         if r == "shadowlite":
             return f"{task}_Shadowlite"
         if r == "orca":
@@ -49,11 +54,13 @@ def resolve_gym_env_id(task: str | None, robot: str | None) -> str:
 
 
 def normalize_hand_robot(robot: str | None) -> str:
-    """Return ``shadow``, ``shadowlite``, ``orca``, or ``allegro`` (default ``shadow``)."""
+    """Return ``shadow``, ``shadowlite``, ``orca``, ``allegro``, ``shadowlite_padtac``, or
+    ``shadowlite_padtac_bt`` (default ``shadow``)."""
     r = (robot or "shadow").strip().lower()
-    if r not in ("shadow", "shadowlite", "orca", "allegro"):
+    if r not in ("shadow", "shadowlite", "orca", "allegro", "shadowlite_padtac", "shadowlite_padtac_bt"):
         raise ValueError(
-            f"Unknown robot {robot!r}. Use one of: shadow, shadowlite, orca, allegro."
+            f"Unknown robot {robot!r}. Use one of: shadow, shadowlite, orca, allegro, "
+            f"shadowlite_padtac, shadowlite_padtac_bt."
         )
     return r
 
@@ -73,11 +80,15 @@ _BOUNCE_SHADOW_AGENT_FILES = {
 _BAODING_SHADOW_AGENT_FILES = {
     "default_cfg": "default.yaml",
     "rl_only_pt": "rl_only_pt.yaml",
+    "rl_only_pt_padtac": "rl_only_pt_padtac.yaml",
+    "rl_only_pt_padtac_bt": "rl_only_pt_padtac_bt.yaml",
+    "rl_only_pt_padtac_bt_sweep": "rl_only_pt_padtac_bt_sweep.yaml",
     "rl_only_ptd": "rl_only_ptd.yaml",
     "rl_only_ptg": "rl_only_ptg.yaml",
     "tac_recon": "tac_recon.yaml",
     "full_recon": "full_recon.yaml",
     "forward_dynamics": "forward_dynamics.yaml",
+    "forward_dynamics_padtac_bt": "forward_dynamics_padtac_bt.yaml",
     "forward_dynamics_memory": "forward_dynamics_memory.yaml",
     "tac_dynamics": "tac_dynamics.yaml",
 }
@@ -128,7 +139,8 @@ def _hand_agent_yaml_path(task_name: str, robot: str, entry_point_key: str) -> s
             f"with robot {robot!r}. Available keys: {sorted(files)}."
         )
     base = os.path.dirname(bounce_agents.__file__ if task_name == "Bounce" else baoding_agents.__file__)
-    return os.path.join(base, robot, files[entry_point_key])
+    agent_robot = "shadowlite" if robot in ("shadowlite_padtac", "shadowlite_padtac_bt") else robot
+    return os.path.join(base, agent_robot, files[entry_point_key])
 
 
 def register_hand_task_to_hydra(
@@ -161,6 +173,8 @@ def register_hand_task_to_hydra(
             BaodingCfg,
             BaodingOrcaCfg,
             BaodingShadowLiteCfg,
+            BaodingShadowLitePadTacCfg,
+            BaodingShadowLitePadTacBTCfg,
         )
 
         env_cfg_cls = {
@@ -168,6 +182,8 @@ def register_hand_task_to_hydra(
             "shadowlite": BaodingShadowLiteCfg,
             "orca": BaodingOrcaCfg,
             "allegro": BaodingAllegroCfg,
+            "shadowlite_padtac": BaodingShadowLitePadTacCfg,
+            "shadowlite_padtac_bt": BaodingShadowLitePadTacBTCfg,
         }[r]
 
     elif task_name == "Peace":
@@ -345,6 +361,12 @@ def make_env(agent_cfg, env_cfg, writer, args_cli):
 
     single_obs_space = gym.spaces.Dict()
     single_obs_space["policy"] = gym.spaces.Dict(gym_dict)
+
+    obs_dims = {k: v.shape for k, v in gym_dict.items()}
+    total_obs_dim = sum(int(np.prod(v.shape)) for v in gym_dict.values())
+    print(f"[INFO] Observation shapes: {obs_dims}")
+    print(f"[INFO] Total observation input dim: {total_obs_dim}")
+
     obs_space = gym.vector.utils.batch_space(single_obs_space, env_cfg.scene.num_envs)
     single_action_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(env_cfg.num_actions,))
     action_space = gym.vector.utils.batch_space(single_action_space, env_cfg.scene.num_envs)

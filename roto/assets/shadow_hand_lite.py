@@ -16,6 +16,8 @@ Reference:
 """
 
 
+import os
+
 import isaaclab.sim as sim_utils
 from isaaclab.actuators.actuator_cfg import ImplicitActuatorCfg
 from isaaclab.assets.articulation import ArticulationCfg
@@ -25,10 +27,11 @@ from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
 # Configuration
 ##
 
+_SHADOW_LITE_ASSET_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "shadow_lite")
 
 
 _SHADOW_LITE_SPAWN = sim_utils.UsdFileCfg(
-    usd_path=f"/home/ayush/icra/roto/roto/assets/shadow_lite/shadow_touchlab_col.usd",
+    usd_path=os.path.join(_SHADOW_LITE_ASSET_DIR, "shadow_touchlab_col.usd"),
     activate_contact_sensors=True,
     rigid_props=sim_utils.RigidBodyPropertiesCfg(
         disable_gravity=True,
@@ -458,3 +461,59 @@ SHADOW_HAND_LITE_CFG = ArticulationCfg(
 #     soft_joint_pos_limit_factor=1.0,
 # )
 # """Configuration of Shadow Hand Lite robot."""
+
+_SHADOW_LITE_PADTAC_SPAWN = sim_utils.UsdFileCfg(
+    usd_path=os.path.join(_SHADOW_LITE_ASSET_DIR, "shadow_padtac.usd"),
+    activate_contact_sensors=True,
+    rigid_props=sim_utils.RigidBodyPropertiesCfg(
+        disable_gravity=True,
+        retain_accelerations=True,
+        max_depenetration_velocity=1000.0,
+    ),
+    articulation_props=sim_utils.ArticulationRootPropertiesCfg(
+        enabled_self_collisions=True,
+        solver_position_iteration_count=8,
+        solver_velocity_iteration_count=0,
+        sleep_threshold=0.005,
+        stabilization_threshold=0.0005,
+    ),
+    joint_drive_props=sim_utils.JointDrivePropertiesCfg(drive_type="force"),
+)
+
+SHADOW_HAND_LITE_PADTAC_CFG = ArticulationCfg(
+    spawn=_SHADOW_LITE_PADTAC_SPAWN,
+    init_state=_SHADOW_LITE_INIT,
+    actuators=SHADOW_HAND_LITE_CFG.actuators,
+    soft_joint_pos_limit_factor=1.0,
+)
+"""Shadow Lite hand + 12 FSR pad collision links only (shadow_padtac.usd)."""
+
+
+_SHADOW_LITE_PADTAC_BT_SPAWN = sim_utils.UsdFileCfg(
+    usd_path=os.path.join(_SHADOW_LITE_ASSET_DIR, "shadow_padtac_biotac.usd"),
+    activate_contact_sensors=True,
+    rigid_props=sim_utils.RigidBodyPropertiesCfg(
+        disable_gravity=True,
+        retain_accelerations=True,
+        max_depenetration_velocity=1000.0,
+    ),
+    articulation_props=sim_utils.ArticulationRootPropertiesCfg(
+        enabled_self_collisions=True,
+        solver_position_iteration_count=8,
+        solver_velocity_iteration_count=0,
+        sleep_threshold=0.005,
+        stabilization_threshold=0.0005,
+    ),
+    joint_drive_props=sim_utils.JointDrivePropertiesCfg(drive_type="force"),
+)
+
+SHADOW_HAND_LITE_PADTAC_BT_CFG = ArticulationCfg(
+    spawn=_SHADOW_LITE_PADTAC_BT_SPAWN,
+    init_state=_SHADOW_LITE_INIT,
+    actuators=SHADOW_HAND_LITE_CFG.actuators,
+    soft_joint_pos_limit_factor=1.0,
+)
+"""Shadow Lite hand + 12 FSR pads + 4 BioTac fingertip sensors (shadow_padtac_biotac.usd).
+
+16 tactile bodies = 12 rh_fsr_pad_C* pad links + 4 distal links whose tip mesh is the
+BioTac SP (contact sensed on rh_{ff,mf,rf,th}distal)."""

@@ -33,7 +33,14 @@ from roto.tasks.robots.allegro.allegro import (
 )
 from roto.tasks.robots.orca.orca import OrcaEnv, OrcaEnvCfg
 from roto.tasks.robots.shadow.shadow import ShadowEnv, ShadowEnvCfg
-from roto.tasks.robots.shadowlite.shadowlite import ShadowLiteEnv, ShadowLiteEnvCfg
+from roto.tasks.robots.shadowlite.shadowlite import (
+    ShadowLiteEnv,
+    ShadowLiteEnvCfg,
+    ShadowLitePadTacEnv,
+    ShadowLitePadTacEnvCfg,
+    ShadowLitePadTacBTEnv,
+    ShadowLitePadTacBTEnvCfg,
+)
 
 _BAODING_HDR = Path(__file__).resolve().parent.parent.parent / "assets/rooms/stierberg_sunrise_4k.hdr"
 _BAODING_HDR = Path(__file__).resolve().parent.parent.parent / "assets/rooms/qwantani_dusk_2_4k.hdr"
@@ -284,6 +291,9 @@ class BaodingShadowLiteCfg(BaodingTaskCfg, ShadowLiteEnvCfg):
     # Ball friction DR: one value sampled per env each reset, applied to BOTH balls.
     ball_friction_range: tuple[float, float] = (0.2, 0.6)
 
+    # Ball mass DR (kg): one value sampled per env each reset, applied to BOTH balls.
+    ball_mass_range: tuple[float, float] = (0.045, 0.100)
+
     ball_reset_height = 0.46
 
     ball_mass_g = 55
@@ -323,6 +333,81 @@ class BaodingShadowLiteCfg(BaodingTaskCfg, ShadowLiteEnvCfg):
     diagonal_target_x = palm_target_x - target_offset
     diagonal_target_y = palm_target_y + target_offset
     diagonal_target_z = palm_target_z + target_offset
+
+
+@configclass
+class BaodingShadowLitePadTacCfg(BaodingTaskCfg, ShadowLitePadTacEnvCfg):
+    """Baoding on Shadow Lite with FSR pad tactile (TouchLab + shadow_padtac.usd)."""
+
+    events: ShadowLiteFrictionEventCfg = ShadowLiteFrictionEventCfg()
+    ball_friction_range: tuple[float, float] = (0.2, 0.6)
+    ball_mass_range: tuple[float, float] = (0.045, 0.100)
+
+    ball_reset_height = 0.46
+    ball_mass_g = 55
+    success_tolerance = 0.013
+
+    ball_diameter_inches = 1.5
+    ball_radius_m = (ball_diameter_inches / 2) * 2.54 / 100
+    ball_diameter_m = ball_radius_m * 2
+
+    ball_1_init_x = -0.03
+    ball_1_init_y = -.225
+    ball_2_init_x = 0.01
+    ball_2_init_y = -0.255
+
+    palm_target_x = 0
+    palm_target_y = -0.25
+    palm_target_z = 0.41
+
+    target_offset = ball_diameter_m / 1.73205080757 + 0.001
+    diagonal_target_x = palm_target_x - target_offset
+    diagonal_target_y = palm_target_y + target_offset
+    diagonal_target_z = palm_target_z + target_offset
+
+    # trial15/27 (the checkpoints this hand is evaluated against) were trained
+    # under this coupling law; the base ShadowLiteEnvCfg keeps the sysid-derived
+    # 0.875 for the plain "shadowlite" hand.
+    coupling_theta: float = 0.785
+
+
+@configclass
+class BaodingShadowLitePadTacBTCfg(BaodingShadowLitePadTacCfg):
+    """Baoding on Shadow Lite with 12 FSR pads + 4 BioTac fingertips.
+
+    Identical task/ball setup to BaodingShadowLitePadTacCfg; only the robot asset
+    (shadow_padtac_biotac.usd) and the contact-sensor prim path change so the 4
+    BioTac distal tips are sensed alongside the 12 pads.
+
+    Command slew (HW SPEED_FRAC) is opt-in via ShadowLiteEnvCfg:
+      cmd_speed_frac=0.5                    # fixed
+      cmd_speed_frac_range=(0.3, 1.0)        # DR (leave cmd_speed_frac=None)
+    Default both None = classic Trial-15/27 plant (no slew).
+
+    FSR taxel DR (opt-in via tactile_fsr_corrupt_max):
+      each episode select k~U{0..max} of the 12 FSR channels and give each a
+      forced value of 0 or 1 (mixed); BioTac distal channels untouched.
+      tactile_flip_prob_* then dithers ONLY those k channels, so a broken taxel
+      is intermittent (~90/10) rather than locked for the episode. Every
+      unselected FSR pad and all 4 BioTac channels stay exact. None = off.
+    """
+
+    robot_cfg: ArticulationCfg = (
+        ShadowLitePadTacBTEnvCfg.__dataclass_fields__["robot_cfg"].default_factory()
+    )
+    robot_contact_sensor_cfg = (
+        ShadowLitePadTacBTEnvCfg.__dataclass_fields__["robot_contact_sensor_cfg"].default_factory()
+    )
+
+    # Robust overnight scratch stack (toggle off individually for classic runs):
+    cmd_speed_frac_range = None #(0.3, 1.0)
+    tactile_fsr_corrupt_max = 8
+    # Per-step dither applied ONLY to the k FSR channels selected above. A
+    # channel forced to 1 reads 1 on ~90% of steps and drops to 0 on ~10%; a
+    # channel forced to 0 reads 0 on ~90% and blips to 1 on ~10%. Unselected FSR
+    # pads and all 4 BioTac tips are never noised and stay exact.
+    tactile_flip_prob_off_to_on = 0.1
+    tactile_flip_prob_on_to_off = 0.1
 
 
 @configclass
@@ -561,6 +646,8 @@ class BaodingMixin:
         self._baoding_reset_balls(env_ids)
         if getattr(self.cfg, "ball_friction_range", None) is not None:
             self._randomize_ball_friction(env_ids)
+        if getattr(self.cfg, "ball_mass_range", None) is not None:
+            self._randomize_ball_mass(env_ids)
 
     def _randomize_ball_friction(self, env_ids: Sequence[int]) -> None:
         """Sample one friction value per env and apply it to BOTH balls (same each reset).
@@ -578,6 +665,28 @@ class BaodingMixin:
             materials[eids, :, 1:2] = mu   # dynamic friction (= static)
             materials[eids, :, 2:3] = 0.0  # restitution
             ball.root_physx_view.set_material_properties(materials, eids)
+
+    def _randomize_ball_mass(self, env_ids: Sequence[int]) -> None:
+        """Sample one mass (kg) per env and apply it to BOTH balls (same each reset).
+
+        Mirrors _randomize_ball_friction: mdp.randomize_rigid_body_mass samples
+        independently per asset_cfg call, so it can't express "same value across two
+        separate RigidObjects" either. Writes the mass buffer directly and rescales
+        inertia by the mass ratio (uniform-density sphere, radius unchanged), matching
+        the recompute done inside mdp.randomize_rigid_body_mass.
+        """
+        lo, hi = self.cfg.ball_mass_range
+        eids = env_ids.cpu()
+        mass = sample_uniform(lo, hi, (len(eids), 1), device="cpu")  # [n_env, 1 body]
+        for ball in (self.ball_1, self.ball_2):
+            masses = ball.root_physx_view.get_masses()  # [N, 1] on CPU
+            ratios = mass / masses[eids]
+            masses[eids] = mass
+            ball.root_physx_view.set_masses(masses, eids)
+
+            inertias = ball.root_physx_view.get_inertias()  # [N, 9] on CPU
+            inertias[eids] = inertias[eids] * ratios
+            ball.root_physx_view.set_inertias(inertias, eids)
 
     def _reset_target_pose(self, reached_goal_ids):
         self.ball_goal_idx[reached_goal_ids] = ~self.ball_goal_idx[reached_goal_ids]
@@ -667,6 +776,62 @@ class BaodingShadowLiteEnv(BaodingMixin, ShadowLiteEnv):
                         term_cfg.func = term_cfg.func(cfg=term_cfg, env=self)
             # Mark resolved so a later timeline PLAY callback does not re-resolve
             # the (now resolved) SceneEntityCfgs and raise the inconsistency error.
+            em._is_scene_entities_resolved = True
+
+        self._init_baoding_state()
+
+
+class BaodingShadowLitePadTacEnv(BaodingMixin, ShadowLitePadTacEnv):
+    """Baoding on Shadow Lite with FSR pad tactile."""
+
+    cfg: BaodingShadowLitePadTacCfg
+
+    def __init__(self, cfg: BaodingShadowLitePadTacCfg, render_mode: str | None = None, **kwargs):
+        apply_baoding_object_cfgs_from_scalars(cfg)
+        super().__init__(cfg, render_mode, **kwargs)
+
+        # Same friction-event fix as BaodingShadowLiteEnv
+        em = getattr(self, "event_manager", None)
+        if em is not None and self.sim.is_playing():
+            for term_cfgs in em._mode_term_cfgs.values():
+                for term_cfg in term_cfgs:
+                    for value in term_cfg.params.values():
+                        if (
+                            isinstance(value, SceneEntityCfg)
+                            and value.body_names is not None
+                            and value.body_ids == slice(None)
+                        ):
+                            value.resolve(self.scene)
+                    if inspect.isclass(term_cfg.func):
+                        term_cfg.func = term_cfg.func(cfg=term_cfg, env=self)
+            em._is_scene_entities_resolved = True
+
+        self._init_baoding_state()
+
+
+class BaodingShadowLitePadTacBTEnv(BaodingMixin, ShadowLitePadTacBTEnv):
+    """Baoding on Shadow Lite with 12 FSR pads + 4 BioTac fingertips."""
+
+    cfg: BaodingShadowLitePadTacBTCfg
+
+    def __init__(self, cfg: BaodingShadowLitePadTacBTCfg, render_mode: str | None = None, **kwargs):
+        apply_baoding_object_cfgs_from_scalars(cfg)
+        super().__init__(cfg, render_mode, **kwargs)
+
+        # Same friction-event fix as BaodingShadowLitePadTacEnv
+        em = getattr(self, "event_manager", None)
+        if em is not None and self.sim.is_playing():
+            for term_cfgs in em._mode_term_cfgs.values():
+                for term_cfg in term_cfgs:
+                    for value in term_cfg.params.values():
+                        if (
+                            isinstance(value, SceneEntityCfg)
+                            and value.body_names is not None
+                            and value.body_ids == slice(None)
+                        ):
+                            value.resolve(self.scene)
+                    if inspect.isclass(term_cfg.func):
+                        term_cfg.func = term_cfg.func(cfg=term_cfg, env=self)
             em._is_scene_entities_resolved = True
 
         self._init_baoding_state()

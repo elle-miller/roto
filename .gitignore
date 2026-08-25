@@ -3,10 +3,18 @@ outputs/
 wandb/
 videos/
 sweep_logs/
+sim_logs/
 
 # Large raw data / cache blobs (too big for git, some files exceed GitHub's 100MB limit)
 roto/data/
 genan/cache/
+
+# Optuna sweep DBs, play.py npz recordings, and ad hoc eval clips/checkpoints —
+# regenerated locally, not meant to be committed.
+*.db
+*.npz
+*.mp4
+scripts/ablation*/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

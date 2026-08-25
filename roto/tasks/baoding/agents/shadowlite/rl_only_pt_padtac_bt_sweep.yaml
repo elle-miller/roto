@@ -1,0 +1,47 @@
+# Scratch Optuna sweep: shadowlite_padtac_bt from random init (NO checkpoint).
+# Use with scripts/sweep.py (not sweep_finetune.py).
+# Logs: Baoding_rl_only_pt_padtac_bt_sweep_<study>/
+# Never writes rl_only_pt_padtac, rl_only_pt_padtac_bt_ft, or ft_sweep DBs.
+
+# Prop-only ablation: keep obs_list/tactile_cfg dims identical to the tactile
+# variant (24 taxels, same 304-D obs/network shapes) but zero every tactile
+# value at the source, so the policy sees no tactile signal without touching
+# observation-space sizing anywhere else.
+observations:
+  obs_list:
+  - prop
+  - tactile
+  tactile_cfg:
+    binary_tactile: true
+    binary_threshold: 0.0
+    zero_tactile: true
+
+agent:
+  rollouts: 32
+  learning_epochs: 8
+  mini_batches: 4
+  discount_factor: 0.99
+  lambda: 0.95
+  learning_rate: 2.02e-04
+  grad_norm_clip: 1.0
+  ratio_clip: 0.2
+  value_clip: 0.2
+  value_loss_scale: 1.0
+  entropy_loss_scale: 0.05
+  kl_threshold: 0
+
+experiment:
+  experiment_name: rl_only_pt_padtac_bt_sweep
+  wandb: 0
+  wandb_kwargs:
+    group: rl_only_pt_padtac_bt_sweep
+    name: '1'
+
+trainer:
+  num_eval_envs: 100
+  max_global_timesteps_M: 250
+
+sweeper:
+  storage: sqlite:///shadow_baoding_padtac_bt_scratch_2.db
+  warmup_timesteps_M: 100
+  max_sweep_timesteps_M: 250

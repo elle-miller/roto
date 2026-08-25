@@ -1,0 +1,130 @@
+# v3 PadTac — FSR pad poses for sr_hand_padtac.urdf
+# Source: labeled dorsal photo (rf middle.png), mux wiring in deploy_policy.py
+# Units: meters. Tune xyz in Isaac viewer (expect ±5–10 mm).
+
+schema_version: 1
+
+# Palm / phalanx link frame (Shadow Lite URDF):
+#   +x: index (FF) toward little (RF)  [FF +x, RF -x]
+#   -y: dorsal (back of hand) — FSR pads sit on -y side
+#   +z: palm toward fingertips
+#
+# Phalanx link frames: +z along finger toward tip (MCP/PIP joints).
+# Knuckle semantic pads are on fixed palm dorsum, NOT on rh_*knuckle links.
+#
+# y: palm pads use -0.011; phalanx pads use -0.009 (sit on mesh, less float).
+
+defaults:
+  radius: 0.004          # 4 mm FSR disc radius
+  thickness: 0.0015      # 1.5 mm; extra vs paper-thin to clear dorsal mesh with ~15 deg hand tilt
+  collision_rpy: [-1.5707963, 0.0, 0.0]  # cylinder axis along -y (dorsal outward)
+  pad_link_prefix: rh_fsr_pad_C
+  joint_type: fixed
+
+# 24-d tactile layout (deploy_policy.py). Only sim_channel below are active in v3.
+# Inactive channels stay hard 0 in sim (BioTac/distals filled on HW at deploy).
+inactive_sim_channels: [0, 1, 6, 14, 15, 16, 17, 19, 20, 21, 22, 23]
+
+pads:
+  # --- mux order matches Arduino CSV / FSR_CHANNELS ---
+
+  - mux: 0
+    name: thprox
+    pad_link: rh_fsr_pad_C00
+    parent_link: rh_thproximal
+    xyz: [0.000, -0.011, 0.014]
+    sim_channel: 10
+    photo_label: th prox
+
+  - mux: 1
+    name: ffprox
+    pad_link: rh_fsr_pad_C01
+    parent_link: rh_ffproximal
+    xyz: [0.000, -0.009, 0.019]
+    sim_channel: 7
+    photo_label: ff prox
+
+  - mux: 2
+    name: mfknuckle
+    pad_link: rh_fsr_pad_C02
+    parent_link: rh_palm
+    xyz: [0.011, -0.011, 0.082]
+    sim_channel: 4
+    photo_label: mf knuck
+    notes: dorsal palm top; proximal to mf knuckle joint (0.011, 0, 0.099)
+
+  - mux: 3
+    name: rfprox
+    pad_link: rh_fsr_pad_C03
+    parent_link: rh_rfproximal
+    xyz: [0.000, -0.009, 0.019]
+    sim_channel: 9
+    photo_label: rf prox
+
+  - mux: 4
+    name: rfknuckle
+    pad_link: rh_fsr_pad_C04
+    parent_link: rh_palm
+    xyz: [-0.011, -0.011, 0.080]
+    sim_channel: 5
+    photo_label: rf knuck
+    notes: dorsal palm top; proximal to rf knuckle joint (-0.011, 0, 0.095)
+
+  - mux: 5
+    name: palm
+    pad_link: rh_fsr_pad_C05
+    parent_link: rh_palm
+    xyz: [0.000, -0.011, 0.064]
+    sim_channel: 2
+    photo_label: palm
+    notes: between mf and rf knuckle columns, below knuckle row
+
+  - mux: 6
+    name: ffmid
+    pad_link: rh_fsr_pad_C06
+    parent_link: rh_ffmiddle
+    xyz: [0.000, -0.009, 0.013]
+    sim_channel: 11
+    photo_label: ff middle
+
+  - mux: 7
+    name: ffknuckle
+    pad_link: rh_fsr_pad_C07
+    parent_link: rh_palm
+    xyz: [0.033, -0.011, 0.080]
+    sim_channel: 3
+    photo_label: ff knuck
+    notes: dorsal palm top; proximal to ff knuckle joint (0.033, 0, 0.095)
+
+  - mux: 8
+    name: mfprox
+    pad_link: rh_fsr_pad_C08
+    parent_link: rh_mfproximal
+    xyz: [0.000, -0.009, 0.019]
+    sim_channel: 8
+    photo_label: mf prox
+
+  - mux: 9
+    name: thmiddle
+    pad_link: rh_fsr_pad_C09
+    parent_link: rh_thmiddle
+    xyz: [0.000, -0.010, 0.012]
+    sim_channel: 18
+    photo_label: th middle
+    notes: thumb frame differs; tune in Isaac
+
+  - mux: 10
+    name: mfmid
+    pad_link: rh_fsr_pad_C10
+    parent_link: rh_mfmiddle
+    xyz: [0.000, -0.009, 0.013]
+    sim_channel: 12
+    photo_label: mf middle
+
+  - mux: 11
+    name: rfmid
+    pad_link: rh_fsr_pad_C11
+    parent_link: rh_rfmiddle
+    xyz: [0.000, -0.009, 0.013]
+    sim_channel: 13
+    photo_label: rf middle

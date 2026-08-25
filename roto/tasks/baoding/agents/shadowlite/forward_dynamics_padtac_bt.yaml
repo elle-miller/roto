@@ -1,0 +1,58 @@
+# Shadow Baoding: rl_only_pt_padtac_bt + forward-dynamics SSL.
+# The agent: block is copied verbatim from rl_only_pt_padtac_bt.yaml so the
+# auxiliary loss is the only difference between the two runs.
+#
+# tactile_only stays false: the tac_dynamics BCE branch in
+# ForwardDynamics.compute_loss is commented out (multimodal_rl/ssl/dynamics.py:103),
+# and its decoder would be built with output_dim = num_tactile_observations,
+# which ShadowLiteEnv hardcodes to 0.
+
+observations:
+  obs_list:
+  - prop
+  - tactile
+  tactile_cfg:
+    binary_tactile: true
+    binary_threshold: 0.0
+
+agent:
+  rollouts: 32
+  learning_epochs: 8
+  mini_batches: 4
+  discount_factor: 0.99
+  lambda: 0.95
+  learning_rate: 2.02e-04
+  grad_norm_clip: 1.0
+  ratio_clip: 0.2
+  value_clip: 0.2
+  value_loss_scale: 1.0
+  entropy_loss_scale: 0.05
+  kl_threshold: 0
+
+# seq_length > 0 gives the aux task its own DynamicsMemory of
+# rollouts * num_envs sequences (~385 MB at 4096 envs). Reduce --num_envs if
+# this OOMs. loss_weight/learning_rate are the shadowlite forward_dynamics
+# values; they were tuned on the 4-taxel hand, not this 24-channel one.
+ssl_task:
+  type: forward_dynamics
+  n_rollouts: 1
+  tactile_only: false
+  loss_weight: 3.686
+  learning_rate: 2.83e-04
+  seq_length: 3
+
+experiment:
+  experiment_name: forward_dynamics_padtac_bt
+  wandb: 0
+  wandb_kwargs:
+    group: forward_dynamics_padtac_bt
+    name: '1'
+
+trainer:
+  num_eval_envs: 100
+  max_global_timesteps_M: 350
+
+sweeper:
+  storage: sqlite:///shadow_baoding_padtac_bt_fd_ssl_3.db
+  warmup_timesteps_M: 120
+  max_sweep_timesteps_M: 350

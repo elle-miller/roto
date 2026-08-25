@@ -105,7 +105,9 @@ def apply_optuna_trial_params(agent_cfg: dict, trial: optuna.trial.FrozenTrial) 
     """Copy hyperparameters from a stored Optuna trial into ``agent_cfg``."""
     p = trial.params
     agent_cfg["agent"]["rollouts"] = 2 ** p["rollouts_pow"]
-    agent_cfg["agent"]["mini_batches"] = 2 ** p["mini_batches_pow"]
+    # Trials from a categorical "mini_batches" sweep (e.g. TactileBaoding's studies)
+    # store the value directly instead of "mini_batches_pow".
+    agent_cfg["agent"]["mini_batches"] = p["mini_batches"] if "mini_batches" in p else 2 ** p["mini_batches_pow"]
     agent_cfg["agent"]["learning_epochs"] = p["learning_epochs"]
     agent_cfg["agent"]["learning_rate"] = p["learning_rate"]
     agent_cfg["agent"]["entropy_loss_scale"] = p["entropy_loss_scale"]
@@ -203,12 +205,14 @@ class OptimisationRunner:
         set_seed(agent_cfg["seed"])
 
         # Suggest PPO hyperparameters
-        # Note: Memory issues can occur with large rollouts + aux tasks     
+        # Note: Memory issues can occur with large rollouts + aux tasks
         if "ssl_task" in agent_cfg and agent_cfg["ssl_task"]["type"] == "forward_dynamics":
-            max_rollouts_pow = 5
-            
+            # 5 (32 rollouts) still OOM'd on the 24-channel padtac_bt FD runs; capped
+            # lower after that finding (see TactileBaoding_ShadowHandLite sweep.py).
+            max_rollouts_pow = 4
+
         else:
-            max_rollouts_pow = 6 
+            max_rollouts_pow = 6
 
         rollouts = 2 ** trial.suggest_int("rollouts_pow", 4, max_rollouts_pow) # 16, 32, 64 due to memory constraints, we can't always use 64 rollouts with large aux tasks
         #rollouts = trial.suggest_categorical("rollouts", [16, 32])
