@@ -49,6 +49,78 @@ parser.add_argument(
 )
 parser.add_argument("--samples_per_pixel_per_frame", type=int, default=1, help="Number of samples per pixel per frame.")
 
+# --- Presentation overrides (camera / background / resolution) ---------------
+# All default to None = leave the env cfg exactly as it ships, so training and
+# every existing caller are unaffected. Used to render the ICRA comparison
+# clips from a fixed front viewpoint; pick the numbers with
+# scripts/random_forces/calibrate_camera.py and paste them in.
+parser.add_argument("--cam_eye", type=float, nargs=3, default=None, metavar=("X", "Y", "Z"),
+                    help="Camera position, world metres. Requires --cam_lookat.")
+parser.add_argument("--cam_lookat", type=float, nargs=3, default=None, metavar=("X", "Y", "Z"),
+                    help="Camera target, world metres. Requires --cam_eye.")
+parser.add_argument("--cam_res", type=int, nargs=2, default=None, metavar=("W", "H"),
+                    help="Render resolution for the recorded video, e.g. 3840 2160. Read ONCE "
+                         "when the render product is built, so it is applied before make_env.")
+parser.add_argument("--hdr", type=str, default=None,
+                    help="HDRI background stem from roto/assets/rooms/ (no .hdr), e.g. "
+                         "qwantani_dusk_2_puresky_4k. Default: whatever baoding.py sets.")
+
+# --- Tactile ablation --------------------------------------------------------
+parser.add_argument("--zero_tactile", action="store_true", default=False,
+                    help="Force the env's tactile output to all-zero at the source, whatever the "
+                         "agent_cfg says. Lets one tactile-trained checkpoint be run both with and "
+                         "without touch, changing exactly one variable. Also the native condition "
+                         "for checkpoints trained under a zero_tactile agent_cfg.")
+
+# --- Episode length ----------------------------------------------------------
+# --- Domain randomisation pinning -------------------------------------------
+# BaodingShadowLitePadTacBTCfg ships with the full robustness stack ON:
+# tactile_fsr_corrupt_max=8, tactile_flip_prob=0.1, ball kicks (0.1-0.3 m/s every
+# 0.5-1.5 s), ball mass DR (45-100 g) and cmd slew DR (0.3-1.0). That is correct
+# for training and for robustness evals, and wrong for a presentation clip or for
+# any A/B where one variable is supposed to differ -- corrupted taxels in
+# particular cripple a tactile policy while a prop-only one does not notice.
+# These default to None = leave the cfg alone, so nothing else changes.
+parser.add_argument("--ball_mass_g", type=float, default=None,
+                    help="Pin BOTH balls in EVERY env to this mass (grams), overriding mass DR.")
+parser.add_argument("--ball_disturb_off", action="store_true", default=False,
+                    help="Force the random ball push/force disturbance DR OFF.")
+parser.add_argument("--fsr_corrupt_max", type=int, default=None,
+                    help="Per-episode FSR taxel corruption DR. 0 disables it (clean tactile).")
+parser.add_argument("--tactile_flip_prob", type=float, default=None,
+                    help="Per-step taxel dither probability, both directions. 0 = off. Needed "
+                         "alongside --fsr_corrupt_max 0 for genuinely clean tactile.")
+parser.add_argument("--cmd_speed_frac_range", type=float, nargs=2, default=None, metavar=("LO", "HI"),
+                    help="Per-episode command-slew DR, resampled on reset. This is the real "
+                         "training plant for slew-DR checkpoints -- (0.3, 1.0) for the aug4 "
+                         "family. Prefer this over a pinned --cmd_speed_frac when reproducing "
+                         "training conditions: a fixed value at the TOP of the range is not "
+                         "representative of it, since most draws land lower and the policy "
+                         "behaves very differently there.")
+parser.add_argument("--cmd_speed_frac", type=float, default=None,
+                    help="Pin the command-rate limiter to a fixed value (e.g. 0.6 to match the "
+                         "hardware deploy SPEED_FRAC), disabling the slew DR range. Pass a "
+                         "negative value to disable slew entirely, which is what pre-2026-08-01 "
+                         "checkpoints need -- they were trained without it.")
+# The temporal taxel debounce. The agent YAML that enabled it
+# (rl_only_pt_padtac_bt_smooth.yaml, k_on=3 k_off=1) was DELETED in commit
+# 7f9500f on 2026-08-16, but the env still implements it
+# (shadowlite.py _init_tactile_smoothing, reads tactile_cfg.smoothing). Any
+# checkpoint trained before that date under the smooth config therefore cannot
+# be reproduced from the YAMLs alone -- this flag restores the setting.
+parser.add_argument("--tactile_smoothing", type=int, nargs=2, default=None, metavar=("K_ON", "K_OFF"),
+                    help="Enable the temporal taxel hold: a taxel must read ON for K_ON "
+                         "consecutive steps before the policy sees 1, and OFF for K_OFF before it "
+                         "returns to 0. The deleted smooth config used 3 1.")
+parser.add_argument("--log_out", type=str, default=None,
+                    help="Path for the joint+tactile npz log. Default is "
+                         "sim_policy_log_seed<SEED>.npz in the cwd, which collides when several "
+                         "conditions are run at the same seed -- set this per run.")
+parser.add_argument("--episode_seconds", type=float, default=None,
+                    help="Override episode_length_s. A clip longer than the stock 10 s otherwise "
+                         "contains a reset teleport mid-video. Drop-termination stays ACTIVE: a "
+                         "real failure should still be visible.")
+
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
 args_cli, hydra_args = parser.parse_known_args()
@@ -103,12 +175,91 @@ def main():
     # Update the environment config
     env_cfg = update_env_cfg(args_cli, env_cfg, agent_cfg)
 
+    # ----- presentation overrides (all before make_env) -----
+    # Baoding._setup_scene reads the module-level _BAODING_HDR when it spawns
+    # /World/bglight, so rebinding the attribute here is enough and leaves
+    # baoding.py untouched for training runs.
+    if args_cli.hdr is not None:
+        import roto.tasks.baoding.baoding as _baoding_mod
+        _hdr_path = _baoding_mod._BAODING_HDR.parent / f"{args_cli.hdr}.hdr"
+        if not _hdr_path.is_file():
+            raise SystemExit(f"Unknown HDRI {args_cli.hdr!r}: no such file {_hdr_path}")
+        _baoding_mod._BAODING_HDR = _hdr_path
+        print(f"[INFO] HDRI background -> {_hdr_path}")
+
+    # viewer.resolution is read exactly once, lazily, when DirectRLEnv builds the
+    # render product on the first render(). Setting it after that point fails
+    # SILENTLY at the old resolution -- hence before make_env, and verify the
+    # output with ffprobe rather than trusting this line.
+    if args_cli.cam_res is not None:
+        env_cfg.viewer.resolution = tuple(args_cli.cam_res)
+        print(f"[INFO] render resolution -> {env_cfg.viewer.resolution}")
+
+    if (args_cli.cam_eye is None) != (args_cli.cam_lookat is None):
+        raise SystemExit("--cam_eye and --cam_lookat must be given together.")
+    if args_cli.cam_eye is not None:
+        env_cfg.viewer.eye = tuple(args_cli.cam_eye)
+        env_cfg.viewer.lookat = tuple(args_cli.cam_lookat)
+        # eye/lookat are offsets from the frame chosen by origin_type. The default
+        # "world" combined with num_envs > 1 puts env 0 away from the origin and
+        # silently shifts the framing; "env" pins it to env 0 regardless.
+        env_cfg.viewer.origin_type = "env"
+        env_cfg.viewer.env_index = 0
+        print(f"[INFO] camera eye={env_cfg.viewer.eye} lookat={env_cfg.viewer.lookat} (origin_type=env)")
+
+    if args_cli.fsr_corrupt_max is not None:
+        env_cfg.tactile_fsr_corrupt_max = (
+            None if args_cli.fsr_corrupt_max <= 0 else int(args_cli.fsr_corrupt_max))
+        print(f"[INFO] tactile_fsr_corrupt_max -> {env_cfg.tactile_fsr_corrupt_max}")
+    if args_cli.tactile_flip_prob is not None:
+        env_cfg.tactile_flip_prob_off_to_on = float(args_cli.tactile_flip_prob)
+        env_cfg.tactile_flip_prob_on_to_off = float(args_cli.tactile_flip_prob)
+        print(f"[INFO] tactile_flip_prob -> {args_cli.tactile_flip_prob:g}")
+    if args_cli.ball_disturb_off:
+        env_cfg.ball_push_vel_range = None
+        env_cfg.ball_push_angvel_range = None
+        env_cfg.ball_force_range = None
+        env_cfg.ball_torque_range = None
+        print("[INFO] ball disturbance DR forced OFF")
+    if args_cli.cmd_speed_frac_range is not None:
+        lo, hi = args_cli.cmd_speed_frac_range
+        env_cfg.cmd_speed_frac = None
+        env_cfg.cmd_speed_frac_range = (float(lo), float(hi))
+        print(f"[INFO] cmd slew DR -> ({lo:g}, {hi:g}) per episode")
+    elif args_cli.cmd_speed_frac is not None:
+        # Negative = slew OFF entirely. Checkpoints trained before the command-rate
+        # slew DR landed (2026-08-01) never saw a rate-limited plant, so pinning
+        # them to any fixed fraction evaluates them off-distribution.
+        if args_cli.cmd_speed_frac < 0:
+            env_cfg.cmd_speed_frac = None
+            env_cfg.cmd_speed_frac_range = None
+            print("[INFO] cmd slew forced OFF (pre-slew checkpoint plant)")
+        else:
+            env_cfg.cmd_speed_frac = float(args_cli.cmd_speed_frac)
+            env_cfg.cmd_speed_frac_range = None
+            print(f"[INFO] cmd slew pinned to {env_cfg.cmd_speed_frac:g}")
+
+    if args_cli.episode_seconds is not None:
+        print(f"[INFO] episode_length_s {env_cfg.episode_length_s:g} -> {args_cli.episode_seconds:g} s")
+        env_cfg.episode_length_s = float(args_cli.episode_seconds)
+
     # Setup logging
     writer = Writer(agent_cfg, play=True)
 
     # Make environment (order: gymnasium Env -> FrameStack -> IsaacLab)
     env_cfg.num_eval_envs = 0 # don't need the visualization of eval envs
     env = make_env(agent_cfg, env_cfg, writer, args_cli)
+
+    if args_cli.ball_mass_g is not None:
+        _m = args_cli.ball_mass_g / 1000.0
+        env.env.unwrapped.cfg.ball_mass_range = (_m, _m)
+        print(f"[INFO] ball mass pinned to {args_cli.ball_mass_g:g} g")
+    if args_cli.zero_tactile:
+        _raw = env.env.unwrapped
+        if _raw.tactile_cfg is None:
+            _raw.tactile_cfg = {"binary_tactile": True, "binary_threshold": 0.0}
+        _raw.tactile_cfg["zero_tactile"] = True
+        print("[INFO] Tactile forced to ZERO at the source (--zero_tactile)")
 
     print("\n===== BODY NAMES =====")
     try:
@@ -180,6 +331,7 @@ def main():
         "cmd13": [],        # (13,) policy-order cmd
         "pos_err13": [],    # (13,) policy-order cmd - q  (matches obs cmd_error)
         "tac": [],          # tactile (binary)
+        "num_rotations": [],  # cumulative rotation count
     }
 
     # Simulate environment
@@ -219,8 +371,9 @@ def main():
                 rec["cmd13"].append(r.joint_pos_cmd[0, prop_idx].detach().cpu().numpy().copy())
                 rec["pos_err13"].append(r.joint_pos_error[0, prop_idx].detach().cpu().numpy().copy())
                 rec["tac"].append(r.tactile[0].detach().cpu().numpy().copy())
+                rec["num_rotations"].append(float(r.num_rotations[0].item()))
                 if len(rec["act"]) >= N_RECORD:
-                    fname = f"sim_policy_log_seed{agent_cfg['seed']}.npz"
+                    fname = args_cli.log_out or f"sim_policy_log_seed{agent_cfg['seed']}.npz"
                     np.savez(
                         fname,
                         **{k: np.array(v) for k, v in rec.items()},
@@ -228,6 +381,10 @@ def main():
                         joints13=[r.robot.joint_names[i] for i in prop_idx],
                     )
                     print("saved", fname, len(rec["act"]), "steps")
+                    _tac = np.array(rec["tac"], dtype=np.float32)
+                    print("[VERIFY] tactile: mean=%.6f  frac_on=%.3f%%  zero_tactile=%s"
+                          % (_tac.mean(), 100.0 * (_tac > 0.5).mean(), args_cli.zero_tactile))
+                    print("[VERIFY] rotations=%.1f" % float(r.num_rotations[0].item()))
                     break
 
         if args_cli.video:

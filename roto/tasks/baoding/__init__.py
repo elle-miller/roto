@@ -23,6 +23,13 @@ from .baoding import (
     BaodingShadowLitePadTacEnv,
     BaodingShadowLitePadTacBTCfg,
     BaodingShadowLitePadTacBTEnv,
+    BaodingShadowLitePadTacBTSparseCfg,
+    BaodingShadowLitePadTacBTStuck8Cfg,
+    BaodingShadowLitePadTacBTLegacyCfg,
+    BaodingShadowLitePadTacBTLegacyNoSlewCfg,
+    BaodingShadowLitePadTacBTLegacyNoMassDRCfg,
+    BaodingShadowLitePadTacBTLegacyNoTacCorruptCfg,
+    BaodingShadowLitePadTacBTLegacyFrictionMassOnlyCfg,
 )
 
 _AGENTS_DIR = os.path.dirname(agents.__file__)
@@ -115,6 +122,76 @@ gym.register(
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": BaodingShadowLitePadTacBTCfg,
+        **_variant_paths("shadowlite", _SHADOWLITE_PADTAC_VARIANT_FILES),
+    },
+)
+
+gym.register(
+    id="Baoding_Shadowlite_PadTacBT_Sparse",
+    entry_point=baoding_make_env,
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": BaodingShadowLitePadTacBTSparseCfg,
+        **_variant_paths("shadowlite", _SHADOWLITE_PADTAC_VARIANT_FILES),
+    },
+)
+
+gym.register(
+    id="Baoding_Shadowlite_PadTacBT_Stuck8",
+    entry_point=baoding_make_env,
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": BaodingShadowLitePadTacBTStuck8Cfg,
+        **_variant_paths("shadowlite", _SHADOWLITE_PADTAC_VARIANT_FILES),
+    },
+)
+
+gym.register(
+    id="Baoding_Shadowlite_PadTacBT_Legacy",
+    entry_point=baoding_make_env,
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": BaodingShadowLitePadTacBTLegacyCfg,
+        **_variant_paths("shadowlite", _SHADOWLITE_PADTAC_VARIANT_FILES),
+    },
+)
+
+gym.register(
+    id="Baoding_Shadowlite_PadTacBT_Legacy_NoSlew",
+    entry_point=baoding_make_env,
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": BaodingShadowLitePadTacBTLegacyNoSlewCfg,
+        **_variant_paths("shadowlite", _SHADOWLITE_PADTAC_VARIANT_FILES),
+    },
+)
+
+gym.register(
+    id="Baoding_Shadowlite_PadTacBT_Legacy_NoMassDR",
+    entry_point=baoding_make_env,
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": BaodingShadowLitePadTacBTLegacyNoMassDRCfg,
+        **_variant_paths("shadowlite", _SHADOWLITE_PADTAC_VARIANT_FILES),
+    },
+)
+
+gym.register(
+    id="Baoding_Shadowlite_PadTacBT_Legacy_NoTac",
+    entry_point=baoding_make_env,
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": BaodingShadowLitePadTacBTLegacyNoTacCorruptCfg,
+        **_variant_paths("shadowlite", _SHADOWLITE_PADTAC_VARIANT_FILES),
+    },
+)
+
+gym.register(
+    id="Baoding_Shadowlite_PadTacBT_Legacy_FrictionMass",
+    entry_point=baoding_make_env,
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": BaodingShadowLitePadTacBTLegacyFrictionMassOnlyCfg,
         **_variant_paths("shadowlite", _SHADOWLITE_PADTAC_VARIANT_FILES),
     },
 )

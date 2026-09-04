@@ -33,10 +33,30 @@ def resolve_gym_env_id(task: str | None, robot: str | None) -> str:
         raise ValueError("Task Find only supports robot franka.")
     if task in ("Bounce", "Baoding"):
         r = normalize_hand_robot(robot)
-        if r in ("shadowlite_padtac", "shadowlite_padtac_bt"):
+        if r in (
+            "shadowlite_padtac",
+            "shadowlite_padtac_bt",
+            "shadowlite_padtac_bt_sparse",
+            "shadowlite_padtac_bt_stuck8",
+            "shadowlite_padtac_bt_legacy",
+            "shadowlite_padtac_bt_legacy_noslew",
+            "shadowlite_padtac_bt_legacy_nomassdr",
+            "shadowlite_padtac_bt_legacy_notac",
+            "shadowlite_padtac_bt_legacy_frictionmass",
+        ):
             if task != "Baoding":
                 raise ValueError(f"Robot {r!r} is only supported for Baoding, got task {task!r}.")
-            suffix = "PadTacBT" if r == "shadowlite_padtac_bt" else "PadTac"
+            suffix = {
+                "shadowlite_padtac": "PadTac",
+                "shadowlite_padtac_bt": "PadTacBT",
+                "shadowlite_padtac_bt_sparse": "PadTacBT_Sparse",
+                "shadowlite_padtac_bt_stuck8": "PadTacBT_Stuck8",
+                "shadowlite_padtac_bt_legacy": "PadTacBT_Legacy",
+                "shadowlite_padtac_bt_legacy_noslew": "PadTacBT_Legacy_NoSlew",
+                "shadowlite_padtac_bt_legacy_nomassdr": "PadTacBT_Legacy_NoMassDR",
+                "shadowlite_padtac_bt_legacy_notac": "PadTacBT_Legacy_NoTac",
+                "shadowlite_padtac_bt_legacy_frictionmass": "PadTacBT_Legacy_FrictionMass",
+            }[r]
             return f"Baoding_Shadowlite_{suffix}"
         if r == "shadowlite":
             return f"{task}_Shadowlite"
@@ -54,13 +74,31 @@ def resolve_gym_env_id(task: str | None, robot: str | None) -> str:
 
 
 def normalize_hand_robot(robot: str | None) -> str:
-    """Return ``shadow``, ``shadowlite``, ``orca``, ``allegro``, ``shadowlite_padtac``, or
-    ``shadowlite_padtac_bt`` (default ``shadow``)."""
+    """Return ``shadow``, ``shadowlite``, ``orca``, ``allegro``, ``shadowlite_padtac``,
+    ``shadowlite_padtac_bt``, ``shadowlite_padtac_bt_sparse``, or
+    ``shadowlite_padtac_bt_stuck8`` (default ``shadow``)."""
     r = (robot or "shadow").strip().lower()
-    if r not in ("shadow", "shadowlite", "orca", "allegro", "shadowlite_padtac", "shadowlite_padtac_bt"):
+    if r not in (
+        "shadow",
+        "shadowlite",
+        "orca",
+        "allegro",
+        "shadowlite_padtac",
+        "shadowlite_padtac_bt",
+        "shadowlite_padtac_bt_sparse",
+        "shadowlite_padtac_bt_stuck8",
+        "shadowlite_padtac_bt_legacy",
+        "shadowlite_padtac_bt_legacy_noslew",
+        "shadowlite_padtac_bt_legacy_nomassdr",
+        "shadowlite_padtac_bt_legacy_notac",
+        "shadowlite_padtac_bt_legacy_frictionmass",
+    ):
         raise ValueError(
             f"Unknown robot {robot!r}. Use one of: shadow, shadowlite, orca, allegro, "
-            f"shadowlite_padtac, shadowlite_padtac_bt."
+            f"shadowlite_padtac, shadowlite_padtac_bt, shadowlite_padtac_bt_sparse, "
+            f"shadowlite_padtac_bt_stuck8, shadowlite_padtac_bt_legacy, "
+            f"shadowlite_padtac_bt_legacy_noslew, shadowlite_padtac_bt_legacy_nomassdr, "
+            f"shadowlite_padtac_bt_legacy_notac, shadowlite_padtac_bt_legacy_frictionmass."
         )
     return r
 
@@ -139,7 +177,21 @@ def _hand_agent_yaml_path(task_name: str, robot: str, entry_point_key: str) -> s
             f"with robot {robot!r}. Available keys: {sorted(files)}."
         )
     base = os.path.dirname(bounce_agents.__file__ if task_name == "Bounce" else baoding_agents.__file__)
-    agent_robot = "shadowlite" if robot in ("shadowlite_padtac", "shadowlite_padtac_bt") else robot
+    agent_robot = (
+        "shadowlite"
+        if robot in (
+            "shadowlite_padtac",
+            "shadowlite_padtac_bt",
+            "shadowlite_padtac_bt_sparse",
+            "shadowlite_padtac_bt_stuck8",
+            "shadowlite_padtac_bt_legacy",
+            "shadowlite_padtac_bt_legacy_noslew",
+            "shadowlite_padtac_bt_legacy_nomassdr",
+            "shadowlite_padtac_bt_legacy_notac",
+            "shadowlite_padtac_bt_legacy_frictionmass",
+        )
+        else robot
+    )
     return os.path.join(base, agent_robot, files[entry_point_key])
 
 
@@ -175,6 +227,13 @@ def register_hand_task_to_hydra(
             BaodingShadowLiteCfg,
             BaodingShadowLitePadTacCfg,
             BaodingShadowLitePadTacBTCfg,
+            BaodingShadowLitePadTacBTSparseCfg,
+            BaodingShadowLitePadTacBTStuck8Cfg,
+            BaodingShadowLitePadTacBTLegacyCfg,
+            BaodingShadowLitePadTacBTLegacyNoSlewCfg,
+            BaodingShadowLitePadTacBTLegacyNoMassDRCfg,
+            BaodingShadowLitePadTacBTLegacyNoTacCorruptCfg,
+            BaodingShadowLitePadTacBTLegacyFrictionMassOnlyCfg,
         )
 
         env_cfg_cls = {
@@ -184,6 +243,13 @@ def register_hand_task_to_hydra(
             "allegro": BaodingAllegroCfg,
             "shadowlite_padtac": BaodingShadowLitePadTacCfg,
             "shadowlite_padtac_bt": BaodingShadowLitePadTacBTCfg,
+            "shadowlite_padtac_bt_sparse": BaodingShadowLitePadTacBTSparseCfg,
+            "shadowlite_padtac_bt_stuck8": BaodingShadowLitePadTacBTStuck8Cfg,
+            "shadowlite_padtac_bt_legacy": BaodingShadowLitePadTacBTLegacyCfg,
+            "shadowlite_padtac_bt_legacy_noslew": BaodingShadowLitePadTacBTLegacyNoSlewCfg,
+            "shadowlite_padtac_bt_legacy_nomassdr": BaodingShadowLitePadTacBTLegacyNoMassDRCfg,
+            "shadowlite_padtac_bt_legacy_notac": BaodingShadowLitePadTacBTLegacyNoTacCorruptCfg,
+            "shadowlite_padtac_bt_legacy_frictionmass": BaodingShadowLitePadTacBTLegacyFrictionMassOnlyCfg,
         }[r]
 
     elif task_name == "Peace":
@@ -375,7 +441,11 @@ def make_env(agent_cfg, env_cfg, writer, args_cli):
     # Wrap for video recording
     if args_cli.video:
         video_kwargs = {
-            "video_folder": "./videos/", 
+            # getattr, not args_cli.video_dir: only ablate_play.py defines this flag
+            # (to give concurrent per-GPU processes separate RecordVideo staging dirs
+            # and avoid racing on a shared ./videos/); every other caller (train.py,
+            # sweep.py, play.py) keeps the original hardcoded default unchanged.
+            "video_folder": getattr(args_cli, "video_dir", "./videos/"),
             "step_trigger": lambda step: step == 0,
             "video_length": args_cli.video_length,
             "disable_logger": True,

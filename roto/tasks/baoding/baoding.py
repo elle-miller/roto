@@ -411,6 +411,159 @@ class BaodingShadowLitePadTacBTCfg(BaodingShadowLitePadTacCfg):
 
 
 @configclass
+class BaodingShadowLitePadTacBTSparseCfg(BaodingShadowLitePadTacBTCfg):
+    """Sparser corrupt draw (k <= 6) with a two-rate per-step flip over all 12 FSR
+    pads: the stuck subset dithers lightly around its forced value while the
+    remaining pads carry heavier noise on the true contact signal. See
+    ShadowLiteEnvCfg.tactile_flip_scope for the mechanism difference from
+    BaodingShadowLitePadTacBTCfg's default single-rate DR.
+    """
+
+    tactile_fsr_corrupt_max = 6
+    # Two-rate FSR dither (tactile_flip_scope="both"): every FSR pad is eligible,
+    # but the k stuck channels and the remaining (12 - k) get independent rates.
+    #   stuck k     -> 0.02 flip, i.e. a broken taxel holds its forced value on
+    #                  ~98% of control steps and blips to the opposite on ~2%.
+    #   other 12-k  -> 0.15 flip both directions on the true contact signal.
+    # BioTac distal channels are never touched under either rate.
+    tactile_flip_prob_off_to_on = 0.02
+    tactile_flip_prob_on_to_off = 0.02
+    tactile_flip_prob_unsel_off_to_on = 0.15
+    tactile_flip_prob_unsel_on_to_off = 0.15
+    tactile_flip_scope = "both"
+    # Explicitly off, matching BaodingShadowLitePadTacBTCfg's current default.
+    cmd_speed_frac_range = None
+
+
+@configclass
+class BaodingShadowLitePadTacBTStuck8Cfg(BaodingShadowLitePadTacBTCfg):
+    """Stuck-taxel-only FSR DR: a wider corrupt draw (k <= 8) whose stuck channels
+    dither lightly around their forced value, with every other FSR pad passing the
+    true contact signal through untouched.
+
+    Contrast with BaodingShadowLitePadTacBTSparseCfg, which dithers all 12 pads at
+    two rates. Here the (12 - k) unselected pads are exact by construction.
+    """
+
+    # Wider draw than the sparse profile: k ~ Uniform{0..8} of the 12 FSR pads.
+    tactile_fsr_corrupt_max = 8
+
+    # Only the k stuck channels dither: 0.05 flip means a broken taxel holds its
+    # forced value on ~95% of control steps and blips to the opposite on ~5%.
+    tactile_flip_prob_off_to_on = 0.05
+    tactile_flip_prob_on_to_off = 0.05
+    # scope="corrupted" confines the dither to exactly those k channels, so the
+    # other (12 - k) FSR pads and all 4 BioTac channels carry the exact contact
+    # signal. The unsel rates below are inert under this scope; pinned at 0.0 so
+    # the intent survives a later scope change.
+    tactile_flip_prob_unsel_off_to_on = 0.0
+    tactile_flip_prob_unsel_on_to_off = 0.0
+    tactile_flip_scope = "corrupted"
+
+    # Coupled J1 joints follow the coupling law rather than being pinned at 0.
+    # Stated explicitly so this profile is reproducible regardless of the base
+    # ShadowLiteEnvCfg default.
+    lock_coupled_dependent_at_zero = False
+
+    # Explicitly off, matching BaodingShadowLitePadTacBTCfg's current default.
+    cmd_speed_frac_range = None
+
+
+@configclass
+class BaodingShadowLitePadTacBTLegacyCfg(BaodingShadowLitePadTacBTCfg):
+    """The hardware-validated profile (~55 rotations on the real hand).
+
+    Ball friction DR and ball mass DR both at the BaodingShadowLitePadTacCfg
+    defaults, command slew DR on over (0.3, 1.0), and a pure stuck-taxel FSR
+    corruption: each episode k ~ U{0..6} of the 12 pads are forced to 0 or 1 and
+    HOLD that value for the whole episode, while the other (12 - k) pads and all
+    4 BioTac channels pass the exact contact signal.
+
+    Differs from BaodingShadowLitePadTacBTCfg in the corrupt draw (6 rather than
+    8), in dropping the per-step dither entirely, and in enabling slew DR.
+    """
+
+    # Narrower corrupt draw than the k<=8 base: k ~ Uniform{0..6} of the 12 pads.
+    tactile_fsr_corrupt_max = 6
+    # No per-step dither: a stuck channel holds its forced 0/1 for the entire
+    # episode rather than flickering (the k<=8 base uses 0.1 both directions).
+    # With both rates at 0 the scope below is inert, but it is pinned so the
+    # intent survives a later default change.
+    tactile_flip_prob_off_to_on = 0.0
+    tactile_flip_prob_on_to_off = 0.0
+    tactile_flip_prob_unsel_off_to_on = 0.0
+    tactile_flip_prob_unsel_on_to_off = 0.0
+    tactile_flip_scope = "corrupted"
+
+    # HW SPEED_FRAC slew, randomized per episode (leave cmd_speed_frac None).
+    cmd_speed_frac = None
+    cmd_speed_frac_range = (0.3, 1.0)
+
+    # Coupled J1 joints follow the coupling law rather than being pinned at 0.
+    # Stated explicitly so this profile is reproducible regardless of the base
+    # ShadowLiteEnvCfg default.
+    lock_coupled_dependent_at_zero = False
+
+
+@configclass
+class BaodingShadowLitePadTacBTLegacyNoSlewCfg(BaodingShadowLitePadTacBTLegacyCfg):
+    """Legacy profile with the command-rate limiter removed (no slew DR).
+
+    Ball friction DR, ball mass DR and the k<=6 FSR corruption are unchanged.
+    """
+
+    cmd_speed_frac = None
+    cmd_speed_frac_range = None
+
+
+@configclass
+class BaodingShadowLitePadTacBTLegacyNoMassDRCfg(BaodingShadowLitePadTacBTLegacyCfg):
+    """Legacy profile with ball-mass DR removed (fixed ball mass).
+
+    ``ball_mass_range = None`` gates off _randomize_ball_mass entirely, so both
+    balls keep the asset's own mass every episode. Friction DR, slew DR over
+    (0.3, 1.0) and the k<=6 FSR corruption are unchanged.
+    """
+
+    ball_mass_range = None
+
+
+@configclass
+class BaodingShadowLitePadTacBTLegacyNoTacCorruptCfg(BaodingShadowLitePadTacBTLegacyCfg):
+    """Legacy profile with FSR corruption removed entirely (perfect tactile).
+
+    ``tactile_fsr_corrupt_max = None`` skips the stuck-taxel draw altogether
+    (see _init_tactile_fsr_corrupt), so every one of the 12 FSR pads passes the
+    exact contact signal every step -- no channel is ever forced to a constant
+    0/1. BioTac channels were never touched by corruption anyway. Friction DR,
+    ball-mass DR and slew DR over (0.3, 1.0) are unchanged from the legacy base.
+    """
+
+    tactile_fsr_corrupt_max = None
+
+
+@configclass
+class BaodingShadowLitePadTacBTLegacyFrictionMassOnlyCfg(BaodingShadowLitePadTacBTLegacyCfg):
+    """Legacy profile with ONLY friction DR and mass DR active.
+
+    Combines BaodingShadowLitePadTacBTLegacyNoSlewCfg (``cmd_speed_frac_range =
+    None``) and BaodingShadowLitePadTacBTLegacyNoTacCorruptCfg
+    (``tactile_fsr_corrupt_max = None``) into one profile: no command-rate
+    slew DR, no FSR taxel corruption (perfect tactile), no per-step flip (the
+    legacy base already pins ``tactile_flip_prob_*`` at 0.0). Only ball
+    friction DR and ball mass DR, both at the BaodingShadowLitePadTacCfg
+    defaults inherited unchanged, remain active.
+
+    Replaces the legacy_notac run (which still had slew DR on) -- see
+    checkpoint_snapshots/legacy_notac_snapshot_*.pt for that run's last
+    checkpoint before it was stopped.
+    """
+
+    cmd_speed_frac_range = None
+    tactile_fsr_corrupt_max = None
+
+
+@configclass
 class BaodingOrcaCfg(BaodingTaskCfg, OrcaEnvCfg):
     """Baoding on the Orca hand."""
 

@@ -1,0 +1,92 @@
+[1/56] 12:11:33 video: notac/active/none
+    -> [INFO] Saved video: /home/ayush/icra/roto/scripts/ablation_notac/ablate-none_zero_seeddefault_20260903-121231.mp4
+[2/56] 12:12:33 video: notac/active/pos_zero
+    -> [INFO] Saved video: /home/ayush/icra/roto/scripts/ablation_notac/ablate-pos_zero_seeddefault_20260903-121333.mp4
+[3/56] 12:13:35 video: notac/active/vel_zero
+    -> [INFO] Saved video: /home/ayush/icra/roto/scripts/ablation_notac/ablate-vel_zero_seeddefault_20260903-121436.mp4
+[4/56] 12:14:38 video: notac/active/vel_zero_noball
+    -> [INFO] Saved video: /home/ayush/icra/roto/scripts/ablation_notac/ablate-vel_zero_noball_seeddefault_20260903-121534.mp4
+[5/56] 12:15:36 video: notac/active/pos_error_zero
+    -> [INFO] Saved video: /home/ayush/icra/roto/scripts/ablation_notac/ablate-pos_error_zero_seeddefault_20260903-121635.mp4
+[6/56] 12:16:37 video: notac/active/pos_error_zero_noball
+    -> [INFO] Saved video: /home/ayush/icra/roto/scripts/ablation_notac/ablate-pos_error_zero_noball_seeddefault_20260903-121733.mp4
+[7/56] 12:17:35 video: notac/active/pos_error_freeze
+    -> [INFO] Saved video: /home/ayush/icra/roto/scripts/ablation_notac/ablate-pos_error_freeze_seeddefault_20260903-121833.mp4
+[8/56] 12:18:35 video: notac/active/prev_action_zero
+    -> [INFO] Saved video: /home/ayush/icra/roto/scripts/ablation_notac/ablate-prev_action_zero_seeddefault_20260903-121934.mp4
+[9/56] 12:19:36 video: notac/active/prev_action_zero_noball
+    -> [INFO] Saved video: /home/ayush/icra/roto/scripts/ablation_notac/ablate-prev_action_zero_noball_seeddefault_20260903-122032.mp4
+[10/56] 12:20:34 video: notac/active/none_noball
+    -> [INFO] Saved video: /home/ayush/icra/roto/scripts/ablation_notac/ablate-none_zero_noball_seeddefault_20260903-122129.mp4
+[11/56] 12:21:31 video: notac/active/none_mass45
+    -> [INFO] Saved video: /home/ayush/icra/roto/scripts/ablation_notac/ablate-none_zero_mass45g_seeddefault_20260903-122229.mp4
+[12/56] 12:22:31 video: notac/active/none_mass55
+    -> [INFO] Saved video: /home/ayush/icra/roto/scripts/ablation_notac/ablate-none_zero_mass55g_seeddefault_20260903-122329.mp4
+[13/56] 12:23:31 video: notac/active/none_mass70
+    attempt 1/3 failed (exit 0), retrying
+    attempt 2/3 failed (exit 0), retrying
+    attempt 3/3 failed (exit 0), retrying
+[14/56] 12:24:12 video: notac/active/none_mass100
+    attempt 1/3 failed (exit 0), retrying
+    attempt 2/3 failed (exit 0), retrying
+    attempt 3/3 failed (exit 0), retrying
+[15/56] 12:24:54 video: notac/taczero/none
+    attempt 1/3 failed (exit 0), retrying
+    attempt 2/3 failed (exit 0), retrying
+    attempt 3/3 failed (exit 0), retrying
+[16/56] 12:25:35 video: notac/taczero/pos_zero
+    attempt 1/3 failed (exit 0), retrying
+    attempt 2/3 failed (exit 0), retrying
+    attempt 3/3 failed (exit 0), retrying
+[17/56] 12:26:17 video: notac/taczero/vel_zero
+    attempt 1/3 failed (exit 0), retrying
+    attempt 2/3 failed (exit 0), retrying
+    attempt 3/3 failed (exit 0), retrying
+[18/56] 12:26:59 video: notac/taczero/vel_zero_noball
+    attempt 1/3 failed (exit 0), retrying
+    attempt 2/3 failed (exit 0), retrying
+    attempt 3/3 failed (exit 0), retrying
+[19/56] 12:27:40 video: notac/taczero/pos_error_zero
+    attempt 1/3 failed (exit 0), retrying
+    attempt 2/3 failed (exit 0), retrying
+    attempt 3/3 failed (exit 0), retrying
+[20/56] 12:28:21 video: notac/taczero/pos_error_zero_noball
+    attempt 1/3 failed (exit 0), retrying
+    attempt 2/3 failed (exit 0), retrying
+    attempt 3/3 failed (exit 0), retrying
+[21/56] 12:29:03 video: notac/taczero/pos_error_freeze
+    attempt 1/3 failed (exit 0), retrying
+    attempt 2/3 failed (exit 0), retrying
+    attempt 3/3 failed (exit 0), retrying
+[22/56] 12:29:45 video: notac/taczero/prev_action_zero
+    attempt 1/3 failed (exit 0), retrying
+    attempt 2/3 failed (exit 0), retrying
+    attempt 3/3 failed (exit 0), retrying
+[23/56] 12:30:26 video: notac/taczero/prev_action_zero_noball
+    attempt 1/3 failed (exit 0), retrying
+    attempt 2/3 failed (exit 0), retrying
+    attempt 3/3 failed (exit 0), retrying
+[24/56] 12:31:08 video: notac/taczero/none_noball
+    attempt 1/3 failed (exit 0), retrying
+    attempt 2/3 failed (exit 0), retrying
+    attempt 3/3 failed (exit 0), retrying
+[25/56] 12:31:49 video: notac/taczero/none_mass45
+    attempt 1/3 failed (exit 0), retrying
+    attempt 2/3 failed (exit 0), retrying
+    attempt 3/3 failed (exit 0), retrying
+[26/56] 12:32:30 video: notac/taczero/none_mass55
+    attempt 1/3 failed (exit 0), retrying
+    attempt 2/3 failed (exit 0), retrying
+    attempt 3/3 failed (exit 0), retrying
+[27/56] 12:33:12 video: notac/taczero/none_mass70
+    attempt 1/3 failed (exit 0), retrying
+    attempt 2/3 failed (exit 0), retrying
+    attempt 3/3 failed (exit 0), retrying
+[28/56] 12:33:54 video: notac/taczero/none_mass100
+    attempt 1/3 failed (exit 0), retrying
+    attempt 2/3 failed (exit 0), retrying
+    attempt 3/3 failed (exit 0), retrying
+[SKIP RUN] checkpoint missing: /home/ayush/icra/roto/scripts/logs/shadowlite_baoding/Baoding_rl_only_pt_padtac_bt_legacy_verify/2026-09-02_17-52-44/checkpoints/best_agent.pt
+ablation video pass finished in 23 min
+  legacy_notac  -> /home/ayush/icra/roto/scripts/ablation_notac{,_TACZERO}/
+  legacy_verify -> /home/ayush/icra/roto/scripts/ablation_verify{,_TACZERO}/

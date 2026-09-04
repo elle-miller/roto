@@ -30,3 +30,12 @@ experiment:
   wandb_kwargs:
     group: rl_only_pt_padtac_bt
     name: '1'
+
+trainer:
+  num_eval_envs: 100
+  max_global_timesteps_M: 250
+
+sweeper:
+  storage: sqlite:///shadow_baoding_padtac_bt_tactile_scratch.db
+  warmup_timesteps_M: 100
+  max_sweep_timesteps_M: 250

@@ -209,7 +209,7 @@ class ShadowLiteEnvCfg(RotoEnvCfg):
     # position is always zero regardless of the J2-derived coupling law below. J2's
     # own command/state-machine bookkeeping is untouched, so J2 dynamics stay
     # identical — only J1's actual motion is disabled.
-    lock_coupled_dependent_at_zero: bool = True
+    lock_coupled_dependent_at_zero: bool = False
 
     # J2 must reach this angle (rad) before J1 starts moving.
     # 0.785 rad = 45°: first half of J2's range drives J2, second half drives J1.
@@ -268,6 +268,26 @@ class ShadowLiteEnvCfg(RotoEnvCfg):
     # carry the exact contact signal. 0.0 = off.
     tactile_flip_prob_off_to_on: float = 0.0
     tactile_flip_prob_on_to_off: float = 0.0
+
+    # Per-step dither on the UNSELECTED FSR channels -- the (12 - k) pads this
+    # episode's corrupt draw did NOT stick. Only read when tactile_flip_scope is
+    # "both", where the selected k dither at tactile_flip_prob_* above and these
+    # unselected pads dither at their own, independent rates. 0.0 = off.
+    tactile_flip_prob_unsel_off_to_on: float = 0.0
+    tactile_flip_prob_unsel_on_to_off: float = 0.0
+
+    # Which channels the per-step flip DR is eligible on:
+    #   "corrupted" (default) -- only the channels this episode's tactile_fsr_corrupt_max
+    #     draw selected as stuck (current behaviour, unchanged).
+    #   "all_fsr" -- the 12 FSR channels MINUS whichever ones this episode's corrupt draw
+    #     selected as stuck: a channel that is stuck this episode is structurally
+    #     excluded from the flip mask, so it is never touched by the flip regardless of
+    #     step order. Reproduces the original FSR taxel DR (commit 7f9500f) before it was
+    #     rescoped to "corrupted".
+    #   "both" -- every FSR pad is eligible, but at two independent rates: the k stuck
+    #     channels dither at tactile_flip_prob_*, the remaining (12 - k) at
+    #     tactile_flip_prob_unsel_*. BioTac channels still pass through exact.
+    tactile_flip_scope: str = "corrupted"
 
     # GRDF coupling (experimental): derive the coupled J1/J2 commands from the
     # phase couplings declared in the GRDF robot file instead of the
@@ -479,48 +499,127 @@ class ShadowLitePadTacEnv(ShadowLiteEnv):
         """Allocate the per-step taxel flip DR mask; default OFF."""
         p_off_on = float(getattr(self.cfg, "tactile_flip_prob_off_to_on", 0.0) or 0.0)
         p_on_off = float(getattr(self.cfg, "tactile_flip_prob_on_to_off", 0.0) or 0.0)
-        for name, p in (("off_to_on", p_off_on), ("on_to_off", p_on_off)):
+        q_off_on = float(getattr(self.cfg, "tactile_flip_prob_unsel_off_to_on", 0.0) or 0.0)
+        q_on_off = float(getattr(self.cfg, "tactile_flip_prob_unsel_on_to_off", 0.0) or 0.0)
+        for name, p in (
+            ("off_to_on", p_off_on),
+            ("on_to_off", p_on_off),
+            ("unsel_off_to_on", q_off_on),
+            ("unsel_on_to_off", q_on_off),
+        ):
             if not 0.0 <= p <= 1.0:
                 raise ValueError(f"tactile_flip_prob_{name} must be in [0, 1], got {p}")
 
-        self.use_tactile_flip = p_off_on > 0.0 or p_on_off > 0.0
+        scope = getattr(self.cfg, "tactile_flip_scope", "corrupted")
+        if scope not in ("corrupted", "all_fsr", "both"):
+            raise ValueError(
+                f"tactile_flip_scope must be 'corrupted', 'all_fsr' or 'both', got {scope!r}"
+            )
+        self._tac_flip_scope = scope
+
+        if scope == "both":
+            self.use_tactile_flip = max(p_off_on, p_on_off, q_off_on, q_on_off) > 0.0
+        else:
+            self.use_tactile_flip = p_off_on > 0.0 or p_on_off > 0.0
         self._tac_p_off_on = p_off_on
         self._tac_p_on_off = p_on_off
+        self._tac_q_off_on = q_off_on
+        self._tac_q_on_off = q_on_off
         if not self.use_tactile_flip:
             print("[taxel_flip] off")
             return
 
-        # Scope: the k FSR channels picked by the episode-constant corrupt draw,
-        # and nothing else. The mask is _tac_fsr_mask, so it is per-env and is
-        # resampled at every reset. Without a corrupt draw nothing is selected
-        # and the flip would be a silent no-op, so refuse that combination.
-        if not getattr(self, "use_tactile_fsr_corrupt", False):
-            raise ValueError(
-                "tactile_flip_prob_* requires tactile_fsr_corrupt_max > 0: the "
-                "per-step dither is scoped to the FSR channels selected by the "
-                "corrupt draw, so with no draw it would do nothing."
+        if scope == "corrupted":
+            # Scope: the k FSR channels picked by the episode-constant corrupt draw,
+            # and nothing else. The mask is _tac_fsr_mask, so it is per-env and is
+            # resampled at every reset. Without a corrupt draw nothing is selected
+            # and the flip would be a silent no-op, so refuse that combination.
+            if not getattr(self, "use_tactile_fsr_corrupt", False):
+                raise ValueError(
+                    "tactile_flip_prob_* requires tactile_fsr_corrupt_max > 0: the "
+                    "per-step dither is scoped to the FSR channels selected by the "
+                    "corrupt draw, so with no draw it would do nothing."
+                )
+
+            print(
+                f"[taxel_flip] per-step dither on selected FSR channels only: "
+                f"p(0->1)={p_off_on} p(1->0)={p_on_off}; unselected FSR pads and all "
+                f"BioTac channels stay exact"
+            )
+        elif scope == "all_fsr":
+            # Candidate FSR channels; the actual flip mask excludes whichever of
+            # these this episode's corrupt draw selected as stuck (computed live in
+            # _apply_tactile_flip, since that set changes every reset). Does not
+            # require tactile_fsr_corrupt_max: works standalone with k=0 corrupted.
+            eligible = torch.zeros((1, NUM_TACTILE_CHANNELS), device=self.device, dtype=torch.bool)
+            eligible[0, self._fsr_channels] = True
+            self._tac_fsr_eligible = eligible
+
+            print(
+                f"[taxel_flip] per-step flip on all 12 FSR channels MINUS this "
+                f"episode's stuck subset: p(0->1)={p_off_on} p(1->0)={p_on_off}; "
+                f"BioTac channels stay exact"
+            )
+        else:  # "both"
+            # Every FSR pad is eligible, at two rates split by the corrupt draw.
+            # That stuck subset changes every reset, so the split itself is
+            # computed live in _apply_tactile_flip; only the FSR candidate set is
+            # precomputed here. The selected-channel rates are meaningless without
+            # a corrupt draw, so refuse that combination the way "corrupted" does.
+            if (p_off_on > 0.0 or p_on_off > 0.0) and not getattr(
+                self, "use_tactile_fsr_corrupt", False
+            ):
+                raise ValueError(
+                    "tactile_flip_scope='both' with a non-zero tactile_flip_prob_* "
+                    "requires tactile_fsr_corrupt_max > 0: those rates are scoped to "
+                    "the channels the corrupt draw sticks, so with no draw they would "
+                    "do nothing. Use tactile_flip_prob_unsel_* to dither all 12 pads."
+                )
+            eligible = torch.zeros((1, NUM_TACTILE_CHANNELS), device=self.device, dtype=torch.bool)
+            eligible[0, self._fsr_channels] = True
+            self._tac_fsr_eligible = eligible
+
+            print(
+                f"[taxel_flip] per-step flip on all 12 FSR channels at two rates: "
+                f"stuck subset p(0->1)={p_off_on} p(1->0)={p_on_off}; the other "
+                f"(12-k) pads p(0->1)={q_off_on} p(1->0)={q_on_off}; BioTac channels "
+                f"stay exact"
             )
 
-        print(
-            f"[taxel_flip] per-step dither on selected FSR channels only: "
-            f"p(0->1)={p_off_on} p(1->0)={p_on_off}; unselected FSR pads and all "
-            f"BioTac channels stay exact"
-        )
-
     def _apply_tactile_flip(self, tactile: torch.Tensor) -> torch.Tensor:
-        """Dither the selected (forced) taxels only. Returns strict 0.0/1.0.
+        """Dither the eligible taxels only. Returns strict 0.0/1.0.
 
-        Masked by ``_tac_fsr_mask``, so unselected FSR pads and every BioTac
-        channel pass through exactly. Non-selected channels are never noised.
+        Scope depends on cfg.tactile_flip_scope:
+          "corrupted" -- only the channels this episode's corrupt draw stuck.
+          "all_fsr"   -- the 12 FSR channels minus that same stuck subset, so a
+                         stuck channel is structurally excluded from the flip.
+          "both"      -- all 12 FSR channels, the stuck subset dithering at
+                         tactile_flip_prob_* and the rest at tactile_flip_prob_unsel_*.
+        Every BioTac channel passes through exactly under all three scopes; under
+        "corrupted" and "all_fsr" so do the out-of-scope FSR pads.
 
         Output must stay binary: DynamicsMemory stores ``tactile`` as ``torch.bool``
         when ``binary_tactile`` is set (multimodal_rl/ssl/physics_memory.py:59),
         which the forward-dynamics configs turn on.
         """
-        # tactile is exactly 0.0/1.0, so this selects p_on_off where it is on and
-        # p_off_on where it is off, without allocating an index tensor.
+        # tactile is exactly 0.0/1.0, so these expressions select the on->off rate
+        # where it is on and the off->on rate where it is off, without allocating
+        # an index tensor.
+        if self._tac_flip_scope == "both":
+            # Per-channel rate: stuck pads take p, the rest take q. The eligible
+            # mask keeps BioTac and the structurally-empty slots exact.
+            p_sel = self._tac_p_off_on + (self._tac_p_on_off - self._tac_p_off_on) * tactile
+            p_uns = self._tac_q_off_on + (self._tac_q_on_off - self._tac_q_off_on) * tactile
+            p = torch.where(self._tac_fsr_mask, p_sel, p_uns)
+            flip = (torch.rand_like(tactile) < p) & self._tac_fsr_eligible
+            return torch.where(flip, 1.0 - tactile, tactile)
+
+        if self._tac_flip_scope == "corrupted":
+            mask = self._tac_fsr_mask
+        else:  # "all_fsr"
+            mask = self._tac_fsr_eligible & ~self._tac_fsr_mask
         p = self._tac_p_off_on + (self._tac_p_on_off - self._tac_p_off_on) * tactile
-        flip = (torch.rand_like(tactile) < p) & self._tac_fsr_mask
+        flip = (torch.rand_like(tactile) < p) & mask
         return torch.where(flip, 1.0 - tactile, tactile)
 
     def _init_tactile_smoothing(self) -> None:
