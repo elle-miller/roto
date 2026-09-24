@@ -25,8 +25,8 @@ in a single continuous trial without dropping a ball.
   - [Evaluating in simulation](#evaluating-in-simulation)
   - [Deploying to hardware](#deploying-to-hardware)
 - [Results](#results)
-- [Citation](#citation)
 - [Built on RoTO](#built-on-roto)
+- [Citation](#citation)
 
 ---
 
@@ -211,21 +211,6 @@ Hardware results are mean ± std over 10 trials. Simulation results cover 768 ep
 
 ---
 
-## Citation
-
-If you use this code, please cite:
-
-```bibtex
-@inproceedings{deshmukh_noeyesnoproblem,
-  author    = {Deshmukh, Ayush and Agarwal, Nalin and Miller, Elle and Vijayakumar, Sethu},
-  title     = {No Eyes, No Problem: What Does Touch Contribute to Blind Baoding Ball Manipulation?},
-  booktitle = {},
-  year      = {},
-}
-```
-
----
-
 ## Built on RoTO
 
 This repository extends **RoTO (Robot Tactile Olympiad)**, an RL benchmark for tactile manipulation with
@@ -244,7 +229,24 @@ python scripts/play.py  --task Baoding --num_envs 512 --agent_cfg forward_dynami
   YAML.
 - **Class hierarchy:** `RotoEnv` (a `DirectRLEnv`) → `[Robot]Env` → `[Task]Env`.
 
-If you use this code, please also cite RoTO:
+Licensed under BSD-3 (see [`LICENSE`](LICENSE)).
+
+---
+
+## Citation
+
+If you use this code, please cite:
+
+```bibtex
+@inproceedings{deshmukh_noeyesnoproblem,
+  author    = {Deshmukh, Ayush and Agarwal, Nalin and Miller, Elle and Vijayakumar, Sethu},
+  title     = {No Eyes, No Problem: What Does Touch Contribute to Blind Baoding Ball Manipulation?},
+  booktitle = {},
+  year      = {},
+}
+```
+
+This work builds on RoTO; please also cite:
 
 ```bibtex
 @inproceedings{miller2025tactilerl,
@@ -253,6 +255,11 @@ If you use this code, please also cite RoTO:
   booktitle = {NeurIPS},
   year      = {2025},
 }
-```
 
-Licensed under BSD-3 (see [`LICENSE`](LICENSE)).
+@article{miller2026roto2,
+  author  = {Miller, Elle and Reddy, Jayaram and Deshmukh, Ayush and McInroe, Trevor and Abel, David and Mac Aodha, Oisin and Vijayakumar, Sethu},
+  title   = {RoTO 2.0: The Robot Tactile Olympiad},
+  journal = {arXiv preprint arXiv:2605.21429},
+  year    = {2026},
+}
+```
