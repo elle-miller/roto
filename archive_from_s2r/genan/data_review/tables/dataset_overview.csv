@@ -1,0 +1,5 @@
+source,n_episodes,total_valid_rows,total_duration_s,dataset_rate_hz
+free_space_50,20,72740,1212.3,60.0
+free_space_continous_50,50,196495,3274.9,60.0
+free_space_10_13072026,19,69458,1157.6,60.0
+ALL,89,338693,5644.9,60.0

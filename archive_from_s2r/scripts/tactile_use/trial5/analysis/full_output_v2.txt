@@ -1,0 +1,143 @@
+Loading trial5 hardware logs (matched ~404s durations, 60Hz, checkpoint/config verified identical except zero_tactile) ...
+
+==============================================================================
+MODULE A: STEREOTYPY -- is the zeroed run a rigid limit cycle?
+==============================================================================
+n_cycles: with_tactile=296  zero_tactile=359
+
+-- Cycle PERIOD regularity (master rhythm, unconfounded by amplitude/shape) --
+  [with_tactile] mean period=1.363s  whole-run CV=0.233  within-8-cycle-window CV: mean=0.176 median=0.137
+  [zero_tactile] mean period=1.123s  whole-run CV=0.150  within-8-cycle-window CV: mean=0.087 median=0.065
+  (permutation p on mean period = 0.0000; CV itself is a dispersion statistic, reported directly)
+
+-- Single-clock reconstruction R^2, WHOLE RUN (one f0 + one waveform for ~400s) --
+(negative = a flat line beats this model -- expected once cycle-to-cycle period
+ jitter compounds into full-cycle phase drift over hundreds of cycles; this specific
+ test is dominated by that compounding, not a clean stereotypy readout on its own)
+  rh_FFJ2   with_tac=-0.391   zero_tac=-0.353   (zero - with = +0.037)
+  rh_MFJ2   with_tac=-0.672   zero_tac=-0.931   (zero - with = -0.259)
+  rh_RFJ2   with_tac=-0.472   zero_tac=-0.690   (zero - with = -0.218)
+
+-- Single-clock reconstruction R^2, LOCAL 8-cycle windows (fair short-horizon test) --
+(re-fits f0 + mean waveform every 8 cycles; higher = more metronome-like over that horizon)
+  rh_FFJ2   with_tac=-0.052 (n=37 windows)   zero_tac=-0.147 (n=44)   p_perm=0.0515  Cliffs d=+0.328
+  rh_MFJ2   with_tac=-0.004 (n=37 windows)   zero_tac=-0.152 (n=44)   p_perm=0.0772  Cliffs d=+0.274
+  rh_RFJ2   with_tac=0.072 (n=37 windows)   zero_tac=-0.099 (n=44)   p_perm=0.0141  Cliffs d=+0.274
+
+-- Poincare section (state once per cycle) + return map --
+  [with_tactile] Poincare spread (z-score units) = 3.358   return-map slope = 0.059 (corr=0.061)
+  [zero_tactile] Poincare spread (z-score units) = 3.353   return-map slope = 0.285 (corr=0.295)
+
+-- Nonlinear-dynamics estimates on MASTER joint (rh_MFJ2), 30Hz downsampled --
+  [with_tactile] tau=13 m=4  RQA: RR=0.100 DET=0.956 LAM=0.978 meanDiagLen=8.42  SampEn=0.522  Lyapunov=1.128/s
+  [zero_tactile] tau=10 m=4  RQA: RR=0.100 DET=0.953 LAM=0.977 meanDiagLen=8.79  SampEn=0.549  Lyapunov=1.228/s
+
+-- Per-joint pairwise-cycle correlation & variance explained by mean cycle --
+    joint |  pw_corr with_tac  zero_tac |  R2_mean with_tac  zero_tac |  norm_disp with_tac  zero_tac
+  rh_FFJ4 |             0.857     0.917 |             0.777     0.841 |               0.156     0.131
+  rh_MFJ4 |             0.826     0.855 |             0.755     0.756 |               0.163     0.156
+  rh_RFJ4 |             0.652     0.834 |             0.573     0.786 |               0.191     0.131
+  rh_THJ5 |             0.195     0.427 |             0.129     0.319 |               0.283     0.252
+  rh_FFJ3 |             0.398     0.283 |             0.353     0.214 |               0.240     0.265
+  rh_MFJ3 |             0.808     0.886 |             0.755     0.866 |               0.159     0.117
+  rh_RFJ3 |             0.864     0.919 |             0.782     0.830 |               0.151     0.134
+  rh_THJ4 |             0.468     0.506 |             0.357     0.398 |               0.250     0.242
+  rh_FFJ2 |             0.462     0.369 |             0.381     0.268 |               0.243     0.259
+  rh_MFJ2 |             0.874     0.936 |             0.684     0.747 |               0.178     0.163
+  rh_RFJ2 |             0.752     0.857 |             0.493     0.572 |               0.217     0.205
+  rh_THJ2 |             0.242     0.408 |             0.150     0.259 |               0.283     0.264
+  rh_THJ1 |             0.864     0.926 |             0.722     0.745 |               0.166     0.159
+
+==============================================================================
+MODULE B: RECOVERY -- does the policy break its own rhythm to correct?
+==============================================================================
+Disruptions detected from signals alone (no ball state, no drop labels):
+  route A = phase stall/reversal, B = tracking-error jamming,
+  route C = contact anomaly, D = departure from the nominal cycle.
+  Consensus = flagged by >=2 routes within +-0.5s.
+
+[with_tactile] route events: {'phase_stall': 6, 'tracking_jam': 5, 'contact_anomaly': 24, 'cycle_deviation': 38}
+  consensus events = 60  (8.91 / min over 6.73 min)
+  recovery time (cycle-deviation back under 1.2x baseline, within 8s): mean=0.20s  recovered-fraction=100.0%  (n=60 of 60 events)
+  peak excess (max deviation / baseline within 2s of onset): mean=1.73x baseline
+
+[zero_tactile] route events: {'phase_stall': 8, 'tracking_jam': 4, 'contact_anomaly': 1, 'cycle_deviation': 10}
+  consensus events = 18  (2.68 / min over 6.73 min)
+  recovery time (cycle-deviation back under 1.2x baseline, within 8s): mean=0.30s  recovered-fraction=100.0%  (n=18 of 18 events)
+  peak excess (max deviation / baseline within 2s of onset): mean=1.56x baseline
+
+Recovery-time comparison: with_tac mean=0.20s (n=60)  zero_tac mean=0.30s (n=18)  p_perm=0.6463  Cliffs d=+0.196
+Peak-excess comparison: with_tac mean=1.73x (n=60)  zero_tac mean=1.56x (n=18)  p_perm=0.0202  Cliffs d=+0.437
+
+-- Contact -> departure-from-nominal-cycle coupling (extends the |d act| coupling test) --
+  [with_tactile] peak corr=+0.1221 at lag=+0.167s  null_p95=0.0526  p=0.0000
+  [zero_tactile] peak corr=+0.1489 at lag=-0.300s  null_p95=0.0464  p=0.0000
+
+==============================================================================
+MODULE C: exploratory -- structure consistent with 'sometimes many rotations'?
+(no rotation counts exist yet; everything here is a proxy, stated as such)
+==============================================================================
+
+-- Regime stability across the run (30s blocks) --
+[with_tactile] amplitude CV across blocks=0.060  period CV across blocks=0.064  within-block self-similarity range=[0.7986992167565049, 0.9118059939254022]
+    t=   0.0s  n_cyc= 21  period=1.488s  amp=28.10deg  self-sim=0.8476620884901427
+    t=  30.0s  n_cyc= 22  period=1.317s  amp=25.18deg  self-sim=0.8969530701031951
+    t=  60.0s  n_cyc= 21  period=1.491s  amp=27.51deg  self-sim=0.8980213484394675
+    t=  90.0s  n_cyc= 20  period=1.440s  amp=26.44deg  self-sim=0.8929347468734044
+    t= 120.0s  n_cyc= 21  period=1.534s  amp=27.16deg  self-sim=0.8615046749433624
+    t= 150.0s  n_cyc= 21  period=1.342s  amp=25.73deg  self-sim=0.8942984796205015
+    t= 180.0s  n_cyc= 23  period=1.281s  amp=24.47deg  self-sim=0.8618606827340309
+    t= 210.0s  n_cyc= 24  period=1.285s  amp=23.31deg  self-sim=0.9118059939254022
+    t= 240.0s  n_cyc= 22  period=1.373s  amp=26.11deg  self-sim=0.8390109103922198
+    t= 270.0s  n_cyc= 21  period=1.390s  amp=25.93deg  self-sim=0.7986992167565049
+    t= 300.0s  n_cyc= 23  period=1.301s  amp=25.97deg  self-sim=0.8852788364616931
+    t= 330.0s  n_cyc= 23  period=1.296s  amp=26.74deg  self-sim=0.8642052111737457
+    t= 360.0s  n_cyc= 24  period=1.270s  amp=24.00deg  self-sim=0.8730040871101554
+    t= 390.0s  n_cyc= 10  period=1.288s  amp=22.59deg  self-sim=0.8408097078438795
+[zero_tactile] amplitude CV across blocks=0.060  period CV across blocks=0.037  within-block self-similarity range=[0.8276478656710186, 0.963774384590166]
+    t=   0.0s  n_cyc= 24  period=1.267s  amp=21.38deg  self-sim=0.8276478656710186
+    t=  30.0s  n_cyc= 27  period=1.114s  amp=19.04deg  self-sim=0.9523356412466699
+    t=  60.0s  n_cyc= 27  period=1.096s  amp=19.57deg  self-sim=0.9115870779771607
+    t=  90.0s  n_cyc= 28  period=1.107s  amp=18.37deg  self-sim=0.963774384590166
+    t= 120.0s  n_cyc= 26  period=1.113s  amp=18.71deg  self-sim=0.9556881932172214
+    t= 150.0s  n_cyc= 28  period=1.104s  amp=18.67deg  self-sim=0.9263641163483027
+    t= 180.0s  n_cyc= 26  period=1.137s  amp=18.75deg  self-sim=0.919557162294617
+    t= 210.0s  n_cyc= 27  period=1.131s  amp=18.93deg  self-sim=0.9161311895946661
+    t= 240.0s  n_cyc= 26  period=1.121s  amp=18.63deg  self-sim=0.9416638368409954
+    t= 270.0s  n_cyc= 27  period=1.120s  amp=19.30deg  self-sim=0.9580884634885671
+    t= 300.0s  n_cyc= 27  period=1.113s  amp=18.63deg  self-sim=0.9558493763402554
+    t= 330.0s  n_cyc= 27  period=1.103s  amp=18.48deg  self-sim=0.955493727560894
+    t= 360.0s  n_cyc= 28  period=1.098s  amp=16.63deg  self-sim=0.9627460200360839
+    t= 390.0s  n_cyc= 11  period=1.102s  amp=16.49deg  self-sim=0.9299756479528075
+
+-- Contact travelling-wave (FF/MF/RF onset order per cycle) --
+(proxy for a coordinated, ball-advancing cycle -- NOT a rotation count)
+[with_tactile] cycles with >=2 fingers contacting: 293 / 296
+    dominant order=('FF', 'MF')  frac=0.795
+    full distribution: {"('FF', 'RF', 'MF')": 35, "('FF', 'MF')": 233, "('FF', 'MF', 'RF')": 9, "('MF', 'FF')": 10, "('RF', 'FF', 'MF')": 1, "('MF', 'RF', 'FF')": 2, "('FF', 'RF')": 1, "('MF', 'FF', 'RF')": 1, "('RF', 'MF', 'FF')": 1}
+[zero_tactile] cycles with >=2 fingers contacting: 317 / 359
+    dominant order=('FF', 'MF')  frac=0.808
+    full distribution: {"('RF', 'FF', 'MF')": 11, "('MF', 'FF', 'RF')": 2, "('FF', 'MF')": 256, "('FF', 'MF', 'RF')": 20, "('MF', 'FF')": 17, "('FF', 'RF', 'MF')": 9, "('RF', 'MF', 'FF')": 2}
+
+==============================================================================
+MODULE D: CONTROLS -- n=1 run per condition
+==============================================================================
+-- Split-half within each run (the honest variability floor) --
+[with_tactile]
+    period_cv                   first_half=0.264  second_half=0.187  |within-run diff|=0.077
+    pairwise_corr               first_half=0.887  second_half=0.860  |within-run diff|=0.027
+    disruption_rate_per_min     first_half=12.961  second_half=4.918  |within-run diff|=8.044
+[zero_tactile]
+    period_cv                   first_half=0.187  second_half=0.099  |within-run diff|=0.087
+    pairwise_corr               first_half=0.925  second_half=0.947  |within-run diff|=0.021
+    disruption_rate_per_min     first_half=3.257  second_half=1.497  |within-run diff|=1.760
+
+Between-condition differences, for comparison against the within-run diffs above:
+  period_cv:        with_tac=0.225  zero_tac=0.143
+
+-- Cycle-count subsampling: is the zero_tactile result an artifact of having
+   more cycles (359) than with_tactile (296 -> subsampled to match)? --
+  period CV:      full(n=359)=0.150   subsampled(n=296) mean=0.150  95% range=[0.10169367800368172, 0.16246666190557882]
+  pairwise corr:  full(n=359)=0.936   subsampled(n=296) mean=0.936  95% range=[0.9315396403139051, 0.9455239339266789]
+
+Saved report_v2.json

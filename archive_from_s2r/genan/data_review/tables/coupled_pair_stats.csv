@@ -1,0 +1,4 @@
+pair,j1_joint,j2_joint,n_samples,j2_range_used,j1_range_used,corr_j2_j1
+rh_FF,rh_FFJ1,rh_FFJ2,338693,1.7292,1.6214,0.4715
+rh_MF,rh_MFJ1,rh_MFJ2,338693,4.2303,2.1966,0.6258
+rh_RF,rh_RFJ1,rh_RFJ2,338693,1.7143,1.6015,0.6384

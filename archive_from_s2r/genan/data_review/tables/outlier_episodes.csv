@@ -1,0 +1,5 @@
+joint,episode,source,episode_range,median_episode_range,ratio
+rh_MFJ2,ep_free_space_005_20260713_102223.aligned.npz,free_space_10_13072026,4.2303,0.9883,4.28
+rh_MFJ2,ep_free_space_007_20260713_102511.aligned.npz,free_space_10_13072026,3.0486,0.9883,3.08
+rh_MFJ2,ep_free_space_016_20260713_103518.aligned.npz,free_space_10_13072026,3.1577,0.9883,3.2
+rh_MFJ2,ep_free_space_018_20260713_103818.aligned.npz,free_space_10_13072026,3.268,0.9883,3.31

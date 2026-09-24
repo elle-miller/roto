@@ -1,0 +1,4 @@
+pair,n_samples_clean,n_episodes_excluded_as_outlier,direction_variance_explained,speed_residual_correlation,episode_variance_explained,reversal_memory_variance_explained_rising,reversal_memory_correlation_rising,onset_n_episodes,onset_mean_rad,onset_std_rad,onset_min_rad,onset_max_rad
+rh_FF,323331,4,0.001,-0.0249,0.348,0.124,0.2503,83,1.1404,0.2842,0.2203,1.5708
+rh_MF,323331,4,0.0082,0.0363,0.2219,0.19,0.299,82,1.1317,0.2669,0.4485,1.5805
+rh_RF,323331,4,0.0075,0.0418,0.149,0.1551,0.094,84,1.1796,0.3229,0.4497,1.6373
