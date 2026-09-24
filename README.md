@@ -121,12 +121,14 @@ not reported in the paper.
 
 #### Checkpoints
 
-| Paper | Checkpoint |
-|---|---|
-| C1 | *TODO* |
-| C2 | *TODO* |
-| C3 | *TODO* |
-| Proprio-only | *TODO* |
+The policies deployed on hardware in the paper are in [`checkpoints/`](checkpoints/):
+
+| Paper | Checkpoint | `--robot` / `--agent_cfg` to play it |
+|---|---|---|
+| C1 | [`checkpoints/c1_physical.pt`](checkpoints/c1_physical.pt) | `shadowlite_padtac_bt_legacy_frictionmass` / `rl_only_pt_padtac_bt` |
+| C2 | [`checkpoints/c2_slewdr.pt`](checkpoints/c2_slewdr.pt) | `shadowlite_padtac_bt_legacy_notac` / `rl_only_pt_padtac_bt` |
+| C3 (ours), C3-TacOff | [`checkpoints/c3_slewdr_stat.pt`](checkpoints/c3_slewdr_stat.pt) | `shadowlite_padtac_bt_legacy` / `rl_only_pt_padtac_bt` |
+| Proprio-only | [`checkpoints/proprio_only.pt`](checkpoints/proprio_only.pt) | `shadowlite_padtac_bt_legacy_frictionmass` / `rl_only_pt_padtac_bt_sweep` |
 
 ### Training
 
@@ -151,7 +153,7 @@ The paper evaluates each configuration over 768 episodes (256 parallel environme
 
 ```bash
 python scripts/play.py --task Baoding --robot shadowlite_padtac_bt_legacy \
-    --agent_cfg rl_only_pt_padtac_bt --checkpoint <c3.pt> --num_envs 256 --headless
+    --agent_cfg rl_only_pt_padtac_bt --checkpoint checkpoints/c3_slewdr_stat.pt --num_envs 256 --headless
 
 # C3-TacOff: same checkpoint, tactile zeroed
 python scripts/play.py ... --zero_tactile
@@ -170,9 +172,9 @@ BioTacs over ROS. They are **not** argparse-driven: set the constants at the top
 
 | Script | Used for | Key settings |
 |---|---|---|
-| [`deploy_warmup_trial15_zerotac.py`](deploy/deploy_warmup_trial15_zerotac.py) | C1, C2, C3, C3-TacOff | `CHECKPOINT`; `SPEED_FRAC` (paper: `s = 0.53`); `ZERO_TACTILE = True` for C3-TacOff |
-| [`deploy_policy_simtactile_curlamp.py`](deploy/deploy_policy_simtactile_curlamp.py) | Proprio-only | `CHECKPOINT`; `SPEED_FRAC = 0.65` (paper value) |
-| [`deploy_openloop_aug4_trial5.py`](deploy/deploy_openloop_aug4_trial5.py) | Open-loop replay | `REPLAY_FILE` (60 s trajectory included) |
+| [`deploy_warmup_trial15_zerotac.py`](deploy/deploy_warmup_trial15_zerotac.py) | C1, C2, C3, C3-TacOff | `CHECKPOINT` (e.g. `checkpoints/c3_slewdr_stat.pt`); `SPEED_FRAC` (paper: `s = 0.53`); `ZERO_TACTILE = True` for C3-TacOff |
+| [`deploy_policy_simtactile_curlamp.py`](deploy/deploy_policy_simtactile_curlamp.py) | Proprio-only | `CHECKPOINT = checkpoints/proprio_only.pt`; `SPEED_FRAC = 0.65` (paper value) |
+| [`deploy_openloop_aug4_trial5.py`](deploy/deploy_openloop_aug4_trial5.py) | Open-loop replay | `REPLAY_FILE` (60 s trajectory recorded from the C3 policy, included) |
 | [`fsr_pad_map.py`](deploy/fsr_pad_map.py) | FSR channel map imported by all three | – |
 
 The tactile deploy runs in phases:
