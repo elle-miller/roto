@@ -1,181 +1,234 @@
-# RoTO: Robot Tactile Olympiad
-RoTO is a **reinforcement learning benchmark environment** designed to standardise and promote future research in tactile-based manipulation. It is introduced in detail in [Enhancing Tactile-based RL for Robotic Control](https://elle-miller.github.io/tactile_rl/) (NeurIPS 2025).  The environments are designed to cover a wide range of tactile interactions: sparse (Find), intermittent (Bounce), and sustained (Baoding). We will continue to add more environments and strongly welcome contributions 🤗
+# No Eyes, No Problem: What Does Touch Contribute to Blind Baoding Ball Manipulation?
 
-> **📌 New tactile hardware (PadTac + BioTac).** Everything below this point is the
-> original RoTO documentation. Every change made for this project on top of it — new
-> FSR "pad" + BioTac fingertip tactile sensing for the Shadow Hand Lite's Baoding task,
-> the new robots/configs that come with it, and how to run all of it — is addressed in
-> one place: the **"🧩 New Tactile Hardware: PadTac + BioTac (Shadow Hand Lite)"**
-> section near the bottom of this README. Start there if you're picking this project up.
+Code for zero-shot sim-to-real transfer of a **blind** Baoding ball policy to the Shadow Dexterous Hand Lite.
+The policy is trained entirely in simulation (Isaac Lab) and deployed without fine-tuning. It observes only
+proprioception and **16 binary tactile contacts**: no camera, depth, motion capture, or object state.
 
-<img src="readme_assets/images/roto.png" 
-     width="400" 
-     border="1"
-     style="display: block; margin: 0 auto;"/>
+On the physical hand, the policy completes **225 consecutive 180° rotations (112.5 full rotations) at ~0.36 rot/s**
+in a single continuous trial without dropping a ball.
 
-## ✨ Overview
+<img src="readme_assets/images/sim_vs_real.png" width="800"/>
 
-<img src="readme_assets/images/setup.png" width="1000" border="1"/>
+*A 1.2 s 180° rotation in simulation (top) and on the physical Shadow Hand Lite (bottom) at matched time steps.*
 
-We split the paper code across two repositories. Imagine the typical RL loop: you can think of `multimodal_rl` as the agent, and `roto` as the environment. We did this for modularity, in case you want to use your own RL repository instead of ours (there will be some integration to achieve this but happy to help).
+> Paper under review; authors anonymised.
 
-`multimodal_rl`: The motto of this repo is _"doing good RL with Isaac Lab as painlessly as possible"_. We started from the [skrl](https://github.com/Toni-SM/skrl) library and made significant changes to better handle multimodal dictionary observations, observation stacking and associated memory management, and integrated self-supervision. Many existing libraries did not provide support for doing robust RL research (correct evaluation metrics, distinct train/evaluation envs, integrated hyperparameter optimisation). These are well established norms in the RL research community, but are not yet consistently present in RL+robotics research, which we want to encourage 🚀
+---
 
-`roto`: This repo just contains the robot configurations and task definitions. We take advantage of class inheritance to heavily reduce repeated code. `RotoEnv` is a child of `DirectRLEnv`, and sets up basic functions to perform joint position control of a robot and reset it. `[Robot]Env` is a child of `RotoEnv`, defining robot-specific functions that do not change task-to-task, e.g. the proprioceptive observation key. Finally, `[Task]Env` defines task-specific functions such as setting up the environment, rewards, and episode resets.
+## Contents
+- [Method](#method)
+- [Repository layout](#repository-layout)
+- [Installation](#installation)
+- [Reproducing the paper](#reproducing-the-paper)
+  - [Configurations](#configurations)
+  - [Training](#training)
+  - [Evaluating in simulation](#evaluating-in-simulation)
+  - [Deploying to hardware](#deploying-to-hardware)
+- [Results](#results)
+- [Built on RoTO](#built-on-roto)
 
+---
 
-## 🤖 Environments
+## Method
 
-The agents are all joint position controlled. Franka has 9 joints, Shadow has 20 actuated joints.
+<img src="readme_assets/images/method.png" width="900"/>
 
-| Environment | Description | Observations | Rewards | Resets |
-| :---: | :--- | :--- | :--- | :--- |
-| <img src="readme_assets/images/find.png" alt="Find Environment" width="400px"> | The agent must locate a fixed ball on a plate as quickly as possible. | Proprioception + 2 binary contacts | Distance reward from end-effector to ball | Timestep limit |
-| <img src="readme_assets/images/bounce.png" alt="Bounce Environment" width="400px"> | The agent must bounce a ball as many times as possible within 10s. | Proprioception + 17 binary contacts | Small airtime reward + bounce bonus | Timestep limit, ball falls |
-| <img src="readme_assets/images/baoding.png" alt="Baoding Environment" width="400px"> | The agent must rotate two small balls around each other without letting them  drop. | Proprioception + 17 binary contacts | Small distance reward to ball target + successful rotation bonus | Timestep limit, ball falls |
+- **Observation:** four stacked frames, each with 52 proprioceptive values (joint position, joint velocity,
+  position error, and previous action for the 13 actuators) plus 16 binary tactile values.
+- **Action:** a 13-D joint-position command at 60 Hz.
+- **Training:** PPO in Isaac Lab, with 10 s episodes (600 control steps). The reward is the RoTO Baoding reward,
+  unchanged.
 
-## Observations
+| Component | What it does | Where |
+|---|---|---|
+| **Hardware-aligned embodiment** | 12 FSRs (palm and phalanges) + 4 BioTac fingertips as small collision bodies at the physical sensor sites | [`roto/assets/shadow_lite/PAD_POSES.yaml`](roto/assets/shadow_lite/PAD_POSES.yaml), `shadow_padtac_biotac.usd` |
+| **Sequential tendon coupling** | Flexion drives PIP until ~100°, then DIP; extension reverses the order. This replaces Isaac Lab's fixed-ratio mimic joint | `_handle_coupled_joints` in [`roto/tasks/roto_env.py`](roto/tasks/roto_env.py) |
+| **Physical DR** | Ball mass 45–100 g; ball and per-region hand friction resampled each episode | `_randomize_ball_mass` / `_randomize_ball_friction` in [`roto/tasks/baoding/baoding.py`](roto/tasks/baoding/baoding.py) |
+| **SlewDR** (novel) | Limits the per-step change in the command to `s · q̇_max · Δt`, with `s ~ U(0.3, 1.0)` per episode. Hardware uses a fixed `s` | `_apply_cmd_slew` in [`roto/tasks/roto_env.py`](roto/tasks/roto_env.py) |
+| **STAT: Stuck-AT Taxels** (novel) | Each episode, `k ~ U{0..6}` of the 12 FSRs are held stuck at 0 or 1 for the whole episode. BioTacs are never corrupted | `_sample_tactile_fsr_corrupt` in [`roto/tasks/robots/shadowlite/shadowlite.py`](roto/tasks/robots/shadowlite/shadowlite.py) |
+| **Tactile calibration** | Per-channel hysteresis thresholds fit on the empty hand before deployment. `τ_hi = P99.5 + 5`; `τ_lo = median + 2`, or `τ_hi − 3` when the envelope exceeds 15 ADC counts | [`deploy/deploy_warmup_trial15_zerotac.py`](deploy/deploy_warmup_trial15_zerotac.py) |
 
-We use dictionary-style observations, and categorising into proprioception, tactile, rgb, depth, and gt (ground-truth). The proprioception & tactile methods should be defined in `RobotEnv`, but gt information is task-dependent. To specify which observations are used, add the keys to `obs_list` in the agent cfg..
+> **Observation size in code.** The 16 physical tactile channels are scattered into the 24-slot tactile vector
+> shared with the rest of RoTO; the other 8 slots are always 0. The network input is therefore 4 × (52 + 24) = 304-D.
+> The paper's 272-D counts only the active channels.
+
+---
+
+## Repository layout
+
 ```
-observations:
-  obs_list:
-  - prop
-  - tactile
-  - rgb
-  - depth
-  - gt
-  obs_stack: 3
-  tactile_cfg:
-    binary_tactile: true
-    binary_threshold: 0.01
-  pixel_cfg:
-    width: 80
-    height: 80
-    latent_pixel_dim: 128 
-    normalise_rgb: true
-    max_depth: 2.0  # meters
+roto/
+  assets/shadow_lite/        Shadow Hand Lite USD/URDF, FSR pad poses
+  tasks/roto_env.py          base env: joint control, sequential coupling, SlewDR
+  tasks/robots/shadowlite/   Shadow Lite env, PadTac/PadTac+BT tactile, STAT
+  tasks/baoding/             Baoding task, physical DR, C1/C2/C3 env configs
+  tasks/baoding/agents/shadowlite/   PPO agent configs (YAML)
+scripts/
+  train.py  sweep.py  play.py        training, Optuna sweeps, sim playback
+  ablate_play.py  ablate_play_tac.py observation-masking ablation harness
+  record_policy.py  collect_traj_{sim,hw}.py  sim/hardware trajectory tools
+deploy/                      ROS scripts for the physical hand (see below)
+fine-tune/                   encoder fine-tuning on hardware data (see FINETUNING.md)
+replay_motion_test/          open-loop replay diagnostics, sim vs hardware
 ```
-Here is an example rendering of raw RGB, normalised RGB, and depth of Shadow Baoding agent.
-<img src="readme_assets/rgb.gif" 
-     width="200" 
-     border="1"
-     style="display: block; margin: 0 auto;"/>
-<img src="readme_assets/rgb_normalise.gif" 
-     width="200" 
-     border="1"
-     style="display: block; margin: 0 auto;"/>
-<img src="readme_assets/depth.gif" 
-     width="200" 
-     border="1"
-     style="display: block; margin: 0 auto;"/>
 
-## 🛠️ Installation
+---
 
-We need to install Isaac Sim, Isaac Lab, `multimodal_rl` and `roto` in a conda environment. We recommend using the latest Isaac Sim for maximum performance.
+## Installation
 
-1. Create conda environment and install Isaac Lab and Isaac Sim (easiest to install both as [pip packages](https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/isaaclab_pip_installation.html#))
+Isaac Sim, Isaac Lab, [`multimodal_rl`](https://github.com/elle-miller/multimodal_rl) (the RL agent) and this
+repo (the environments) go in one conda environment.
 
-2. Install [multimodal_rl](https://github.com/elle-miller/multimodal_rl) as a local editable package
-```
-git clone git@github.com:elle-miller/multimodal_rl.git
-cd multimodal_rl
-pip install -e .
-```
-3. Install `roto` as a local editable package
-```
-git clone git@github.com:elle-miller/roto.git
-cd roto
-pip install -e .
-```
-4. Test the installation by playing a trained agent in the viewer or saving a video. Note that the viewer playback is much slower than real-time.
-```
-python scripts/play.py --task Baoding --num_envs 512 --agent_cfg forward_dynamics_memory --checkpoint readme_assets/checkpoints/baoding_memory.pt
-python scripts/play.py --task Baoding --num_envs 512 --agent_cfg forward_dynamics_memory --video --video_length 1200 --headless --checkpoint readme_assets/checkpoints/baoding_memory.pt
-```
-The video should pop up in a `./videos` folder and look like this:
+1. Install Isaac Sim and Isaac Lab as
+   [pip packages](https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/isaaclab_pip_installation.html).
+2. Install `multimodal_rl`:
+   ```bash
+   git clone https://github.com/elle-miller/multimodal_rl.git
+   pip install -e multimodal_rl
+   ```
+3. Install this repo:
+   ```bash
+   git clone <this repository> roto
+   pip install -e roto
+   ```
 
-<img src="readme_assets/baoding_memory.gif" 
-     width="400" 
-     border="1"
-     style="display: block; margin: 0 auto;"/>
+Hardware deployment additionally needs ROS with the Shadow Hand Lite driver running, plus `pyserial` for the FSR
+multiplexer.
 
-You can find more trained checkpoints in the [roto_paper_results](https://github.com/elle-miller/roto_paper_results) repository.
+---
 
+## Reproducing the paper
 
-## 🏃 Usage
-Mostly the same as default Isaac Lab setup. The only breaking change is that a given task is not linked to a cfg file. The cfgs must be defined in the task `__init__.py` and specified as an `agent_cfg` argument.
+All commands run from the repo root. Baoding on the Shadow Hand Lite is selected with `--task Baoding` plus a
+`--robot` that picks the randomisation profile.
 
-We provide 3 environments x 7 cfgs, corresponding to the paper
-```
-gym.register(
-    id="Baoding",
-    entry_point="roto.tasks.baoding.baoding:BaodingShadowEnv",
-    disable_env_checker=True,
-    kwargs={
-        "env_cfg_entry_point": baoding.BaodingCfg,
-        "default_cfg": baoding_default_cfg,
-        "rl_only_pt": baoding_rl_only_pt,
-        "tac_recon": baoding_tactile_recon,
-        "full_recon": baoding_full_recon,
-        "forward_dynamics": baoding_forward_dynamics,
-        "tac_dynamics": baoding_tactile_dynamics,
-    }
-)
-```
+### Configurations
+
+| Paper | Randomisation | Input | `--robot` | `--agent_cfg` |
+|---|---|---|---|---|
+| **C1** | Physical | Prop + tactile | `shadowlite_padtac_bt_legacy_frictionmass` | `rl_only_pt_padtac_bt` |
+| **C2** | Physical + SlewDR | Prop + tactile | `shadowlite_padtac_bt_legacy_notac` | `rl_only_pt_padtac_bt` |
+| **C3 (ours)** | Physical + SlewDR + STAT | Prop + tactile | `shadowlite_padtac_bt_legacy` | `rl_only_pt_padtac_bt` |
+| Proprio-only | Physical | Prop only | `shadowlite_padtac_bt_legacy_frictionmass` | `rl_only_pt_padtac_bt_sweep` |
+| C3-TacOff | C3 checkpoint | Prop only (tactile zeroed at deployment) | as C3 | as C3, plus `--zero_tactile` |
+| Open-loop | – | none (recorded trajectory) | – | [`deploy/deploy_openloop_aug4_trial5.py`](deploy/deploy_openloop_aug4_trial5.py) |
+
+`rl_only_pt_padtac_bt_sweep` keeps the tactile observation slots but zeroes them at the source
+(`zero_tactile: true`), so the proprio-only network has the same shape as the tactile ones.
+
+The remaining `--robot` profiles (`_legacy_noslew`, `_legacy_nomassdr`, `_sparse`, `_stuck8`) are extra ablations
+not reported in the paper.
+
+#### Checkpoints
+
+| Paper | Checkpoint |
+|---|---|
+| C1 | *TODO* |
+| C2 | *TODO* |
+| C3 | *TODO* |
+| Proprio-only | *TODO* |
+
 ### Training
-Here is how you would train a Find agent just with RL, a Bounce agent with RL + Tactile Reconstruction, and a Baoding agent with RL + Forward Dynamics.
-```
-python scripts/train.py --task Find --num_envs 4196 --headless --seed 1234 --agent_cfg rl_only_pt
-python scripts/train.py --task Bounce --num_envs 4196 --headless --seed 1234 --agent_cfg tac_recon
-python scripts/train.py --task Baoding --num_envs 4196 --headless --seed 1234 --agent_cfg forward_dynamics
-```
 
-### Sweeping
-We use `opunta` for integrated hyperparameter optimisation. The command is the same as for `train.py`, but with an additional `--study` name argument. You can specify the pruner, number of trials, number of warm up steps etc. I recommend [this blogpost](https://araffin.github.io/post/hyperparam-tuning/)  if you are new to sweeping :)
-```
-python scripts/sweep.py --task Find --num_envs 4196 --headless --seed 1234 --agent_cfg rl_only_pt --study find_rl_only_pt
-python scripts/sweep.py --task Bounce --num_envs 4196 --headless --seed 1234 --agent_cfg tac_recon --study bounce_tac_recon
-python scripts/sweep.py --task Baoding --num_envs 4196 --headless --seed 1234 --agent_cfg forward_dynamics --study baoding_forward_dynamics
+The paper trains each configuration for 250 M environment steps on three seeds:
+
+```bash
+# C3 (ours)
+python scripts/train.py --task Baoding --robot shadowlite_padtac_bt_legacy \
+    --agent_cfg rl_only_pt_padtac_bt --num_envs 4096 --headless --seed 1234
+
+# Proprio-only
+python scripts/train.py --task Baoding --robot shadowlite_padtac_bt_legacy_frictionmass \
+    --agent_cfg rl_only_pt_padtac_bt_sweep --num_envs 4096 --headless --seed 1234
 ```
 
-### Playing
-See last step in installation.
+Swap `--robot` from the table for C1/C2. `scripts/sweep.py` takes the same arguments plus `--study <name>` for an
+Optuna sweep.
 
+### Evaluating in simulation
 
-## 📊 Benchmark Results [in-progress]
+The paper evaluates each configuration over 768 episodes (256 parallel environments × 3 training seeds):
 
-Please see the paper for now.
+```bash
+python scripts/play.py --task Baoding --robot shadowlite_padtac_bt_legacy \
+    --agent_cfg rl_only_pt_padtac_bt --checkpoint <c3.pt> --num_envs 256 --headless
 
-## 📁 Data
-
-The data in the paper (checkpoints, training logs, plot scripts) is available in the [roto_paper_results](https://github.com/elle-miller/roto_paper_results) repo.
-
-
-## 📧 Contact
-
-For any questions, issues, or collaborations, please feel free to post an issue/start a discussion/reach out.
-
-- Maintainer: Elle Miller
-- Project Website: https://elle-miller.github.io/tactile_rl
-
-This project is licensed under the BSD-3 License.
-
-
-## 🤗 Contributing
-This is our plan for future additions, but we highly welcome community contributions and PRs!
-
-- More environments
-- Observation augmentations (code exists just need to integrate)
-- Integrate TacSL for high-resolution touch sensing when it becomes released: https://github.com/isaac-sim/IsaacGymEnvs/issues/244
-- Provide transformer architectures
-- Action chunking
-
-## 📄 Citation
-
-If you use this benchmark environment in your academic or professional research, please cite the following work:
-
+# C3-TacOff: same checkpoint, tactile zeroed
+python scripts/play.py ... --zero_tactile
 ```
+
+`play.py` also writes a `sim_policy_log_seed<seed>.npz` trace (actions, positions, commands, velocities, position
+error, tactile). This trace is the sim-side input to the hardware warmup below. For observation-masking ablations
+(zeroing or freezing individual proprioceptive blocks, no-ball probes, ball-mass sweeps), see
+[`scripts/ablate_play_tac.py`](scripts/ablate_play_tac.py).
+
+### Deploying to hardware
+
+The deploy scripts are ROS nodes for the physical Shadow Hand Lite. They read the 12 FSRs over serial and the 4
+BioTacs over ROS. They are **not** argparse-driven: set the constants at the top of each file, then run
+`python deploy/<script>.py`. Each module docstring documents its flow.
+
+| Script | Used for | Key settings |
+|---|---|---|
+| [`deploy_warmup_trial15_zerotac.py`](deploy/deploy_warmup_trial15_zerotac.py) | C1, C2, C3, C3-TacOff | `CHECKPOINT`; `SPEED_FRAC` (paper: `s = 0.53`); `ZERO_TACTILE = True` for C3-TacOff |
+| [`deploy_policy_simtactile_curlamp.py`](deploy/deploy_policy_simtactile_curlamp.py) | Proprio-only | `CHECKPOINT`; `SPEED_FRAC = 0.65` (paper value) |
+| [`deploy_openloop_aug4_trial5.py`](deploy/deploy_openloop_aug4_trial5.py) | Open-loop replay | `REPLAY_FILE` (60 s trajectory included) |
+| [`fsr_pad_map.py`](deploy/fsr_pad_map.py) | FSR channel map imported by all three | – |
+
+The tactile deploy runs in phases:
+1. **Warmup:** replays a sim trajectory with the hand empty. `REPLAY_Q_FILE` is a `play.py` trace.
+2. **Calibration:** fits per-channel hysteresis thresholds from that empty-hand envelope.
+3. **Positioning:** moves to the start pose and prompts you to place the balls.
+4. **Policy:** runs the policy closed-loop at 60 Hz with the slew limit applied.
+
+Hardware protocol used in the paper:
+- The hand was tilted ~15° downward from horizontal.
+- Default Shadow Hand Lite PD gains were scaled by 0.15, except the index, middle and ring fingers: MCP flexion
+  joints were kept at default and MCP abduction joints were scaled by 0.3.
+- The same pair of 1.58 in, 55 g balls was used throughout.
+- Each configuration ran 10 trials, each until a ball left the hand.
+
+---
+
+## Results
+
+Hardware results are mean ± std over 10 trials. Simulation results cover 768 episodes.
+
+| Condition | Full rotations (HW) | Time-to-drop (s) | η | Speed HW (rot/s) | Speed sim (rot/s) | Drop sim | Drop HW |
+|---|---|---|---|---|---|---|---|
+| Open-loop | 1.7 ± 1.99 | 6.1 ± 4.7 | – | 0.168 ± 0.179 | – | – | 80% |
+| Proprio-only | 4.4 ± 2.44 | 21.4 ± 12.2 | 0.31 ± 0.13 | 0.226 ± 0.098 | 0.591 ± 0.128 | 17% | 20% |
+| C3-TacOff | 5.0 ± 4.1 | 19.0 ± 11.2 | 0.58 ± 0.26 | 0.256 ± 0.112 | 0.291 ± 0.167 | 32% | 20% |
+| **C3 (ours)** | **34.75 ± 26.06** | **94.8 ± 68.0** | **0.9 ± 0.16** | **0.36 ± 0.061** | 0.416 ± 0.129 | 2% | 10% |
+| C1 | 0.35 ± 0.63 | 5.9 ± 4.3 | – | 0.054 ± 0.079 | 0.959 ± 0.071 | 2% | 70% |
+| C2 | 0.5 ± 0.53 | 4.1 ± 1.5 | – | 0.101 ± 0.094 | 0.277 ± 0.082 | 9% | 100% |
+
+- **η (exchange efficiency):** the fraction of gait cycles that end in a completed ball exchange.
+- **Long-horizon run:** a separate C3 deployment, outside the 10-trial set, completed 112.5 full rotations in 310 s.
+
+---
+
+## Built on RoTO
+
+This repository extends **RoTO (Robot Tactile Olympiad)**, an RL benchmark for tactile manipulation with
+**Find**, **Bounce** and **Baoding** tasks on Franka, Shadow Hand, Shadow Hand Lite, Allegro and ORCA. Those
+environments are unchanged and still available:
+
+```bash
+python scripts/train.py --task Baoding --robot shadow --agent_cfg forward_dynamics --num_envs 4096 --headless --seed 1234
+python scripts/play.py  --task Baoding --num_envs 512 --agent_cfg forward_dynamics_memory \
+    --checkpoint readme_assets/checkpoints/baoding_memory.pt
+```
+
+- **Configs are passed explicitly.** A task is not tied to one config: agent YAMLs live in
+  `roto/tasks/<task>/agents/<robot>/` and are chosen with `--agent_cfg`.
+- **Observations** are dictionaries (`prop`, `tactile`, `rgb`, `depth`, `gt`), selected by `obs_list` in the agent
+  YAML.
+- **Class hierarchy:** `RotoEnv` (a `DirectRLEnv`) → `[Robot]Env` → `[Task]Env`.
+
+If you use this code, please also cite RoTO:
+
+```bibtex
 @inproceedings{miller2025tactilerl,
   author    = {Miller, Elle and McInroe, Trevor and Abel, David and Mac Aodha, Oisin and Vijayakumar, Sethu},
   title     = {Enhancing Tactile-based Reinforcement Learning for Robotic Control},
@@ -184,121 +237,4 @@ If you use this benchmark environment in your academic or professional research,
 }
 ```
 
----
-
-## 🧩 New Tactile Hardware: PadTac + BioTac (Shadow Hand Lite)
-
-Everything in this section is **new on top of the RoTO documentation above** — a new
-tactile sensing modality for Shadow Lite **Baoding**, the robots/configs needed to
-train it, and how to run every part of it. Nothing above this line changed; this is
-the single place documenting what's different and how to use it.
-
-### What changed
-
-The rest of this README describes per-link binary contact tactile sensing. This project
-adds a second tactile modality for **Shadow Lite Baoding only** that mirrors discrete
-sensors on the real hand instead of one channel per touched link:
-
-- **PadTac** — 12 discrete FSR ("pad") tactile sensor sites placed at specific points on
-  the palm and phalanges. Poses are authored in
-  [`roto/assets/shadow_lite/PAD_POSES.yaml`](roto/assets/shadow_lite/PAD_POSES.yaml) and
-  baked into the `shadow_padtac.usd` robot asset.
-- **PadTac + BioTac (`padtac_bt`)** — the same 12 FSR pads, plus 4 BioTac SP fingertip
-  sensors on the distal links (`shadow_padtac_biotac.usd`). This is the configuration
-  actively deployed to hardware.
-- Both scatter contact into the same **24-channel** tactile vector used elsewhere in
-  this codebase; only 12–16 of those channels are ever active per variant (the rest
-  stay hard 0). New env/config classes: `ShadowLitePadTacEnv(Cfg)` and
-  `ShadowLitePadTacBTEnv(Cfg)` in
-  [`roto/tasks/robots/shadowlite/shadowlite.py`](roto/tasks/robots/shadowlite/shadowlite.py),
-  `BaodingShadowLitePadTacCfg`/`BaodingShadowLitePadTacBTCfg` in
-  [`roto/tasks/baoding/baoding.py`](roto/tasks/baoding/baoding.py).
-- **Only Baoding on Shadow Lite has PadTac support** — Find, Bounce, and the other
-  robots (Shadow, ORCA, Allegro) are untouched.
-- **Obs/action contract:** 13 control-joint actions, 304-d observation (per-step
-  `prop(52) + tactile(24)`, stacked ×4) — same shape as `rl_only_pt_padtac`.
-- New domain randomization shipped with `BaodingShadowLitePadTacBTCfg`: ball mass range
-  45–100g (was a fixed 55g), ball friction range, an opt-in command "slew" matching the
-  hardware's `SPEED_FRAC` rate limiter (off by default), and FSR "taxel" corruption/flip
-  DR (a random subset of the 12 FSR channels forced stuck + intermittently dithered each
-  episode; the 4 BioTac channels are never touched by this). See the docstring on
-  `BaodingShadowLitePadTacBTCfg` for the exact knobs.
-- These configs also override `coupling_theta = 0.785` (vs. the sysid-derived `0.875` on
-  plain `shadowlite`) to match the coupling law the trial15/27 hardware checkpoints were
-  trained and are evaluated under.
-- `default.yaml` (shared by all `shadowlite*` agent configs) now has `tactile` commented
-  out of `obs_list` by default — each PadTac(+BT) agent config re-enables `prop + tactile`
-  explicitly, so don't assume tactile is on unless the specific `--agent_cfg` says so.
-- `scripts/play.py` now also dumps a `sim_policy_log_seed<seed>.npz` trace (actions,
-  positions, commands, velocities, pos-error, tactile) on every run — controlled by
-  `--record_steps` (default 300 steps = 5s @ 60Hz). This is the sim-side half of the
-  sim-vs-hardware comparisons used when validating a deploy.
-
-### New `--robot` options (Baoding only)
-
-| `--robot` value | Tactile sensors | Robot asset |
-|---|---|---|
-| `shadowlite_padtac` | 12 FSR pads only | `shadow_padtac.usd` |
-| `shadowlite_padtac_bt` | 12 FSR pads + 4 BioTac fingertips | `shadow_padtac_biotac.usd` |
-
-Agent configs for these live under the same
-`roto/tasks/baoding/agents/shadowlite/` folder used by plain `shadowlite`.
-
-### New agent configs (`roto/tasks/baoding/agents/shadowlite/`)
-
-| `--agent_cfg` | Use with `--robot` | Purpose |
-|---|---|---|
-| `rl_only_pt_padtac` | `shadowlite_padtac` | Scratch RL, pads only |
-| `rl_only_pt_padtac_bt` | `shadowlite_padtac_bt` | Scratch RL, pads + BioTac |
-| `forward_dynamics_padtac_bt` | `shadowlite_padtac_bt` | + self-supervised forward-dynamics auxiliary loss |
-| `rl_only_pt_padtac_bt_sweep` | `shadowlite_padtac_bt` | Scratch Optuna sweep, ships with `zero_tactile: true` baked in — this is specifically the **prop-only ablation** sweep (same 304-d obs shape, tactile zeroed at the source), not a general tactile sweep config |
-
-### Running it
-
-These flags work with the same `train.py` / `play.py` / `sweep.py` entry points used
-elsewhere in this README — `--robot` just wasn't shown above since the rest of this
-file predates the multi-robot / multi-tactile work.
-
-**Train from scratch:**
-```bash
-python scripts/train.py --task Baoding --robot shadowlite_padtac_bt --agent_cfg rl_only_pt_padtac_bt --num_envs 4096 --headless --seed 1234
-
-# + forward-dynamics self-supervision
-python scripts/train.py --task Baoding --robot shadowlite_padtac_bt --agent_cfg forward_dynamics_padtac_bt --num_envs 4096 --headless --seed 1234
-```
-
-**Sweep (prop-only ablation, scratch, no checkpoint):**
-```bash
-python scripts/sweep.py --task Baoding --robot shadowlite_padtac_bt --agent_cfg rl_only_pt_padtac_bt_sweep --num_envs 4096 --headless --seed 1234 --study my_ablation_sweep
-```
-
-**Play / evaluate a checkpoint** (also dumps `sim_policy_log_seed<seed>.npz`):
-```bash
-python scripts/play.py --task Baoding --robot shadowlite_padtac_bt --agent_cfg rl_only_pt_padtac_bt --checkpoint <path/to/best_agent.pt> --num_envs 512 --record_steps 300
-```
-
-There is no separate warm-start/fine-tune CLI script for PadTac(+BT) checkpoints in
-this repo yet — [`fine-tune/FINETUNING.md`](fine-tune/FINETUNING.md) documents the
-(encoder) fine-tuning approach actually used to close the sim-to-real observation gap
-for these checkpoints; read it before starting any sim-to-real fine-tuning work.
-`scripts/ablate_play.py` and `replay_motion_test/` provide the broader ablation /
-open-loop-replay tooling this hand's checkpoints have been evaluated with, but they
-aren't PadTac-specific, so they aren't re-documented here.
-
-### Deploying to real hardware
-
-[`scripts/deploy_policy_simtactile_curlamp.py`](scripts/deploy_policy_simtactile_curlamp.py)
-is the current real-hardware deploy script for these checkpoints (ROS + the physical
-Shadow Hand Lite, reading the FSR mux over serial and, optionally, BioTac). Unlike
-`train.py`/`play.py` it is **not** argparse-driven — edit the mode/protocol constants
-documented at the top of the file (SIM / ZERO / REAL tactile source, plus an
-experimental curl-joint `pos_err` amplification toggle) and run it directly:
-```bash
-python scripts/deploy_policy_simtactile_curlamp.py
-```
-Read its module docstring first — it explains exactly what each mode does and why, and
-flags which parts are diagnostic-only vs. policy-affecting. It imports
-`from fsr_pad_map import FSR_CHANNELS` and falls back to an inlined copy of the same
-12-value channel list if that module isn't present (`fsr_pad_map.py` itself isn't part
-of this repo), so hardware runs are already wired to the pad channel layout above
-without extra setup.
+Licensed under BSD-3 (see [`LICENSE`](LICENSE)).
