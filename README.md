@@ -1,5 +1,7 @@
 # No Eyes, No Problem: What Does Touch Contribute to Blind Baoding Ball Manipulation?
 
+**[Project page](https://theundercover01.github.io/ayushdeshmukh/projects/no-eyes-no-problem/)**
+
 Code for zero-shot sim-to-real transfer of a **blind** Baoding ball policy to the Shadow Dexterous Hand Lite.
 The policy is trained entirely in simulation (Isaac Lab) and deployed without fine-tuning. It observes only
 proprioception and **16 binary tactile contacts**: no camera, depth, motion capture, or object state.
@@ -243,6 +245,7 @@ If you use this code, please cite:
   title     = {No Eyes, No Problem: What Does Touch Contribute to Blind Baoding Ball Manipulation?},
   booktitle = {},
   year      = {},
+  url       = {https://theundercover01.github.io/ayushdeshmukh/projects/no-eyes-no-problem/},
 }
 ```
 
