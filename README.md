@@ -11,7 +11,7 @@ in a single continuous trial without dropping a ball.
 
 *A 1.2 s 180° rotation in simulation (top) and on the physical Shadow Hand Lite (bottom) at matched time steps.*
 
-> Paper under review; authors anonymised.
+> Paper under review.
 
 ---
 
@@ -25,6 +25,7 @@ in a single continuous trial without dropping a ball.
   - [Evaluating in simulation](#evaluating-in-simulation)
   - [Deploying to hardware](#deploying-to-hardware)
 - [Results](#results)
+- [Citation](#citation)
 - [Built on RoTO](#built-on-roto)
 
 ---
@@ -207,6 +208,21 @@ Hardware results are mean ± std over 10 trials. Simulation results cover 768 ep
 
 - **η (exchange efficiency):** the fraction of gait cycles that end in a completed ball exchange.
 - **Long-horizon run:** a separate C3 deployment, outside the 10-trial set, completed 112.5 full rotations in 310 s.
+
+---
+
+## Citation
+
+If you use this code, please cite:
+
+```bibtex
+@inproceedings{deshmukh_noeyesnoproblem,
+  author    = {Deshmukh, Ayush and Agarwal, Nalin and Miller, Elle and Vijayakumar, Sethu},
+  title     = {No Eyes, No Problem: What Does Touch Contribute to Blind Baoding Ball Manipulation?},
+  booktitle = {},
+  year      = {},
+}
+```
 
 ---
 
