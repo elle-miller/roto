@@ -59,7 +59,7 @@ _PEACE_SIGN_JOINT_POS = {
 # fmt: on
 
 
-_BOUNCE_HDR = Path(__file__).resolve().parent.parent.parent / "/home/ayush/Desktop/icra/roto/roto/assets/rooms/stierberg_sunrise_4k.hdr"
+_BOUNCE_HDR = Path(__file__).resolve().parent.parent.parent / "assets/rooms/stierberg_sunrise_4k.hdr"
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------

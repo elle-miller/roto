@@ -35,7 +35,7 @@ from isaaclab.app import AppLauncher
 # on this machine (an older checkout with the BioTac/FSR hand instead of the
 # TouchLab hand). Load the current project's modules directly by path so the
 # correct assets/tasks are always used regardless of site-packages state.
-ROTO_ROOT = "/home/ayush/icra/roto/roto"
+ROTO_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "roto")
 
 
 def _load_module(name, path):
